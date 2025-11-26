@@ -26,11 +26,11 @@ export default function DashboardPage() {
 
       setUser(currentUser)
 
-      // Fetch participant data
+      // Fetch participant data using user_id (more secure and efficient)
       const { data: participant } = await supabase
         .from('participants')
         .select('*, teams(*)')
-        .eq('email', currentUser.email)
+        .eq('user_id', currentUser.id)
         .single()
 
       setParticipantData(participant)

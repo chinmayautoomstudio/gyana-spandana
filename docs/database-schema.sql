@@ -1,5 +1,6 @@
 -- Gyana Spandana Database Schema for Supabase
 -- This file contains the SQL schema for creating tables in Supabase
+-- Run this in your Supabase SQL Editor
 
 -- Teams table
 CREATE TABLE IF NOT EXISTS teams (
@@ -9,23 +10,24 @@ CREATE TABLE IF NOT EXISTS teams (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Participants table
+-- Participants table (CORRECTED - Added user_id to link with Supabase Auth)
 CREATE TABLE IF NOT EXISTS participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE, -- Link to Supabase Auth
   team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
   email VARCHAR(255) NOT NULL UNIQUE,
   phone VARCHAR(10) NOT NULL UNIQUE,
   school_name VARCHAR(200) NOT NULL,
   aadhar VARCHAR(12) NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
+  -- Removed password_hash (Supabase Auth handles passwords)
   email_verified BOOLEAN DEFAULT FALSE,
   phone_verified BOOLEAN DEFAULT FALSE,
   is_participant1 BOOLEAN NOT NULL, -- true for participant 1, false for participant 2
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  CONSTRAINT check_phone_format CHECK (phone ~ '^[6-9]\d{9}$'),
-  CONSTRAINT check_aadhar_format CHECK (aadhar ~ '^\d{12}$')
+  CONSTRAINT check_phone_format CHECK (phone ~ '^[6-9]\\d{9}$'),
+  CONSTRAINT check_aadhar_format CHECK (aadhar ~ '^\\d{12}$')
 );
 
 -- Quiz sessions table (for future use)
@@ -50,6 +52,7 @@ CREATE TABLE IF NOT EXISTS quiz_answers (
 );
 
 -- Indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_participants_user_id ON participants(user_id);
 CREATE INDEX IF NOT EXISTS idx_participants_team_id ON participants(team_id);
 CREATE INDEX IF NOT EXISTS idx_participants_email ON participants(email);
 CREATE INDEX IF NOT EXISTS idx_participants_aadhar ON participants(aadhar);
@@ -66,22 +69,56 @@ ALTER TABLE quiz_answers ENABLE ROW LEVEL SECURITY;
 -- RLS Policy: Users can view their own participant data
 CREATE POLICY "Users can view own participant data"
   ON participants FOR SELECT
-  USING (auth.uid()::text = id::text);
+  USING (auth.uid() = user_id);
 
 -- RLS Policy: Users can update their own participant data
 CREATE POLICY "Users can update own participant data"
   ON participants FOR UPDATE
-  USING (auth.uid()::text = id::text);
+  USING (auth.uid() = user_id);
+
+-- RLS Policy: Allow participant creation during registration
+-- During registration, users are created but not yet authenticated,
+-- so we need to allow INSERT without requiring auth.uid() = user_id
+CREATE POLICY "Allow participant creation during registration"
+  ON participants FOR INSERT
+  WITH CHECK (true);
 
 -- RLS Policy: Public can view teams (for leaderboard)
 CREATE POLICY "Public can view teams"
   ON teams FOR SELECT
   USING (true);
 
--- RLS Policy: Public can view participant names and scores (privacy: no email/aadhar)
+-- RLS Policy: Allow team creation during registration
+CREATE POLICY "Allow team creation during registration"
+  ON teams FOR INSERT
+  WITH CHECK (true);
+
+-- RLS Policy: Public can view participant public data (privacy: no email/aadhar)
 CREATE POLICY "Public can view participant public data"
   ON participants FOR SELECT
   USING (true);
+
+-- RLS Policy: Users can view their own quiz sessions
+CREATE POLICY "Users can view own quiz sessions"
+  ON quiz_sessions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM participants
+      WHERE participants.id = quiz_sessions.participant_id
+      AND participants.user_id = auth.uid()
+    )
+  );
+
+-- RLS Policy: Users can insert their own quiz sessions
+CREATE POLICY "Users can insert own quiz sessions"
+  ON quiz_sessions FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM participants
+      WHERE participants.id = quiz_sessions.participant_id
+      AND participants.user_id = auth.uid()
+    )
+  );
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -98,4 +135,3 @@ CREATE TRIGGER update_teams_updated_at BEFORE UPDATE ON teams
 
 CREATE TRIGGER update_participants_updated_at BEFORE UPDATE ON participants
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-

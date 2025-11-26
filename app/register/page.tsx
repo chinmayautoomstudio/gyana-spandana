@@ -95,16 +95,20 @@ export default function RegisterPage() {
         }
 
         // Create participant record
+        if (!authData.user) {
+          throw new Error('Failed to create auth user')
+        }
+
         const { error: participantError } = await supabase
           .from('participants')
           .insert({
+            user_id: authData.user.id, // Link to Supabase Auth user
             team_id: team.id,
             name: participant.name,
             email: participant.email,
             phone: participant.phone,
             school_name: participant.schoolName,
             aadhar: participant.aadhar,
-            password_hash: '', // Supabase handles password hashing
             is_participant1: participant.isParticipant1,
             email_verified: false,
             phone_verified: false,

@@ -9,6 +9,46 @@ import { loginSchema, type LoginFormData } from '@/lib/validations'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { Carousel } from '@/components/ui/Carousel'
+
+// Carousel slides data
+const carouselSlides = [
+  {
+    image: '/images/carousel/carousel-img-1.png',
+    title: 'Test Your Knowledge of Odisha',
+    description: 'Participate in exciting quizzes about Odisha\'s rich culture, traditions, history, and geography.',
+  },
+  {
+    image: '/images/carousel/carousel-img2.png',
+    title: 'Compete with Your Team',
+    description: 'Join forces with your teammate and showcase your combined knowledge of Odisha\'s heritage.',
+  },
+  {
+    image: '/images/carousel/carousel-img3.png',
+    title: 'Celebrate Odia Culture',
+    description: 'Deepen your understanding of Odisha while competing for recognition and exciting prizes.',
+  },
+  {
+    image: '/images/carousel/carousel-img4.png',
+    title: 'Explore Odisha\'s Heritage',
+    description: 'Learn about Konark Temple, Jagannath Puri, and the rich cultural legacy of Odisha.',
+  },
+  {
+    image: '/images/carousel/carousel-img5.png',
+    title: 'Master Odia Language & Literature',
+    description: 'Test your knowledge of Odia language, literature, and traditional arts of Odisha.',
+  },
+  {
+    image: '/images/carousel/carousel-img6.png',
+    title: 'Discover Odisha\'s Geography',
+    description: 'Challenge yourself with questions about Odisha\'s districts, rivers, and natural beauty.',
+  },
+  {
+    image: '/images/carousel/carousel-img7.png',
+    title: 'Win Exciting Rewards',
+    description: 'Top performers get recognized and rewarded for their exceptional knowledge of Odisha.',
+  },
+]
 
 export default function LoginPage() {
   const router = useRouter()
@@ -19,6 +59,7 @@ export default function LoginPage() {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false)
   const [isResettingPassword, setIsResettingPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const registered = searchParams.get('registered') === 'true'
 
@@ -45,39 +86,15 @@ export default function LoginPage() {
     try {
       const supabase = createClient()
 
-      // Check if identifier is email or Aadhar
-      const isEmail = data.identifier.includes('@')
-      
-      let email = ''
-      
-      if (isEmail) {
-        email = data.identifier
-      } else {
-        // Look up email by Aadhar
-        const { data: participant, error: lookupError } = await supabase
-          .from('participants')
-          .select('email')
-          .eq('aadhar', data.identifier)
-          .single()
-
-        if (lookupError || !participant) {
-          setLoginError('Invalid Aadhar number or email address.')
-          setIsSubmitting(false)
-          return
-        }
-
-        email = participant.email
-      }
-
       // Sign in with email and password
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: data.email,
         password: data.password,
       })
 
       if (authError) {
         if (authError.message.includes('Invalid login credentials')) {
-          setLoginError('Invalid email/Aadhar or password. Please try again.')
+          setLoginError('Invalid email or password. Please try again.')
         } else if (authError.message.includes('Email not confirmed')) {
           setLoginError('Please verify your email address before logging in.')
         } else {
@@ -126,7 +143,7 @@ export default function LoginPage() {
 
   if (showForgotPassword && !forgotPasswordSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <button
             onClick={() => {
@@ -174,7 +191,7 @@ export default function LoginPage() {
 
   if (showForgotPassword && forgotPasswordSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
           <div className="mb-4">
             <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
@@ -215,48 +232,89 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-block mb-4">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              Gyana Spandana
-            </h1>
-          </Link>
-          <p className="text-gray-600 text-lg">Welcome back! Please login to continue.</p>
-        </div>
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* Left Side - Carousel (60%) */}
+      <div className="hidden lg:flex lg:w-[60%] relative">
+        <Carousel slides={carouselSlides} />
+      </div>
 
-        {/* Login Form */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10">
-          {registered && (
-            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-green-800 text-sm">
-                ✓ Registration successful! Please check your email for verification and then login.
-              </p>
+      {/* Right Side - Login Form (40%) */}
+      <div className="w-full lg:w-[40%] bg-white flex flex-col">
+        {/* Login Form - Centered */}
+        <div className="flex-1 flex items-center justify-center px-6 sm:px-8 py-8 sm:py-12">
+          <div className="w-full max-w-md">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Welcome Back to Gyana Spandana!
+              </h1>
+              <p className="text-gray-600">Sign in your account</p>
             </div>
-          )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <Input
-              label="Email or Aadhar Number"
-              {...register('identifier')}
-              error={errors.identifier?.message}
-              placeholder="Enter email or 12-digit Aadhar"
-              required
-              autoFocus
-            />
+            {registered && (
+              <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-green-800 text-sm">
+                  ✓ Registration successful! Please check your email for verification and then login.
+                </p>
+              </div>
+            )}
 
-            <div>
-              <Input
-                label="Password"
-                type="password"
-                {...register('password')}
-                error={errors.password?.message}
-                placeholder="Enter your password"
-                required
-              />
-              <div className="mt-2 flex items-center justify-between">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <div>
+                <Input
+                  label="Your Email"
+                  type="email"
+                  {...register('email')}
+                  error={errors.email?.message}
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="relative">
+                  <Input
+                    label="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    {...register('password')}
+                    error={errors.password?.message}
+                    placeholder="Enter your password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-[38px] text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                        />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <input
                     id="remember-me"
@@ -265,7 +323,7 @@ export default function LoginPage() {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                    Remember me
+                    Remember Me
                   </label>
                 </div>
                 <button
@@ -273,61 +331,39 @@ export default function LoginPage() {
                   onClick={() => setShowForgotPassword(true)}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  Forgot password?
+                  Forgot Password?
                 </button>
               </div>
-            </div>
 
-            {loginError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-red-800 text-sm">{loginError}</p>
-              </div>
-            )}
+              {loginError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-800 text-sm">{loginError}</p>
+                </div>
+              )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              isLoading={isSubmitting}
-              className="w-full"
-            >
-              Sign In
-            </Button>
-          </form>
-
-          {/* Divider */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">New to Gyana Spandana?</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Register Link */}
-          <div className="mt-6">
-            <Link href="/register">
-              <Button variant="outline" size="lg" className="w-full">
-                Create New Team Account
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                isLoading={isSubmitting}
+                className="w-full bg-gray-900 hover:bg-gray-800"
+              >
+                Login
               </Button>
-            </Link>
-          </div>
-        </div>
+            </form>
 
-        {/* Footer */}
-        <div className="text-center mt-6">
-          <p className="text-gray-600 text-sm">
-            Don't have an account?{' '}
-            <Link href="/register" className="text-blue-600 hover:underline font-medium">
-              Register your team
-            </Link>
-          </p>
+            {/* Registration Link */}
+            <div className="mt-6 text-center">
+              <p className="text-gray-600 text-sm">
+                Don't have any account?{' '}
+                <Link href="/register" className="text-blue-600 hover:underline font-medium">
+                  Register
+                </Link>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
-
