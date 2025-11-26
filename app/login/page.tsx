@@ -109,7 +109,30 @@ export default function LoginPage() {
         router.push('/dashboard')
       }
     } catch (error: any) {
-      setLoginError(error.message || 'Login failed. Please try again.')
+      // Handle connection errors specifically
+      const errorMessage = error.message || ''
+      const errorString = String(error)
+      
+      if (
+        errorMessage.includes('Failed to fetch') ||
+        errorString.includes('Failed to fetch') ||
+        errorMessage.includes('ERR_CONNECTION_CLOSED') ||
+        errorString.includes('ERR_CONNECTION_CLOSED') ||
+        errorMessage.includes('Missing Supabase environment variables')
+      ) {
+        setLoginError(
+          'Cannot connect to Supabase. Please check:\n' +
+          '1. Your internet connection\n' +
+          '2. Your .env.local file has NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY\n' +
+          '3. The dev server was restarted after adding environment variables\n' +
+          '4. See ENV_SETUP.md for setup instructions'
+        )
+      } else if (errorMessage.includes('Missing Supabase environment variables')) {
+        setLoginError(errorMessage)
+      } else {
+        setLoginError(errorMessage || 'Login failed. Please try again.')
+      }
+      console.error('Login error:', error)
     } finally {
       setIsSubmitting(false)
     }

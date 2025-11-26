@@ -17,7 +17,14 @@ export const participantSchema = z.object({
   email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
   phone: z.string().regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
   schoolName: z.string().min(2, 'School name is required').max(200, 'School name is too long'),
-  aadhar: z.string().regex(aadharRegex, 'Aadhar must be exactly 12 digits'),
+  aadhar: z.string()
+    .refine((val) => {
+      const digitsOnly = val.replace(/\s/g, '')
+      return aadharRegex.test(digitsOnly)
+    }, {
+      message: 'Aadhar must be exactly 12 digits'
+    })
+    .transform((val) => val.replace(/\s/g, '')), // Remove spaces for storage
   password: z.string()
     .min(8, 'Password must be at least 8 characters')
     .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
