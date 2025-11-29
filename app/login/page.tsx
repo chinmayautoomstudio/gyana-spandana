@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -50,7 +50,7 @@ const carouselSlides = [
   },
 ]
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -105,8 +105,21 @@ export default function LoginPage() {
       }
 
       if (authData.user) {
-        // Redirect to dashboard
-        router.push('/dashboard')
+        // Check user role from user_profiles table (primary source)
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('user_id', authData.user.id)
+          .single()
+
+        // Fallback to user_metadata if profile doesn't exist
+        const role = profile?.role || authData.user.user_metadata?.role || 'participant'
+
+        if (role === 'admin') {
+          router.push('/admin')
+        } else {
+          router.push('/dashboard')
+        }
       }
     } catch (error: any) {
       // Handle connection errors specifically
@@ -217,9 +230,9 @@ export default function LoginPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
           <div className="mb-4">
-            <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+            <div className="mx-auto w-16 h-16 bg-[#C0392B]/10 rounded-full flex items-center justify-center">
               <svg
-                className="w-8 h-8 text-blue-600"
+                className="w-8 h-8 text-[#C0392B]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -343,7 +356,7 @@ export default function LoginPage() {
                     id="remember-me"
                     name="remember-me"
                     type="checkbox"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-[#C0392B] focus:ring-[#C0392B] border-gray-300 rounded"
                   />
                   <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
                     Remember Me
@@ -352,7 +365,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-sm text-[#C0392B] hover:text-[#A93226] font-medium"
                 >
                   Forgot Password?
                 </button>
@@ -379,7 +392,7 @@ export default function LoginPage() {
             <div className="mt-6 text-center">
               <p className="text-gray-600 text-sm">
                 Don't have any account?{' '}
-                <Link href="/register" className="text-blue-600 hover:underline font-medium">
+                <Link href="/register" className="text-[#C0392B] hover:underline font-medium">
                   Register
                 </Link>
               </p>
@@ -388,5 +401,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }

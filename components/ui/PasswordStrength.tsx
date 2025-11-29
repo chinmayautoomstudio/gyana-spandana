@@ -21,7 +21,7 @@ export function PasswordStrength({ password }: PasswordStrengthProps) {
       { label: 'Very Weak', color: 'bg-red-500' },
       { label: 'Weak', color: 'bg-orange-500' },
       { label: 'Fair', color: 'bg-yellow-500' },
-      { label: 'Good', color: 'bg-blue-500' },
+      { label: 'Good', color: 'bg-[#C0392B]' },
       { label: 'Strong', color: 'bg-green-500' },
     ]
 

@@ -35,7 +35,7 @@ export function Carousel({ slides, autoSlideInterval = 5000 }: CarouselProps) {
       {/* Branding - Top Left */}
       <div className="absolute top-8 left-8 z-20 flex items-center gap-3">
         <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg">
-          <span className="text-2xl font-bold text-blue-600">GS</span>
+          <span className="text-2xl font-bold text-[#C0392B]">GS</span>
         </div>
         <Link href="/" className="text-white font-bold text-xl">
           Gyana Spandana

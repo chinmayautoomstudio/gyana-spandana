@@ -57,6 +57,7 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [teamCode, setTeamCode] = useState<string | null>(null)
 
   // Email verification state
   const [p1EmailVerified, setP1EmailVerified] = useState(false)
@@ -154,6 +155,7 @@ export default function RegisterPage() {
         throw new Error(result.error)
       }
 
+      setTeamCode(result.teamCode || null)
       setSubmitSuccess(true)
       setTimeout(() => {
         router.push('/login?registered=true')
@@ -167,7 +169,7 @@ export default function RegisterPage() {
 
   if (submitSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-[#ECF0F1] px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
           <div className="mb-4">
             <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
@@ -187,10 +189,17 @@ export default function RegisterPage() {
             </div>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Successful!</h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-4">
             Your team has been registered successfully. Please check your email for verification
             links. You will be redirected to the login page shortly.
           </p>
+          {teamCode && (
+            <div className="mb-6 p-4 bg-[#C0392B]/10 border border-[#C0392B]/20 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 mb-1">Your Team ID:</p>
+              <p className="text-2xl font-bold text-[#C0392B] font-mono">{teamCode}</p>
+              <p className="text-xs text-gray-500 mt-2">Please save this Team ID for future reference</p>
+            </div>
+          )}
           <Button onClick={() => router.push('/login')} variant="primary">
             Go to Login
           </Button>
@@ -256,6 +265,31 @@ export default function RegisterPage() {
                     required
                   />
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Gender <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      {...register('participant1.gender')}
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
+                        errors.participant1?.gender
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                      }`}
+                    >
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                      <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                    {errors.participant1?.gender && (
+                      <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                        <span>⚠</span>
+                        {errors.participant1.gender.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
                     <Input
                       label="Email Address"
                       type="email"
@@ -298,10 +332,10 @@ export default function RegisterPage() {
                     />
                   </div>
                   <Input
-                    label="School Name"
+                    label="School / College Name"
                     {...register('participant1.schoolName')}
                     error={errors.participant1?.schoolName?.message}
-                    placeholder="Enter school name"
+                    placeholder="Enter school / college name"
                     required
                   />
                   <div>
@@ -333,6 +367,31 @@ export default function RegisterPage() {
                     placeholder="Enter full name"
                     required
                   />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Gender <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      {...register('participant2.gender')}
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
+                        errors.participant2?.gender
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                      }`}
+                    >
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                      <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                    {errors.participant2?.gender && (
+                      <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                        <span>⚠</span>
+                        {errors.participant2.gender.message}
+                      </p>
+                    )}
+                  </div>
                   <div>
                     <Input
                       label="Email Address"
@@ -376,10 +435,10 @@ export default function RegisterPage() {
                     />
                   </div>
                   <Input
-                    label="School Name"
+                    label="School / College Name"
                     {...register('participant2.schoolName')}
                     error={errors.participant2?.schoolName?.message}
-                    placeholder="Enter school name"
+                    placeholder="Enter school / college name"
                     required
                   />
                   <div>
@@ -404,15 +463,15 @@ export default function RegisterPage() {
                   type="checkbox"
                   id="consent"
                   {...register('consent')}
-                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
                 />
                 <label htmlFor="consent" className="text-sm text-gray-700">
                   I agree to the{' '}
-                  <Link href="/terms" className="text-blue-600 hover:underline">
+                  <Link href="/terms" className="text-[#C0392B] hover:underline">
                     Terms and Conditions
                   </Link>{' '}
                   and{' '}
-                  <Link href="/privacy" className="text-blue-600 hover:underline">
+                  <Link href="/privacy" className="text-[#C0392B] hover:underline">
                     Privacy Policy
                   </Link>
                   . I understand that my data will be used for the quiz competition purposes only.
@@ -445,7 +504,7 @@ export default function RegisterPage() {
             <div className="mt-6 text-center">
               <p className="text-gray-600 text-sm">
                 Already have an account?{' '}
-                <Link href="/login" className="text-blue-600 hover:underline font-medium">
+                <Link href="/login" className="text-[#C0392B] hover:underline font-medium">
                   Sign in here
                 </Link>
               </p>

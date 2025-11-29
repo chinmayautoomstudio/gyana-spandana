@@ -6,6 +6,7 @@
 CREATE TABLE IF NOT EXISTS teams (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_name VARCHAR(100) NOT NULL UNIQUE,
+  team_code VARCHAR(50) NOT NULL UNIQUE, -- Custom Team ID: GS-P1INIT-P2INIT-XXXX
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -24,6 +25,14 @@ CREATE TABLE IF NOT EXISTS participants (
   email_verified BOOLEAN DEFAULT FALSE,
   phone_verified BOOLEAN DEFAULT FALSE,
   is_participant1 BOOLEAN NOT NULL, -- true for participant 1, false for participant 2
+  gender VARCHAR(20) NOT NULL CHECK (gender IN ('Male', 'Female', 'Other', 'Prefer not to say')), -- Gender
+  -- Profile completion fields
+  profile_photo_url TEXT, -- URL to uploaded profile photo in Supabase Storage
+  address TEXT, -- Full residential address
+  school_address TEXT, -- School/College address
+  class VARCHAR(50), -- Current class/grade (e.g., "10th", "12th", "B.Tech 2nd Year")
+  date_of_birth DATE, -- Date of birth
+  profile_completed BOOLEAN DEFAULT FALSE, -- Flag to track if profile is completed
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT check_phone_format CHECK (phone ~ '^[6-9]\\d{9}$'),
@@ -65,6 +74,16 @@ ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quiz_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quiz_answers ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "Users can view own participant data" ON participants;
+DROP POLICY IF EXISTS "Users can update own participant data" ON participants;
+DROP POLICY IF EXISTS "Allow participant creation during registration" ON participants;
+DROP POLICY IF EXISTS "Public can view teams" ON teams;
+DROP POLICY IF EXISTS "Allow team creation during registration" ON teams;
+DROP POLICY IF EXISTS "Public can view participant public data" ON participants;
+DROP POLICY IF EXISTS "Users can view own quiz sessions" ON quiz_sessions;
+DROP POLICY IF EXISTS "Users can insert own quiz sessions" ON quiz_sessions;
 
 -- RLS Policy: Users can view their own participant data
 CREATE POLICY "Users can view own participant data"
@@ -130,8 +149,10 @@ END;
 $$ language 'plpgsql';
 
 -- Triggers to auto-update updated_at
+DROP TRIGGER IF EXISTS update_teams_updated_at ON teams;
 CREATE TRIGGER update_teams_updated_at BEFORE UPDATE ON teams
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_participants_updated_at ON participants;
 CREATE TRIGGER update_participants_updated_at BEFORE UPDATE ON participants
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

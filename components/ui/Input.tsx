@@ -33,7 +33,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             'placeholder:text-gray-400',
             error
               ? 'border-red-500 focus:ring-red-500'
-              : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500',
+              : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]',
             'disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500',
             className
           )}

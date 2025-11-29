@@ -80,9 +80,9 @@ export function OTPInput({ length = 6, value, onChange, disabled = false }: OTPI
             w-12 h-12 text-center text-lg font-semibold
             text-gray-900
             border-2 rounded-lg
-            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+            focus:outline-none focus:ring-2 focus:ring-[#C0392B] focus:border-[#C0392B]
             ${disabled ? 'bg-gray-100 cursor-not-allowed text-gray-500' : 'bg-white'}
-            ${digit ? 'border-blue-500' : 'border-gray-300'}
+            ${digit ? 'border-[#C0392B]' : 'border-gray-300'}
           `}
                 />
             ))}

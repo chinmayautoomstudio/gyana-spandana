@@ -3,6 +3,69 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { TeamRegistrationFormData } from '@/lib/validations'
 
+/**
+ * Generate initials from a name (max 2-3 letters)
+ * Example: "John Doe" -> "JD", "Mary Jane Watson" -> "MJ"
+ */
+function generateInitials(name: string): string {
+    const words = name.trim().split(/\s+/)
+    if (words.length === 0) return 'XX'
+    
+    // Take first letter of first word
+    let initials = words[0].charAt(0).toUpperCase()
+    
+    // Take first letter of second word if exists
+    if (words.length > 1) {
+        initials += words[1].charAt(0).toUpperCase()
+    } else {
+        // If only one word, take second character if available
+        initials += words[0].length > 1 ? words[0].charAt(1).toUpperCase() : 'X'
+    }
+    
+    return initials
+}
+
+/**
+ * Generate unique team code in format: GS-P1INIT-P2INIT-XXXX
+ */
+async function generateTeamCode(
+    supabase: ReturnType<typeof createAdminClient>,
+    p1Name: string,
+    p2Name: string
+): Promise<string> {
+    const p1Initials = generateInitials(p1Name)
+    const p2Initials = generateInitials(p2Name)
+    
+    let sequential = 1
+    let teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
+    
+    // Check if code exists and increment until we find a unique one
+    while (true) {
+        const { data: existing } = await supabase
+            .from('teams')
+            .select('id')
+            .eq('team_code', teamCode)
+            .single()
+        
+        if (!existing) {
+            break // Code is unique
+        }
+        
+        sequential++
+        teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
+        
+        // Safety check to prevent infinite loop
+        if (sequential > 9999) {
+            // Fallback to timestamp-based code
+            const timestamp = Date.now().toString().slice(-4)
+            teamCode = `GS-${p1Initials}-${p2Initials}-${timestamp}`
+            break
+        }
+    }
+    
+    return teamCode
+}
+
 export async function registerTeam(
     data: TeamRegistrationFormData,
     p1UserId: string,
@@ -25,7 +88,10 @@ export async function registerTeam(
         })
         if (p2Error) throw new Error(`Participant 2 Error: ${p2Error.message}`)
 
-        // 2. Create Team
+        // 2. Generate Team Code
+        const teamCode = await generateTeamCode(supabase, data.participant1.name, data.participant2.name)
+
+        // 3. Create Team
         // Check if team name exists
         const { data: existingTeam } = await supabase
             .from('teams')
@@ -39,7 +105,10 @@ export async function registerTeam(
 
         const { data: team, error: teamError } = await supabase
             .from('teams')
-            .insert({ team_name: data.teamName })
+            .insert({ 
+                team_name: data.teamName,
+                team_code: teamCode
+            })
             .select()
             .single()
 
@@ -47,7 +116,7 @@ export async function registerTeam(
             throw new Error(teamError?.message || 'Failed to create team')
         }
 
-        // 3. Create Participants
+        // 4. Create Participants
         const participants = [
             {
                 ...data.participant1,
@@ -68,6 +137,7 @@ export async function registerTeam(
                     user_id: p.userId,
                     team_id: team.id,
                     name: p.name,
+                    gender: p.gender,
                     email: p.email,
                     phone: p.phone,
                     school_name: p.schoolName,
@@ -80,9 +150,24 @@ export async function registerTeam(
             if (participantError) {
                 throw new Error(`Failed to create participant record: ${participantError.message}`)
             }
+
+            // Create user profile with 'participant' role
+            const { error: profileError } = await supabase
+                .from('user_profiles')
+                .insert({
+                    user_id: p.userId,
+                    role: 'participant',
+                    name: p.name,
+                })
+
+            // If profile already exists, update it (shouldn't happen, but handle gracefully)
+            if (profileError && profileError.code !== '23505') { // 23505 is unique violation
+                console.warn(`Failed to create user profile for ${p.userId}:`, profileError.message)
+                // Don't throw - profile creation is not critical for registration
+            }
         }
 
-        return { success: true }
+        return { success: true, teamCode: teamCode }
     } catch (error: any) {
         console.error('Registration Error:', error)
         return { success: false, error: error.message }
