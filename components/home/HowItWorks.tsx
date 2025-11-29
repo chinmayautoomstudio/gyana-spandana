@@ -28,28 +28,32 @@ export function HowItWorks({ steps }: HowItWorksProps) {
           {/* Timeline Line - Desktop */}
           <div className="hidden lg:block absolute top-24 left-0 right-0 h-1 bg-gradient-to-r from-[#C0392B]/30 via-[#E67E22]/30 to-[#F39C12]/30" />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8 items-stretch">
             {steps.map((step, index) => (
-              <div key={index} className="relative">
+              <div key={index} className="relative flex h-full">
                 {/* Step Card */}
-                <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 text-center hover:scale-105 transition-transform duration-300">
-                  {/* Step Number Badge */}
-                  <div className="relative mb-6">
-                    <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#C0392B] to-[#E67E22] rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-                      {step.number}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 text-center hover:shadow-xl transition-shadow duration-300 flex flex-col w-full h-full">
+                  {/* Icon Container - Uniform styling */}
+                  <div className="relative mb-6 flex justify-center">
+                    {/* Outer gradient circle */}
+                    <div className="w-20 h-20 bg-gradient-to-br from-[#C0392B] to-[#E67E22] rounded-full flex items-center justify-center shadow-lg">
+                      {/* Inner white circle with red border */}
+                      <div className="w-16 h-16 bg-white border-2 border-[#C0392B] rounded-full flex items-center justify-center">
+                        {/* Icon */}
+                        <div className="text-[#C0392B] flex justify-center items-center">
+                          {step.icon}
+                        </div>
+                      </div>
                     </div>
-                    {/* Timeline Dot */}
-                    <div className="hidden lg:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-[#C0392B] rounded-full border-4 border-white shadow-lg" />
                   </div>
 
-                  {/* Icon */}
-                  <div className="mb-4 text-4xl text-[#C0392B] flex justify-center">
-                    {step.icon}
+                  {/* Content - Uniform spacing and sizing */}
+                  <div className="flex-1 flex flex-col">
+                    <h3 className="text-lg font-bold text-gray-900 mb-3 min-h-[3rem] flex items-center justify-center">
+                      {step.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm leading-relaxed flex-1">{step.description}</p>
                   </div>
-
-                  {/* Content */}
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">{step.title}</h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">{step.description}</p>
                 </div>
               </div>
             ))}
