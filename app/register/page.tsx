@@ -28,7 +28,7 @@ const carouselSlides = [
   {
     image: '/images/carousel/carousel-img3.png',
     title: 'Start Your Journey',
-    description: 'Begin your quest to become a Gyana Spandana champion. Register now and test your knowledge!',
+    description: 'Begin your quest to become a GYANA SPARDHA champion. Register now and test your knowledge!',
   },
   {
     image: '/images/carousel/carousel-img4.png',
@@ -233,7 +233,31 @@ export default function RegisterPage() {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
                 Create Your Team
               </h1>
-              <p className="text-gray-600">Register your team for Gyana Spandana</p>
+              <p className="text-gray-600">Register your team for GYANA SPARDHA</p>
+            </div>
+
+            {/* Approval Notice */}
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <svg
+                    className="w-5 h-5 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <p className="text-sm text-blue-800">
+                  Online registration of participants requires approval from the designated authority of the respective educational institution.
+                </p>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
