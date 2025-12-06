@@ -28,8 +28,11 @@ export function Footer() {
               <div className="w-10 h-10 bg-gradient-to-br from-[#C0392B] to-[#E67E22] rounded-lg flex items-center justify-center text-white font-bold text-lg">
                 GS
               </div>
-              <span className="text-xl font-bold">Gyana Spandana</span>
+              <span className="text-xl font-bold">GYANA SPARDHA</span>
             </div>
+            <p className="text-2xl font-semibold text-white mb-2">
+              ଓଡ଼ିଶା: ଅସ୍ତିତ୍ଵରୁ ଅସ୍ମିତା
+            </p>
             <p className="text-gray-400 mb-4 max-w-md">
               Celebrating Odisha's rich cultural heritage through exciting quiz competitions.
               Test your knowledge and compete for recognition!
@@ -89,9 +92,14 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Bottom Bar */}
+        {/* Supported By Section */}
         <div className="border-t border-gray-700 pt-8 mt-8 text-center text-gray-400">
-          <p>&copy; {currentYear} Gyana Spandana. All rights reserved.</p>
+          <p className="mb-2">Supported by: <span className="text-white font-semibold">avinav.in & autoomstudio.com</span></p>
+        </div>
+
+        {/* Bottom Bar */}
+        <div className="border-t border-gray-700 pt-8 mt-4 text-center text-gray-400">
+          <p>&copy; {currentYear} GYANA SPARDHA. All rights reserved.</p>
         </div>
       </div>
     </footer>
