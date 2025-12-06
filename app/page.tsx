@@ -12,7 +12,7 @@ import { CTASection } from '@/components/home/CTASection'
 const heroSlides = [
   {
     image: '/images/carousel/carousel-img-homepage-1.png',
-    title: 'Welcome to Gyana Spandana',
+    title: 'GYANA SPARDHA',
     description: 'Join the ultimate quiz competition celebrating Odisha\'s rich cultural heritage, traditions, and knowledge. Test your expertise and compete for glory!',
     ctaText: 'Register Your Team',
     ctaLink: '/register',
@@ -207,7 +207,7 @@ const testimonials = [
   {
     name: 'Priyanka Das',
     school: 'DPS, Bhubaneswar',
-    quote: 'Gyana Spandana was an amazing experience! The questions were challenging and helped me learn so much about Odisha\'s culture. The team format made it even more fun!',
+    quote: 'GYANA SPARDHA was an amazing experience! The questions were challenging and helped me learn so much about Odisha\'s culture. The team format made it even more fun!',
     rating: 5,
   },
   {
@@ -236,7 +236,7 @@ const faqItems = [
   },
   {
     question: 'Is it free to participate?',
-    answer: 'Yes, participation in Gyana Spandana is completely free. There are no registration fees or hidden charges.',
+    answer: 'Yes, participation in GYANA SPARDHA is completely free. There are no registration fees or hidden charges.',
   },
   {
     question: 'What topics are covered in the quizzes?',

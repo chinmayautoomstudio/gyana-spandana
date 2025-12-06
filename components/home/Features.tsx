@@ -17,7 +17,7 @@ export function Features({ features }: FeaturesProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent mb-4">
-            Why Choose Gyana Spandana?
+            Why Choose GYANA SPARDHA?
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Experience the best quiz competition platform designed for Odisha's cultural heritage

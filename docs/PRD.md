@@ -49,11 +49,15 @@
 - Form validation and error handling
 - Password management (reset/forgot password)
 - Responsive design for mobile and desktop
-
-🚧 **In Development:**
-- Quiz participation interface
-- Real-time leaderboard
-- Admin dashboard
+- **Exam system (fully implemented):**
+  - Admin exam creation and management
+  - Question management (MCQ format)
+  - Exam taking interface with timer
+  - Auto-save functionality
+  - Score calculation and results
+  - Team score aggregation
+  - Real-time leaderboard
+  - Admin dashboard
 
 ---
 
@@ -326,6 +330,610 @@ To create an engaging, secure, and user-friendly platform that promotes knowledg
 
 ---
 
+## Exam System
+
+### Overview
+
+The exam system allows administrators to create and manage exams with multiple-choice questions, enables participants to take timed exams individually, and automatically calculates team scores by aggregating individual participant scores. The system includes comprehensive admin features for exam management, real-time leaderboards, and detailed results viewing.
+
+### Key Features
+
+- **Admin Exam Management:** Create, edit, schedule, and activate exams
+- **Question Management:** Add, edit, and delete multiple-choice questions with 4 options
+- **Exam Taking Interface:** User-friendly interface with timer, auto-save, and question navigation
+- **Automatic Scoring:** Instant score calculation upon submission
+- **Team Score Aggregation:** Automatic calculation of team scores from individual participant scores
+- **Real-time Leaderboard:** Live updates of team rankings
+- **Results Review:** Detailed question-by-question results with correct/incorrect indicators
+
+---
+
+### 6. Admin Exam Management
+
+#### 6.1 Exam Creation (`/admin/exams/new`)
+
+**Purpose:** Allow administrators to create new exams
+
+**Access:** Admin users only (verified via `user_profiles.role = 'admin'`)
+
+**Form Fields:**
+- **Exam Title** (required, min 3 characters)
+- **Description** (optional, text area)
+- **Duration (minutes)** (required, minimum 1 minute)
+- **Passing Score** (optional, integer)
+- **Scheduled Start** (optional, datetime-local)
+- **Scheduled End** (optional, datetime-local)
+
+**Process Flow:**
+1. Admin navigates to `/admin/exams/new`
+2. System verifies admin role
+3. Admin fills exam details
+4. Form validation (client-side with Zod)
+5. Exam created with status 'draft'
+6. Redirect to question management page
+
+**Exam Statuses:**
+- `draft` - Exam created but not ready
+- `scheduled` - Exam scheduled for specific date/time
+- `active` - Exam currently available for participants
+- `completed` - Exam period has ended
+- `cancelled` - Exam cancelled by admin
+
+#### 6.2 Exam List (`/admin/exams`)
+
+**Purpose:** View and manage all exams
+
+**Features:**
+- List all exams with status indicators
+- Color-coded status badges
+- Quick access to exam details and question management
+- Create new exam button
+- Filter by status (future enhancement)
+
+**Display Information:**
+- Exam title and description
+- Duration and total questions count
+- Scheduled start/end times
+- Current status
+- Creation date
+
+#### 6.3 Exam Details (`/admin/exams/[id]`)
+
+**Purpose:** View exam details and manage exam status
+
+**Features:**
+- View complete exam information
+- Change exam status (draft → scheduled → active → completed)
+- Access question management
+- View statistics (future enhancement)
+
+---
+
+### 7. Question Management
+
+#### 7.1 Question List (`/admin/exams/[id]/questions`)
+
+**Purpose:** Manage questions for a specific exam
+
+**Access:** Admin users only
+
+**Features:**
+- List all questions with order
+- Visual indicators for correct answers
+- Add new question button
+- Edit question button
+- Delete question button
+- Question count displayed
+- Automatic question count update
+
+#### 7.2 Question Form
+
+**Question Fields:**
+- **Question Text** (required, textarea)
+- **Option A** (required)
+- **Option B** (required)
+- **Option C** (required)
+- **Option D** (required)
+- **Correct Answer** (required, dropdown: A/B/C/D)
+- **Points** (required, default: 1, minimum: 1)
+- **Explanation** (optional, textarea)
+
+**Validation:**
+- All options must be unique (future enhancement)
+- Question text cannot be empty
+- Points must be positive integer
+
+**Question Display:**
+- Questions shown in creation order
+- Correct answer highlighted with green background
+- Points displayed for each question
+- Explanation shown if provided
+
+---
+
+### 8. Participant Exam Interface
+
+#### 8.1 Available Exams (`/exams`)
+
+**Purpose:** Display exams available for participants to take
+
+**Access:** Authenticated participants
+
+**Features:**
+- List only scheduled or active exams
+- Show exam details: title, description, duration, question count
+- Display scheduled start/end times
+- Status indicators (available/not available yet)
+- "Start Exam" button for available exams
+- "View Results" button for completed exams
+- Completion status for each exam
+
+**Process Flow:**
+1. Participant logs in
+2. Navigates to `/exams` (or clicks "Available Exams" in dashboard)
+3. Views list of available exams
+4. Clicks "Start Exam" on desired exam
+5. Redirected to exam taking interface
+
+**Exam Availability Rules:**
+- Exam status must be 'scheduled' or 'active'
+- If scheduled: Current time must be between scheduled_start and scheduled_end
+- If active: Available immediately
+- Participant can only attempt each exam once
+
+#### 8.2 Exam Taking Interface (`/exams/[id]/take`)
+
+**Purpose:** Provide interface for participants to take exams
+
+**Access:** Authenticated participants, exam must be available
+
+**Key Features:**
+
+**Header Section:**
+- Exam title
+- Current question number (e.g., "Question 5 of 50")
+- Timer countdown (MM:SS format)
+- Red warning when less than 5 minutes remaining
+- Submit Exam button
+
+**Progress Indicator:**
+- Visual progress bar
+- Answered questions count
+- Percentage completed
+- Color-coded progress
+
+**Question Navigation Sidebar:**
+- Grid/list of all questions
+- Current question highlighted
+- Answered questions marked with green
+- Unanswered questions in gray
+- Click to jump to any question
+- Scrollable for large question sets
+
+**Question Display:**
+- Large, readable question text
+- Four option buttons (A, B, C, D)
+- Selected option highlighted
+- Previous/Next navigation buttons
+- Disabled Previous on first question
+- Disabled Next on last question
+
+**Auto-Save Functionality:**
+- Answers automatically saved every 2 seconds
+- Debounced to prevent excessive database writes
+- Transparent to user (no save indicator needed)
+- Answers persist across page refreshes
+
+**Timer Functionality:**
+- Countdown timer from exam duration
+- Automatically calculated from attempt start time
+- Auto-submit when timer reaches zero
+- Warning visual when less than 5 minutes remain
+- Timer persists across page refreshes
+
+**Attempt Management:**
+- Exam attempt created when exam is started
+- Resume capability if attempt is in progress
+- Prevents multiple attempts (unique constraint on exam_id + participant_id)
+- Time remaining calculated from original start time
+
+**Process Flow:**
+1. Participant clicks "Start Exam"
+2. System checks for existing in-progress attempt
+3. If exists: Resume with remaining time
+4. If not: Create new attempt, record start time
+5. Load questions for exam
+6. Load any previously saved answers
+7. Display exam interface
+8. Timer starts countdown
+9. Participant answers questions (auto-saved)
+10. Participant can navigate between questions
+11. Submit exam manually or wait for auto-submit
+12. Calculate scores automatically
+13. Redirect to results page
+
+**Submission Process:**
+1. User clicks "Submit Exam" (or auto-submit on timeout)
+2. Confirmation dialog (for manual submit)
+3. Fetch all questions with correct answers
+4. Compare user answers with correct answers
+5. Calculate total score and correct answers count
+6. Save all answers with is_correct flag and points_earned
+7. Update attempt: status = 'submitted', score, correct_answers, submitted_at
+8. Trigger team score calculation (database trigger)
+9. Redirect to results page
+
+---
+
+### 9. Exam Results
+
+#### 9.1 Results Page (`/exams/[id]/results`)
+
+**Purpose:** Display detailed exam results to participants
+
+**Access:** Authenticated participants, only for their own submitted exams
+
+**Features:**
+
+**Summary Section:**
+- Exam title
+- Total score (out of maximum possible)
+- Correct answers count (e.g., "45 / 50")
+- Percentage score
+- Pass/Fail indicator (if passing score set)
+- Submitted timestamp
+
+**Question Review:**
+- All questions displayed with answers
+- Correct answers highlighted in green
+- Incorrect answers highlighted in red
+- User's selected answer shown
+- Points earned for each question
+- Option to review all questions with explanations
+
+**Display Format:**
+- Questions listed sequentially
+- Each question shows:
+  - Question text
+  - All four options (A, B, C, D)
+  - User's selected answer marked
+  - Correct answer highlighted
+  - Points earned/available
+
+---
+
+### 10. Team Score Aggregation
+
+#### 10.1 Team Score Calculation
+
+**Purpose:** Automatically calculate team scores from individual participant scores
+
+**Implementation:**
+- Database trigger automatically calculates team scores when exam attempt is submitted
+- Function: `calculate_team_scores(exam_uuid)`
+- Trigger: `trigger_update_team_scores` fires on exam_attempts status change
+
+**Calculation Logic:**
+1. When participant submits exam:
+   - Individual score saved to `exam_attempts.score`
+   - Trigger fires if status changes to 'submitted'
+2. Team score calculation:
+   - Find participant1's score for the exam
+   - Find participant2's score for the exam
+   - Calculate total_team_score = participant1_score + participant2_score
+   - Update or insert into `team_scores` table
+   - Calculate rank based on total_team_score (descending)
+   - Update rank for all teams
+
+**Team Scores Table:**
+- `exam_id` - Reference to exam
+- `team_id` - Reference to team
+- `participant1_score` - Score of participant 1
+- `participant2_score` - Score of participant 2
+- `total_team_score` - Sum of both scores
+- `rank` - Team rank for the exam
+- `last_updated` - Timestamp of last update
+
+**Ranking Rules:**
+- Teams ranked by total_team_score (descending)
+- Ties broken by last_updated (earlier submission ranks higher)
+- Ranks recalculated whenever any team member submits
+
+---
+
+### 11. Leaderboard
+
+#### 11.1 Admin Leaderboard (`/admin/leaderboard`)
+
+**Purpose:** Display team rankings for exams
+
+**Access:** Admin users only
+
+**Features:**
+- Dropdown to select exam
+- Real-time updates via Supabase subscriptions
+- Team rankings table
+- Medal indicators for top 3 teams (🥇 🥈 🥉)
+- Individual participant scores displayed
+- Total team score highlighted
+
+**Display Columns:**
+- Rank (with medals for top 3)
+- Team Name
+- Participant 1 Score
+- Participant 2 Score
+- Total Team Score
+
+**Real-time Updates:**
+- Uses Supabase real-time subscriptions
+- Automatically updates when team_scores table changes
+- No page refresh required
+
+**Available Exams:**
+- Only shows exams with status 'active' or 'completed'
+- Sorted by creation date (newest first)
+
+---
+
+### 12. Database Schema - Exam System
+
+#### 12.1 Exams Table
+
+Stores exam information and configuration.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique exam identifier |
+| title | VARCHAR(255) | NOT NULL | Exam title |
+| description | TEXT | NULL | Exam description |
+| duration_minutes | INTEGER | NOT NULL | Exam duration in minutes |
+| total_questions | INTEGER | DEFAULT 0 | Total number of questions (auto-updated) |
+| passing_score | INTEGER | NULL | Minimum score to pass (optional) |
+| scheduled_start | TIMESTAMP WITH TIME ZONE | NULL | Exam start time |
+| scheduled_end | TIMESTAMP WITH TIME ZONE | NULL | Exam end time |
+| status | VARCHAR(20) | DEFAULT 'draft', CHECK | Exam status: draft, scheduled, active, completed, cancelled |
+| created_by | UUID | REFERENCES auth.users(id) | Admin user who created the exam |
+| created_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Creation timestamp |
+| updated_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Last update timestamp |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_exams_status` on `status`
+- `idx_exams_created_by` on `created_by`
+- `idx_exams_scheduled_start` on `scheduled_start`
+
+**RLS Policies:**
+- Admins can manage all exams (INSERT, UPDATE, DELETE, SELECT)
+- Participants can view scheduled/active exams (SELECT only)
+
+#### 12.2 Questions Table
+
+Stores questions for exams.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique question identifier |
+| exam_id | UUID | REFERENCES exams(id), ON DELETE CASCADE | Parent exam |
+| question_text | TEXT | NOT NULL | Question text |
+| option_a | TEXT | NOT NULL | Option A |
+| option_b | TEXT | NOT NULL | Option B |
+| option_c | TEXT | NOT NULL | Option C |
+| option_d | TEXT | NOT NULL | Option D |
+| correct_answer | VARCHAR(1) | CHECK (IN 'A','B','C','D') | Correct answer option |
+| points | INTEGER | DEFAULT 1 | Points awarded for correct answer |
+| explanation | TEXT | NULL | Explanation for correct answer |
+| order_index | INTEGER | NULL | Question order (optional) |
+| created_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Creation timestamp |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_questions_exam_id` on `exam_id`
+- `idx_questions_order_index` on `(exam_id, order_index)`
+
+**RLS Policies:**
+- Admins can manage all questions
+- Participants can view questions for scheduled/active exams
+
+**Auto-update Trigger:**
+- When questions added/deleted, `total_questions` in exams table automatically updated
+
+#### 12.3 Exam Attempts Table
+
+Stores individual participant exam attempts.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique attempt identifier |
+| exam_id | UUID | REFERENCES exams(id), ON DELETE CASCADE | Exam being attempted |
+| participant_id | UUID | REFERENCES participants(id), ON DELETE CASCADE | Participant taking exam |
+| started_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Attempt start time |
+| submitted_at | TIMESTAMP WITH TIME ZONE | NULL | Submission time |
+| score | INTEGER | DEFAULT 0 | Total score achieved |
+| total_questions | INTEGER | NULL | Total questions in exam |
+| correct_answers | INTEGER | DEFAULT 0 | Number of correct answers |
+| status | VARCHAR(20) | DEFAULT 'in_progress', CHECK | Status: in_progress, submitted, timeout |
+| time_taken_minutes | INTEGER | NULL | Time taken to complete (minutes) |
+| UNIQUE(exam_id, participant_id) | | | Prevents multiple attempts per participant per exam |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_exam_attempts_exam_id` on `exam_id`
+- `idx_exam_attempts_participant_id` on `participant_id`
+- `idx_exam_attempts_status` on `status`
+- Unique index on `(exam_id, participant_id)`
+
+**RLS Policies:**
+- Participants can create their own exam attempts
+- Participants can view their own attempts
+- Participants can update their own in-progress attempts
+- Admins can view all attempts
+
+**Team Score Trigger:**
+- When attempt status changes to 'submitted', automatically triggers team score calculation
+
+#### 12.4 Exam Answers Table
+
+Stores individual answers for each question in an attempt.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique answer identifier |
+| attempt_id | UUID | REFERENCES exam_attempts(id), ON DELETE CASCADE | Parent attempt |
+| question_id | UUID | REFERENCES questions(id), ON DELETE CASCADE | Question answered |
+| selected_answer | VARCHAR(1) | CHECK (IN 'A','B','C','D'), NULL | Answer selected by participant |
+| is_correct | BOOLEAN | NULL | Whether answer is correct |
+| points_earned | INTEGER | DEFAULT 0 | Points earned for this answer |
+| answered_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Answer timestamp |
+| UNIQUE(attempt_id, question_id) | | | One answer per question per attempt |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_exam_answers_attempt_id` on `attempt_id`
+- `idx_exam_answers_question_id` on `question_id`
+- Unique index on `(attempt_id, question_id)`
+
+**RLS Policies:**
+- Participants can create/update answers for their own in-progress attempts
+- Participants can view answers for their own attempts
+- Admins can view all answers
+
+#### 12.5 Team Scores Table
+
+Stores aggregated team scores for leaderboards.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique score identifier |
+| exam_id | UUID | REFERENCES exams(id), ON DELETE CASCADE | Exam reference |
+| team_id | UUID | REFERENCES teams(id), ON DELETE CASCADE | Team reference |
+| participant1_score | INTEGER | DEFAULT 0 | Score of participant 1 |
+| participant2_score | INTEGER | DEFAULT 0 | Score of participant 2 |
+| total_team_score | INTEGER | DEFAULT 0 | Sum of both scores |
+| rank | INTEGER | NULL | Team rank for this exam |
+| last_updated | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Last update timestamp |
+| UNIQUE(exam_id, team_id) | | | One score record per team per exam |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_team_scores_exam_id` on `exam_id`
+- `idx_team_scores_team_id` on `team_id`
+- `idx_team_scores_total_score` on `(exam_id, total_team_score DESC)` - For leaderboard queries
+
+**RLS Policies:**
+- Only admins can view team scores (for leaderboard)
+
+**Auto-calculation:**
+- Scores automatically calculated by database function when exam attempts are submitted
+- Ranks automatically calculated and updated
+
+#### 12.6 Database Functions
+
+**calculate_team_scores(exam_uuid UUID)**
+- Calculates team scores for all teams that have submitted attempts
+- Deletes existing scores for the exam
+- Inserts new calculated scores
+- Updates ranks for all teams
+- Called automatically by trigger when attempt is submitted
+
+**update_exam_question_count()**
+- Automatically updates `total_questions` in exams table
+- Triggered when questions are added or deleted
+
+**update_team_scores_on_submit()**
+- Trigger function that calls `calculate_team_scores()` when attempt is submitted
+- Ensures team scores are always up-to-date
+
+---
+
+### 13. Security & Access Control
+
+#### 13.1 Role-Based Access
+
+**Admin Users:**
+- Full access to exam management
+- Can create, edit, delete exams
+- Can manage questions
+- Can view all attempts and results
+- Can view leaderboard
+- Verified via `user_profiles.role = 'admin'`
+
+**Participants:**
+- Can view available exams
+- Can take exams (one attempt per exam)
+- Can view their own results
+- Cannot view other participants' results
+- Cannot view team scores (leaderboard admin-only)
+
+#### 13.2 Exam Access Rules
+
+1. **Exam Visibility:**
+   - Participants can only see exams with status 'scheduled' or 'active'
+   - Draft and completed exams hidden from participants
+   - Scheduled exams visible only within scheduled time window
+
+2. **Exam Attempt Rules:**
+   - One attempt per participant per exam (enforced by unique constraint)
+   - Cannot start new attempt if one already exists
+   - Can resume in-progress attempts
+   - Cannot modify submitted attempts
+
+3. **Time Restrictions:**
+   - Timer enforces exam duration
+   - Auto-submit when time expires
+   - Cannot submit after scheduled_end time (future enhancement)
+
+#### 13.3 Data Protection
+
+- Row Level Security (RLS) enabled on all exam tables
+- Participants can only access their own attempts and answers
+- Question text hidden until exam attempt starts
+- Correct answers hidden until exam is submitted
+- Team scores only visible to admins
+
+---
+
+### 14. User Flows - Exam System
+
+#### 14.1 Admin: Create and Activate Exam
+
+1. Admin logs in and navigates to `/admin/exams`
+2. Clicks "Create New Exam"
+3. Fills exam details (title, description, duration, schedule)
+4. Clicks "Create Exam"
+5. Redirected to question management page
+6. Adds questions one by one
+7. Reviews questions list
+8. Returns to exam list
+9. Clicks exam to view details
+10. Changes status from 'draft' to 'scheduled' or 'active'
+11. Exam now visible to participants
+
+#### 14.2 Participant: Take Exam
+
+1. Participant logs in
+2. Navigates to dashboard or `/exams`
+3. Views available exams list
+4. Clicks "Start Exam" on desired exam
+5. Exam interface loads with timer
+6. Answers questions (auto-saved every 2 seconds)
+7. Navigates between questions using sidebar
+8. Reviews all answers before submitting
+9. Clicks "Submit Exam"
+10. Confirms submission
+11. Redirected to results page
+12. Reviews detailed results
+13. Can view results anytime from `/exams/[id]/results`
+
+#### 14.3 Admin: View Leaderboard
+
+1. Admin logs in and navigates to `/admin/leaderboard`
+2. Selects exam from dropdown
+3. Views team rankings table
+4. Leaderboard updates in real-time as participants submit
+5. Can switch between different exams
+
+---
+
 ## Technical Architecture
 
 ### Technology Stack
@@ -357,43 +965,76 @@ To create an engaging, secure, and user-friendly platform that promotes knowledg
 ```
 gyana-spandana/
 ├── app/
+│   ├── admin/
+│   │   ├── exams/
+│   │   │   ├── [id]/
+│   │   │   │   ├── page.tsx       # Exam details
+│   │   │   │   └── questions/
+│   │   │   │       └── page.tsx    # Question management
+│   │   │   ├── new/
+│   │   │   │   └── page.tsx        # Create new exam
+│   │   │   └── page.tsx            # Exam list
+│   │   ├── leaderboard/
+│   │   │   └── page.tsx            # Leaderboard
+│   │   ├── participants/
+│   │   │   └── page.tsx            # Participant management
+│   │   └── page.tsx                # Admin dashboard
+│   ├── exams/
+│   │   ├── [id]/
+│   │   │   ├── take/
+│   │   │   │   └── page.tsx        # Exam taking interface
+│   │   │   └── results/
+│   │   │       └── page.tsx        # Exam results
+│   │   └── page.tsx                # Available exams list
 │   ├── auth/
 │   │   └── callback/
-│   │       └── route.ts          # Auth callback handler
+│   │       └── route.ts            # Auth callback handler
 │   ├── dashboard/
-│   │   └── page.tsx               # User dashboard
+│   │   └── page.tsx                # User dashboard
 │   ├── login/
-│   │   └── page.tsx               # Login page
+│   │   └── page.tsx                # Login page
 │   ├── register/
-│   │   └── page.tsx               # Registration page
-│   ├── test-connection/
-│   │   └── page.tsx               # Connection test page
-│   ├── layout.tsx                 # Root layout
-│   ├── page.tsx                   # Landing page
+│   │   └── page.tsx                # Registration page
+│   ├── profile/
+│   │   └── edit/
+│   │       └── page.tsx            # Profile editing
+│   ├── layout.tsx                  # Root layout
+│   ├── page.tsx                    # Landing page
 │   └── globals.css                 # Global styles
 ├── components/
-│   └── ui/
-│       ├── Button.tsx              # Button component
-│       ├── Carousel.tsx            # Image carousel
-│       ├── Input.tsx               # Input component
-│       └── PasswordStrength.tsx    # Password strength indicator
+│   ├── ui/
+│   │   ├── Button.tsx              # Button component
+│   │   ├── Carousel.tsx            # Image carousel
+│   │   ├── Input.tsx               # Input component
+│   │   ├── PasswordStrength.tsx    # Password strength indicator
+│   │   ├── ProfileCompletionModal.tsx  # Profile completion modal
+│   │   └── EmailVerification.tsx   # Email verification component
+│   └── layout/
+│       ├── Navbar.tsx               # Navigation bar
+│       └── Footer.tsx               # Footer
 ├── lib/
 │   ├── supabase/
-│   │   ├── client.ts              # Browser Supabase client
-│   │   └── server.ts              # Server Supabase client
-│   ├── validations.ts             # Zod schemas
-│   └── utils.ts                   # Utility functions
+│   │   ├── client.ts               # Browser Supabase client
+│   │   ├── server.ts               # Server Supabase client
+│   │   └── admin.ts                # Admin Supabase client
+│   ├── utils/
+│   │   ├── scoring.ts              # Score calculation utilities
+│   │   └── roles.ts                # Role management utilities
+│   ├── validations.ts              # Zod schemas
+│   └── utils.ts                    # Utility functions
 ├── docs/
-│   ├── PRD.md                     # This document
-│   ├── database-schema.sql        # Database schema
-│   └── ...                        # Other documentation
+│   ├── PRD.md                      # This document
+│   ├── database-schema.sql         # Base database schema
+│   ├── database-exam-schema.sql    # Exam system schema
+│   ├── exam-system-setup.md        # Exam system setup guide
+│   └── ...                         # Other documentation
 ├── public/
 │   └── images/
-│       └── carousel/              # Carousel images
-├── middleware.ts                  # Next.js middleware
-├── next.config.ts                 # Next.js configuration
-├── package.json                   # Dependencies
-└── tsconfig.json                  # TypeScript configuration
+│       └── carousel/                # Carousel images
+├── middleware.ts                   # Next.js middleware
+├── next.config.ts                  # Next.js configuration
+├── package.json                    # Dependencies
+└── tsconfig.json                   # TypeScript configuration
 ```
 
 ### Authentication Flow
@@ -435,6 +1076,16 @@ gyana-spandana/
 3. **Dashboard:**
    ```
    Request → Middleware (check auth) → Fetch user → Fetch participant → Fetch team → Display
+   ```
+
+4. **Exam Taking:**
+   ```
+   Start Exam → Create Attempt → Load Questions → Auto-save Answers → Submit → Calculate Scores → Update Team Scores → Display Results
+   ```
+
+5. **Team Score Calculation:**
+   ```
+   Participant Submits → Trigger Fires → Calculate Team Scores → Update Ranks → Leaderboard Updates (Real-time)
    ```
 
 ---
@@ -511,47 +1162,152 @@ Stores participant information linked to teams and auth users.
 
 ---
 
-#### 3. `quiz_sessions` (Future Use)
+#### 3. `exams` (Exam System)
 
-Stores quiz session information for participants.
+Stores exam information and configuration. See [Exam System Database Schema](#12-database-schema---exam-system) for complete details.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique session identifier |
-| participant_id | UUID | REFERENCES participants(id), ON DELETE CASCADE | Link to participant |
-| started_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Session start time |
-| completed_at | TIMESTAMP WITH TIME ZONE | NULL | Session completion time |
-| score | INTEGER | DEFAULT 0 | Quiz score |
-| total_questions | INTEGER | DEFAULT 0 | Total questions in quiz |
-| status | VARCHAR(20) | DEFAULT 'in_progress', CHECK | Session status (in_progress, completed, abandoned) |
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique exam identifier |
+| title | VARCHAR(255) | NOT NULL | Exam title |
+| description | TEXT | NULL | Exam description |
+| duration_minutes | INTEGER | NOT NULL | Exam duration in minutes |
+| total_questions | INTEGER | DEFAULT 0 | Total number of questions (auto-updated) |
+| passing_score | INTEGER | NULL | Minimum score to pass (optional) |
+| scheduled_start | TIMESTAMP WITH TIME ZONE | NULL | Exam start time |
+| scheduled_end | TIMESTAMP WITH TIME ZONE | NULL | Exam end time |
+| status | VARCHAR(20) | DEFAULT 'draft', CHECK | Exam status: draft, scheduled, active, completed, cancelled |
+| created_by | UUID | REFERENCES auth.users(id) | Admin user who created the exam |
+| created_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Creation timestamp |
+| updated_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Last update timestamp |
 
 **Indexes:**
-- `idx_quiz_sessions_participant_id` on `participant_id`
+- Primary key on `id`
+- `idx_exams_status` on `status`
+- `idx_exams_created_by` on `created_by`
+- `idx_exams_scheduled_start` on `scheduled_start`
 
 **RLS Policies:**
-- Users can view their own quiz sessions
-- Users can insert their own quiz sessions
+- Admins can manage all exams
+- Participants can view scheduled/active exams
 
 ---
 
-#### 4. `quiz_answers` (Future Use)
+#### 4. `questions` (Exam System)
 
-Stores individual quiz answers.
+Stores questions for exams. See [Exam System Database Schema](#12-database-schema---exam-system) for complete details.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique question identifier |
+| exam_id | UUID | REFERENCES exams(id), ON DELETE CASCADE | Parent exam |
+| question_text | TEXT | NOT NULL | Question text |
+| option_a | TEXT | NOT NULL | Option A |
+| option_b | TEXT | NOT NULL | Option B |
+| option_c | TEXT | NOT NULL | Option C |
+| option_d | TEXT | NOT NULL | Option D |
+| correct_answer | VARCHAR(1) | CHECK (IN 'A','B','C','D') | Correct answer option |
+| points | INTEGER | DEFAULT 1 | Points awarded for correct answer |
+| explanation | TEXT | NULL | Explanation for correct answer |
+| order_index | INTEGER | NULL | Question order (optional) |
+| created_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Creation timestamp |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_questions_exam_id` on `exam_id`
+- `idx_questions_order_index` on `(exam_id, order_index)`
+
+**RLS Policies:**
+- Admins can manage all questions
+- Participants can view questions for scheduled/active exams
+
+---
+
+#### 5. `exam_attempts` (Exam System)
+
+Stores individual participant exam attempts. See [Exam System Database Schema](#12-database-schema---exam-system) for complete details.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique attempt identifier |
+| exam_id | UUID | REFERENCES exams(id), ON DELETE CASCADE | Exam being attempted |
+| participant_id | UUID | REFERENCES participants(id), ON DELETE CASCADE | Participant taking exam |
+| started_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Attempt start time |
+| submitted_at | TIMESTAMP WITH TIME ZONE | NULL | Submission time |
+| score | INTEGER | DEFAULT 0 | Total score achieved |
+| total_questions | INTEGER | NULL | Total questions in exam |
+| correct_answers | INTEGER | DEFAULT 0 | Number of correct answers |
+| status | VARCHAR(20) | DEFAULT 'in_progress', CHECK | Status: in_progress, submitted, timeout |
+| time_taken_minutes | INTEGER | NULL | Time taken to complete (minutes) |
+| UNIQUE(exam_id, participant_id) | | | Prevents multiple attempts per participant per exam |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_exam_attempts_exam_id` on `exam_id`
+- `idx_exam_attempts_participant_id` on `participant_id`
+- `idx_exam_attempts_status` on `status`
+- Unique index on `(exam_id, participant_id)`
+
+**RLS Policies:**
+- Participants can create/view/update their own attempts
+- Admins can view all attempts
+
+---
+
+#### 6. `exam_answers` (Exam System)
+
+Stores individual answers for each question in an attempt. See [Exam System Database Schema](#12-database-schema---exam-system) for complete details.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique answer identifier |
-| session_id | UUID | REFERENCES quiz_sessions(id), ON DELETE CASCADE | Link to quiz session |
-| question_id | UUID | NULL | Question identifier |
-| answer | TEXT | NULL | Answer text |
+| attempt_id | UUID | REFERENCES exam_attempts(id), ON DELETE CASCADE | Parent attempt |
+| question_id | UUID | REFERENCES questions(id), ON DELETE CASCADE | Question answered |
+| selected_answer | VARCHAR(1) | CHECK (IN 'A','B','C','D'), NULL | Answer selected by participant |
 | is_correct | BOOLEAN | NULL | Whether answer is correct |
+| points_earned | INTEGER | DEFAULT 0 | Points earned for this answer |
 | answered_at | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Answer timestamp |
+| UNIQUE(attempt_id, question_id) | | | One answer per question per attempt |
 
 **Indexes:**
-- `idx_quiz_answers_session_id` on `session_id`
+- Primary key on `id`
+- `idx_exam_answers_attempt_id` on `attempt_id`
+- `idx_exam_answers_question_id` on `question_id`
+- Unique index on `(attempt_id, question_id)`
 
 **RLS Policies:**
-- Inherited from quiz_sessions policies
+- Participants can create/update/view answers for their own attempts
+- Admins can view all answers
+
+---
+
+#### 7. `team_scores` (Exam System)
+
+Stores aggregated team scores for leaderboards. See [Exam System Database Schema](#12-database-schema---exam-system) for complete details.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique score identifier |
+| exam_id | UUID | REFERENCES exams(id), ON DELETE CASCADE | Exam reference |
+| team_id | UUID | REFERENCES teams(id), ON DELETE CASCADE | Team reference |
+| participant1_score | INTEGER | DEFAULT 0 | Score of participant 1 |
+| participant2_score | INTEGER | DEFAULT 0 | Score of participant 2 |
+| total_team_score | INTEGER | DEFAULT 0 | Sum of both scores |
+| rank | INTEGER | NULL | Team rank for this exam |
+| last_updated | TIMESTAMP WITH TIME ZONE | DEFAULT NOW() | Last update timestamp |
+| UNIQUE(exam_id, team_id) | | | One score record per team per exam |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_team_scores_exam_id` on `exam_id`
+- `idx_team_scores_team_id` on `team_id`
+- `idx_team_scores_total_score` on `(exam_id, total_team_score DESC)`
+
+**RLS Policies:**
+- Only admins can view team scores (for leaderboard)
+
+**Auto-calculation:**
+- Scores automatically calculated by database function when exam attempts are submitted
 
 ---
 
@@ -962,6 +1718,190 @@ supabase
   .single()
 ```
 
+#### Exam System API
+
+**Create Exam (Admin):**
+```typescript
+supabase
+  .from('exams')
+  .insert({
+    title: string,
+    description: string | null,
+    duration_minutes: number,
+    passing_score: number | null,
+    scheduled_start: string | null,
+    scheduled_end: string | null,
+    status: 'draft',
+    created_by: UUID
+  })
+  .select()
+  .single()
+```
+
+**Fetch Available Exams:**
+```typescript
+supabase
+  .from('exams')
+  .select('*')
+  .in('status', ['scheduled', 'active'])
+  .order('scheduled_start', { ascending: true })
+```
+
+**Create Exam Attempt:**
+```typescript
+supabase
+  .from('exam_attempts')
+  .insert({
+    exam_id: UUID,
+    participant_id: UUID,
+    total_questions: number,
+    status: 'in_progress'
+  })
+  .select()
+  .single()
+```
+
+**Fetch Questions for Exam:**
+```typescript
+supabase
+  .from('questions')
+  .select('*')
+  .eq('exam_id', UUID)
+  .order('order_index', { ascending: true, nullsFirst: false })
+  .order('created_at', { ascending: true })
+```
+
+**Save Exam Answer (Auto-save):**
+```typescript
+supabase
+  .from('exam_answers')
+  .upsert({
+    attempt_id: UUID,
+    question_id: UUID,
+    selected_answer: 'A' | 'B' | 'C' | 'D'
+  }, {
+    onConflict: 'attempt_id,question_id'
+  })
+```
+
+**Submit Exam:**
+```typescript
+// 1. Calculate scores
+const { data: questions } = await supabase
+  .from('questions')
+  .select('id, correct_answer, points')
+  .eq('exam_id', UUID)
+
+// 2. Update all answers with scoring
+for (const question of questions) {
+  await supabase
+    .from('exam_answers')
+    .upsert({
+      attempt_id: UUID,
+      question_id: question.id,
+      selected_answer: answer,
+      is_correct: answer === question.correct_answer,
+      points_earned: answer === question.correct_answer ? question.points : 0
+    }, {
+      onConflict: 'attempt_id,question_id'
+    })
+}
+
+// 3. Update attempt status
+await supabase
+  .from('exam_attempts')
+  .update({
+    status: 'submitted',
+    score: totalScore,
+    correct_answers: correctCount,
+    submitted_at: new Date().toISOString(),
+    time_taken_minutes: timeTaken
+  })
+  .eq('id', attemptId)
+```
+
+**Fetch Exam Results:**
+```typescript
+// Fetch attempt
+const { data: attempt } = await supabase
+  .from('exam_attempts')
+  .select('*')
+  .eq('exam_id', UUID)
+  .eq('participant_id', UUID)
+  .eq('status', 'submitted')
+  .single()
+
+// Fetch answers with question details
+const { data: answers } = await supabase
+  .from('exam_answers')
+  .select(`
+    *,
+    questions (
+      question_text,
+      option_a,
+      option_b,
+      option_c,
+      option_d,
+      correct_answer
+    )
+  `)
+  .eq('attempt_id', attempt.id)
+```
+
+**Fetch Leaderboard (Admin):**
+```typescript
+supabase
+  .from('team_scores')
+  .select('*, teams(team_name), exams(title)')
+  .eq('exam_id', UUID)
+  .order('total_team_score', { ascending: false })
+  .order('rank', { ascending: true })
+```
+
+**Real-time Leaderboard Subscription:**
+```typescript
+const channel = supabase
+  .channel('leaderboard-updates')
+  .on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'team_scores',
+      filter: `exam_id=eq.${examId}`
+    },
+    () => {
+      // Refresh leaderboard data
+    }
+  )
+  .subscribe()
+```
+
+**Add Question (Admin):**
+```typescript
+supabase
+  .from('questions')
+  .insert({
+    exam_id: UUID,
+    question_text: string,
+    option_a: string,
+    option_b: string,
+    option_c: string,
+    option_d: string,
+    correct_answer: 'A' | 'B' | 'C' | 'D',
+    points: number,
+    explanation: string | null
+  })
+```
+
+**Update Exam Status (Admin):**
+```typescript
+supabase
+  .from('exams')
+  .update({ status: 'scheduled' | 'active' | 'completed' })
+  .eq('id', UUID)
+```
+
 ### API Error Handling
 
 All API calls include:
@@ -969,6 +1909,8 @@ All API calls include:
 - **Error Messages:** User-friendly error messages
 - **Loading States:** Show loading indicators during API calls
 - **Retry Logic:** Handle network errors gracefully
+- **Role Verification:** Admin operations verify user role before execution
+- **RLS Enforcement:** Database-level security via Row Level Security policies
 
 ---
 
@@ -1063,14 +2005,24 @@ All API calls include:
 
 ### Database Setup
 
-1. **Run Database Schema:**
+1. **Run Base Database Schema:**
    - Go to Supabase SQL Editor
    - Run `docs/database-schema.sql`
-   - Verify tables are created
+   - Verify base tables are created (teams, participants)
 
-2. **Verify RLS Policies:**
+2. **Run Exam System Schema:**
+   - Run `docs/database-exam-schema.sql`
+   - This creates exam-related tables (exams, questions, exam_attempts, exam_answers, team_scores)
+   - Creates database functions and triggers for team score calculation
+
+3. **Verify RLS Policies:**
    - Check that all tables have RLS enabled
    - Verify policies are created correctly
+   - Test admin and participant access restrictions
+
+4. **Set Up Admin User:**
+   - Follow instructions in `docs/admin-setup.md`
+   - Create at least one admin user for exam management
 
 ### Supabase Configuration
 
@@ -1114,82 +2066,195 @@ All API calls include:
    - Login with test account
    - Verify dashboard loads
 
-3. **Test Security:**
-   - Verify RLS policies work
-   - Test unauthorized access
+3. **Test Exam System:**
+   - Create a test exam as admin
+   - Add test questions
+   - Activate exam
+   - Take exam as participant
+   - Verify scoring and results
+   - Check leaderboard updates
 
-4. **Monitor:**
+4. **Test Security:**
+   - Verify RLS policies work
+   - Test unauthorized access (participant trying to create exam)
+   - Verify admin-only features are protected
+   - Test participant data isolation
+
+5. **Monitor:**
    - Check Supabase dashboard for errors
    - Monitor application logs
    - Check user registrations
+   - Monitor exam attempts and submissions
 
 ---
 
 ## Future Enhancements
 
-### Phase 2: Quiz Functionality
+### Phase 2: Exam System Enhancements
 
-1. **Quiz Interface:**
-   - Question display
-   - Answer submission
-   - Timer functionality
-   - Progress indicator
+#### 2.1 Question Management Enhancements
 
-2. **Question Management:**
-   - Question database
-   - Question categories
-   - Difficulty levels
-   - Multiple question types
+1. **Question Types:**
+   - True/False questions
+   - Fill-in-the-blank questions
+   - Multiple correct answers (select all that apply)
+   - Short answer questions
+   - Image-based questions
 
-3. **Scoring System:**
-   - Automatic scoring
-   - Score calculation
-   - Team score aggregation
+2. **Question Organization:**
+   - Question categories/tags (e.g., History, Geography, Culture)
+   - Difficulty levels (Easy, Medium, Hard)
+   - Question banks and templates
+   - Bulk question import (CSV/Excel)
+   - Question search and filtering
 
-### Phase 3: Leaderboard
+3. **Question Quality:**
+   - Question validation (ensure all options are unique)
+   - Question difficulty analysis
+   - Question usage statistics
+   - Question review workflow
+
+#### 2.2 Exam Configuration Enhancements
+
+1. **Advanced Scheduling:**
+   - Recurring exams
+   - Time zone support
+   - Exam windows (multiple time slots)
+   - Late submission penalties
+
+2. **Exam Security:**
+   - Proctoring features (screen monitoring)
+   - IP address restrictions
+   - Browser lockdown mode
+   - Question shuffling per attempt
+   - Option shuffling per question
+   - Random question selection from question bank
+
+3. **Exam Attempts:**
+   - Configurable attempt limits (currently: 1 attempt)
+   - Practice mode (unlimited attempts, no scoring)
+   - Review mode (see answers before submitting)
+   - Pause/resume functionality (with time limits)
+
+#### 2.3 Scoring Enhancements
+
+1. **Advanced Scoring:**
+   - Partial credit for multiple-step questions
+   - Negative marking for incorrect answers
+   - Time-based bonus points
+   - Category-wise scoring breakdown
+   - Weighted questions (different point values)
+
+2. **Analytics:**
+   - Question-level analytics (difficulty, discrimination)
+   - Participant performance analytics
+   - Team performance trends
+   - Comparative analysis
+
+#### 2.4 User Experience Enhancements
+
+1. **Exam Interface:**
+   - Keyboard shortcuts (arrow keys for navigation)
+   - Mark for review functionality
+   - Question filtering (answered/unanswered/review)
+   - Full-screen exam mode
+   - Offline capability with sync
+
+2. **Results Enhancement:**
+   - Detailed performance analytics
+   - Category-wise performance breakdown
+   - Comparison with average scores
+   - Downloadable results (PDF)
+   - Share results functionality
+
+### Phase 3: Leaderboard Enhancements
 
 1. **Public Leaderboard:**
-   - Team rankings
-   - Individual scores
+   - Public-facing leaderboard (participant view)
    - School/district filters
-   - Real-time updates
+   - Historical leaderboards (past exams)
+   - Team comparison view
+   - Individual participant rankings
 
-2. **Statistics:**
+2. **Statistics Dashboard:**
    - Participation statistics
    - Category-wise performance
-   - Historical data
+   - Historical data and trends
+   - Performance distribution charts
+   - Top performers showcase
 
-### Phase 4: Admin Dashboard
+### Phase 4: Admin Dashboard Enhancements
 
-1. **Admin Features:**
-   - User management
-   - Team management
-   - Quiz management
-   - Analytics dashboard
+1. **Enhanced Admin Features:**
+   - User management interface (promote/demote users)
+   - Team management (view/edit teams)
+   - Bulk operations (bulk question import, bulk exam creation)
+   - Advanced analytics dashboard
+   - Export capabilities (CSV, PDF, Excel)
 
 2. **Content Management:**
-   - Question editor
-   - Quiz configuration
-   - Event management
+   - Rich text editor for questions (with formatting)
+   - Image/media support in questions
+   - Exam templates and cloning
+   - Question versioning
+   - Content approval workflow
 
-### Phase 5: Additional Features
+3. **Monitoring & Reporting:**
+   - Real-time exam monitoring
+   - Suspicious activity detection
+   - Detailed audit logs
+   - Performance reports
+   - Custom report generation
+
+### Phase 5: Communication & Notifications
 
 1. **Email Notifications:**
-   - Registration confirmation
-   - Quiz reminders
+   - Registration confirmation emails
+   - Exam reminder emails (before scheduled start)
+   - Results notification emails
+   - Exam completion confirmations
+   - Team score updates
+
+2. **SMS Notifications:**
+   - Exam reminders via SMS
    - Results notifications
+   - Important announcements
 
-2. **Phone Verification:**
-   - OTP verification
-   - SMS integration
+3. **In-App Notifications:**
+   - Notification center
+   - Real-time alerts
+   - Exam announcements
 
-3. **School Autocomplete:**
+### Phase 6: Additional Features
+
+1. **Phone Verification:**
+   - OTP verification during registration
+   - SMS integration for verification
+   - Phone number verification status
+
+2. **School Management:**
    - School database integration
-   - Autocomplete functionality
+   - School name autocomplete
+   - School-based leaderboards
+   - School admin roles
 
-4. **Multi-language Support:**
+3. **Multi-language Support:**
+   - Odia language interface (primary)
    - English interface option
    - Language switcher
+   - Bilingual question support
+
+4. **Accessibility:**
+   - Screen reader optimization
+   - High contrast mode
+   - Font size adjustment
+   - Keyboard-only navigation
+
+5. **Mobile App:**
+   - Native mobile applications (iOS/Android)
+   - Offline exam taking capability
+   - Push notifications
+   - Mobile-optimized interface
 
 ---
 
@@ -1222,11 +2287,22 @@ All API calls include:
 - **Error Rate:** Percentage of requests resulting in errors
 - **Uptime:** Application availability percentage
 
+### Exam System Metrics
+
+- **Exam Completion Rate:** Percentage of started exams that are completed
+- **Average Exam Duration:** Average time taken to complete exams
+- **Question Answer Rate:** Percentage of questions answered per exam
+- **Auto-submit Rate:** Percentage of exams auto-submitted due to timeout
+- **Average Score:** Mean score across all exam attempts
+- **Team Participation Rate:** Percentage of teams with both participants completing exams
+- **Leaderboard Update Frequency:** Real-time update performance
+
 ### Security Metrics
 
 - **Failed Login Attempts:** Number of failed authentication attempts
 - **Security Incidents:** Number of security-related issues
 - **Data Breaches:** Number of data breach incidents (target: 0)
+- **Unauthorized Access Attempts:** Attempts to access admin features or other users' data
 
 ---
 
@@ -1253,6 +2329,7 @@ All API calls include:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2024 | Development Team | Initial PRD for current implementation |
+| 2.0 | 2024 | Development Team | Added comprehensive Exam System documentation including admin features, participant interface, database schema, API specifications, and future enhancements |
 
 ---
 

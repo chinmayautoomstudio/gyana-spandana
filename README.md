@@ -1,4 +1,4 @@
-# Gyana Spandana - Odisha Quiz Competition Website
+# GYANA SPARDHA - Odisha Quiz Competition Website
 
 A beautiful, modern quiz competition website for Odisha's culture, traditions, history, and geography. Built with Next.js 14, TypeScript, Tailwind CSS, and Supabase.
 

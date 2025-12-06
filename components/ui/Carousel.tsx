@@ -38,7 +38,7 @@ export function Carousel({ slides, autoSlideInterval = 5000 }: CarouselProps) {
           <span className="text-2xl font-bold text-[#C0392B]">GS</span>
         </div>
         <Link href="/" className="text-white font-bold text-xl">
-          Gyana Spandana
+          GYANA SPARDHA
         </Link>
       </div>
 

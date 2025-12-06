@@ -75,9 +75,27 @@ export function HeroCarousel({ slides, autoSlideInterval = 6000 }: HeroCarouselP
             {/* Content Overlay */}
             <div className="absolute inset-0 flex items-center justify-center z-20">
               <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
-                <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight animate-fade-in">
-                  {slide.title}
-                </h1>
+                <div className={`inline-block relative ${index === 0 ? 'mb-6' : 'mb-4'}`}>
+                  <h1 className={`font-bold leading-tight animate-fade-in ${
+                    index === 0 
+                      ? 'text-6xl md:text-7xl lg:text-8xl' 
+                      : 'text-5xl md:text-6xl lg:text-7xl'
+                  }`}>
+                    {slide.title}
+                  </h1>
+                  {index === 0 && (
+                    <div className="absolute right-0 top-full mt-1">
+                      <p className="text-xs md:text-sm opacity-80 animate-fade-in-delay whitespace-nowrap">
+                        By Pabitra Manjari Educational Foundation
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {index === 0 && (
+                  <p className="text-2xl md:text-3xl font-semibold mb-6 opacity-95 leading-relaxed animate-fade-in-delay">
+                    ଓଡ଼ିଶା: ଅସ୍ତିତ୍ଵରୁ ଅସ୍ମିତା
+                  </p>
+                )}
                 <p className="text-xl md:text-2xl mb-8 opacity-90 leading-relaxed animate-fade-in-delay">
                   {slide.description}
                 </p>

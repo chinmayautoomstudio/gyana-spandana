@@ -26,7 +26,7 @@ export function FAQ({ items }: FAQProps) {
             Frequently Asked Questions
           </h2>
           <p className="text-xl text-gray-600">
-            Everything you need to know about Gyana Spandana
+            Everything you need to know about GYANA SPARDHA
           </p>
         </div>
 

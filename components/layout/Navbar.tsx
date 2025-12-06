@@ -54,7 +54,7 @@ export function Navbar() {
                 scrolled ? 'text-gray-900' : ''
               }`}
             >
-              Gyana Spandana
+              GYANA SPARDHA
             </span>
           </Link>
 

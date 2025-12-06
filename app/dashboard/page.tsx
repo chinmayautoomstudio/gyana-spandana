@@ -195,7 +195,7 @@ export default function DashboardPage() {
                   GS
                 </div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent">
-                  Gyana Spandana
+                  GYANA SPARDHA
                 </h1>
               </div>
             </div>

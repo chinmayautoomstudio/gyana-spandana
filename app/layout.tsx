@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gyana Spandana - Odisha Quiz Competition",
-  description: "Participate in the Gyana Spandana quiz competition and test your knowledge about Odisha's culture, traditions, history, and geography.",
+  title: "GYANA SPARDHA - Odisha Quiz Competition",
+  description: "Participate in the GYANA SPARDHA quiz competition and test your knowledge about Odisha's culture, traditions, history, and geography.",
 };
 
 export default function RootLayout({
