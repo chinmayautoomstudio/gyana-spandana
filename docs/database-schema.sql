@@ -7,8 +7,12 @@ CREATE TABLE IF NOT EXISTS teams (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_name VARCHAR(100) NOT NULL UNIQUE,
   team_code VARCHAR(50) NOT NULL UNIQUE, -- Custom Team ID: GS-P1INIT-P2INIT-XXXX
+  authority_name VARCHAR(100), -- School/College Authority Name
+  authority_email VARCHAR(255), -- School/College Authority Email
+  authority_phone VARCHAR(10) NOT NULL, -- School/College Authority Phone (required)
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT check_authority_phone_format CHECK (authority_phone ~ '^[6-9]\d{9}$')
 );
 
 -- Participants table (CORRECTED - Added user_id to link with Supabase Auth)

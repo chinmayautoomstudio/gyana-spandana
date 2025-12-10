@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { DataTable } from '@/components/admin/DataTable'
+import { FilterBar } from '@/components/admin/FilterBar'
+import { ExportButton } from '@/components/admin/ExportButton'
 
 interface Participant {
   id: string
@@ -18,14 +21,16 @@ interface Participant {
 export default function ParticipantsPage() {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [teamFilter, setTeamFilter] = useState('')
+  const [schoolFilter, setSchoolFilter] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
 
   useEffect(() => {
     const fetchParticipants = async () => {
       const supabase = createClient()
       const { data, error } = await supabase
         .from('participants')
-        .select('*, teams(team_name)')
+        .select('*, teams(team_name, team_code)')
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -39,12 +44,18 @@ export default function ParticipantsPage() {
     fetchParticipants()
   }, [])
 
-  const filteredParticipants = participants.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.school_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.teams?.team_name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const uniqueTeams = Array.from(new Set(participants.map(p => p.teams?.team_name).filter(Boolean)))
+  const uniqueSchools = Array.from(new Set(participants.map(p => p.school_name).filter(Boolean)))
+
+  const filteredParticipants = participants.filter(p => {
+    if (teamFilter && p.teams?.team_name !== teamFilter) return false
+    if (schoolFilter && p.school_name !== schoolFilter) return false
+    if (roleFilter) {
+      if (roleFilter === 'participant1' && !p.is_participant1) return false
+      if (roleFilter === 'participant2' && p.is_participant1) return false
+    }
+    return true
+  })
 
   if (loading) {
     return (
@@ -54,73 +65,119 @@ export default function ParticipantsPage() {
     )
   }
 
+  const columns = [
+    {
+      key: 'name',
+      header: 'Name',
+      render: (p: Participant) => p.name,
+      sortable: true,
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      render: (p: Participant) => p.email,
+      sortable: true,
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      render: (p: Participant) => p.phone,
+      sortable: true,
+    },
+    {
+      key: 'school_name',
+      header: 'School',
+      render: (p: Participant) => p.school_name,
+      sortable: true,
+    },
+    {
+      key: 'teams.team_name',
+      header: 'Team',
+      render: (p: Participant) => p.teams?.team_name || 'N/A',
+      sortable: true,
+    },
+    {
+      key: 'is_participant1',
+      header: 'Role',
+      render: (p: Participant) => (
+        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+          p.is_participant1
+            ? 'bg-[#C0392B]/10 text-[#C0392B]'
+            : 'bg-purple-100 text-purple-800'
+        }`}>
+          {p.is_participant1 ? 'Participant 1' : 'Participant 2'}
+        </span>
+      ),
+      sortable: true,
+    },
+  ]
+
+  const exportData = filteredParticipants.map(p => ({
+    'Name': p.name,
+    'Email': p.email,
+    'Phone': p.phone,
+    'School': p.school_name,
+    'Team': p.teams?.team_name || 'N/A',
+    'Role': p.is_participant1 ? 'Participant 1' : 'Participant 2',
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Participants</h1>
-        <div className="w-64">
-          <input
-            type="text"
-            placeholder="Search participants..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
-          />
-        </div>
+        <ExportButton
+          data={exportData}
+          filename="participants"
+          exportType="both"
+          pdfTitle="Participants List"
+          columns={[
+            { header: 'Name', dataKey: 'Name' },
+            { header: 'Email', dataKey: 'Email' },
+            { header: 'Phone', dataKey: 'Phone' },
+            { header: 'School', dataKey: 'School' },
+            { header: 'Team', dataKey: 'Team' },
+            { header: 'Role', dataKey: 'Role' },
+          ]}
+        />
       </div>
 
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">School</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredParticipants.map((participant) => (
-                <tr key={participant.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {participant.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {participant.email}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {participant.phone}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {participant.school_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {participant.teams?.team_name || 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      participant.is_participant1
-                        ? 'bg-[#C0392B]/10 text-[#C0392B]'
-                        : 'bg-purple-100 text-purple-800'
-                    }`}>
-                      {participant.is_participant1 ? 'Participant 1' : 'Participant 2'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <FilterBar
+        filters={{
+          team: {
+            label: 'Team',
+            options: uniqueTeams.map(t => ({ value: t, label: t })),
+            value: teamFilter,
+            onChange: setTeamFilter,
+          },
+          school: {
+            label: 'School',
+            options: uniqueSchools.map(s => ({ value: s, label: s })),
+            value: schoolFilter,
+            onChange: setSchoolFilter,
+          },
+          role: {
+            label: 'Role',
+            options: [
+              { value: 'participant1', label: 'Participant 1' },
+              { value: 'participant2', label: 'Participant 2' },
+            ],
+            value: roleFilter,
+            onChange: setRoleFilter,
+          },
+        }}
+        onReset={() => {
+          setTeamFilter('')
+          setSchoolFilter('')
+          setRoleFilter('')
+        }}
+      />
 
-      {filteredParticipants.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-600">No participants found</p>
-        </div>
-      )}
+      <DataTable
+        data={filteredParticipants}
+        columns={columns}
+        searchable
+        searchPlaceholder="Search by name, email, school, or team..."
+      />
     </div>
   )
 }

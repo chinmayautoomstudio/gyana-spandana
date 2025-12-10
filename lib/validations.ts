@@ -33,10 +33,19 @@ export const participantSchema = z.object({
     .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
 })
 
+export const schoolAuthoritySchema = z.object({
+  name: z.string().min(2, 'Authority name must be at least 2 characters').max(100, 'Authority name is too long'),
+  email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
+  phone: z.string()
+    .min(1, 'Authority phone number is required')
+    .regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
+})
+
 export const teamRegistrationSchema = z.object({
   teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
   participant1: participantSchema,
   participant2: participantSchema,
+  schoolAuthority: schoolAuthoritySchema,
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),

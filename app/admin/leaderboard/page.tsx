@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { ExportButton } from '@/components/admin/ExportButton'
 
 interface TeamScore {
   id: string
@@ -101,23 +102,48 @@ export default function LeaderboardPage() {
     )
   }
 
+  const exportData = teamScores.map((ts, index) => ({
+    'Rank': ts.rank || index + 1,
+    'Team Name': ts.teams?.team_name || 'N/A',
+    'Participant 1 Score': ts.participant1_score,
+    'Participant 2 Score': ts.participant2_score,
+    'Total Score': ts.total_team_score,
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Leaderboard</h1>
-        <div className="w-64">
-          <select
-            value={selectedExamId || ''}
-            onChange={(e) => setSelectedExamId(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
-          >
-            <option value="">Select an exam</option>
-            {exams.map((exam) => (
-              <option key={exam.id} value={exam.id}>
-                {exam.title}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-3">
+          {selectedExamId && teamScores.length > 0 && (
+            <ExportButton
+              data={exportData}
+              filename={`leaderboard-${selectedExamId}`}
+              exportType="both"
+              pdfTitle={`Leaderboard - ${exams.find(e => e.id === selectedExamId)?.title || 'Exam'}`}
+              columns={[
+                { header: 'Rank', dataKey: 'Rank' },
+                { header: 'Team Name', dataKey: 'Team Name' },
+                { header: 'Participant 1 Score', dataKey: 'Participant 1 Score' },
+                { header: 'Participant 2 Score', dataKey: 'Participant 2 Score' },
+                { header: 'Total Score', dataKey: 'Total Score' },
+              ]}
+            />
+          )}
+          <div className="w-64">
+            <select
+              value={selectedExamId || ''}
+              onChange={(e) => setSelectedExamId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+            >
+              <option value="">Select an exam</option>
+              {exams.map((exam) => (
+                <option key={exam.id} value={exam.id}>
+                  {exam.title}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

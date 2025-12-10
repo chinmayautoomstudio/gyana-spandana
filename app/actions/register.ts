@@ -107,7 +107,10 @@ export async function registerTeam(
             .from('teams')
             .insert({ 
                 team_name: data.teamName,
-                team_code: teamCode
+                team_code: teamCode,
+                authority_name: data.schoolAuthority.name,
+                authority_email: data.schoolAuthority.email,
+                authority_phone: data.schoolAuthority.phone
             })
             .select()
             .single()
@@ -165,6 +168,32 @@ export async function registerTeam(
                 console.warn(`Failed to create user profile for ${p.userId}:`, profileError.message)
                 // Don't throw - profile creation is not critical for registration
             }
+        }
+
+        // Send email notification to school authority (non-blocking)
+        try {
+            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+            
+            await fetch(`${siteUrl}/api/send-authority-notification`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    authorityEmail: data.schoolAuthority.email,
+                    authorityName: data.schoolAuthority.name,
+                    teamName: data.teamName,
+                    teamCode: teamCode,
+                    participant1Name: data.participant1.name,
+                    participant1School: data.participant1.schoolName,
+                    participant2Name: data.participant2.name,
+                    participant2School: data.participant2.schoolName,
+                }),
+            })
+        } catch (emailError) {
+            // Log error but don't fail registration
+            console.error('Failed to send authority notification email:', emailError)
         }
 
         return { success: true, teamCode: teamCode }

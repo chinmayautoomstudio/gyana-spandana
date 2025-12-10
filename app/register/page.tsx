@@ -481,6 +481,39 @@ export default function RegisterPage() {
                 </div>
               </div>
 
+              {/* School/College Authority Details */}
+              <div className="space-y-4">
+                <div className="pb-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900">School/College Authority Details</h3>
+                </div>
+                <div className="space-y-4">
+                  <Input
+                    label="Authority Name"
+                    {...register('schoolAuthority.name')}
+                    error={errors.schoolAuthority?.name?.message}
+                    placeholder="Enter authority name (e.g., Principal, Coordinator)"
+                    required
+                  />
+                  <Input
+                    label="Authority Email Address"
+                    type="email"
+                    {...register('schoolAuthority.email')}
+                    error={errors.schoolAuthority?.email?.message}
+                    placeholder="authority@school.com"
+                    required
+                  />
+                  <Input
+                    label="Authority Phone Number"
+                    type="tel"
+                    {...register('schoolAuthority.phone')}
+                    error={errors.schoolAuthority?.phone?.message}
+                    placeholder="9876543210"
+                    maxLength={10}
+                    required
+                  />
+                </div>
+              </div>
+
               {/* Consent Checkbox */}
               <div className="flex items-start gap-3 pt-2">
                 <input

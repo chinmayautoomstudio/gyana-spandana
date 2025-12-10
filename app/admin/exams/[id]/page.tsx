@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
+import { StatsCard } from '@/components/admin/StatsCard'
 
 interface Exam {
   id: string
@@ -24,6 +25,13 @@ export default function ExamDetailsPage() {
   const router = useRouter()
   const examId = params.id as string
   const [exam, setExam] = useState<Exam | null>(null)
+  const [stats, setStats] = useState({
+    totalAttempts: 0,
+    submittedAttempts: 0,
+    averageScore: 0,
+    completionRate: 0,
+    averageTime: 0,
+  })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -41,6 +49,37 @@ export default function ExamDetailsPage() {
       } else {
         setExam(data)
       }
+
+      // Fetch exam statistics
+      const { data: attempts, count: totalAttempts } = await supabase
+        .from('exam_attempts')
+        .select('score, status, time_taken_minutes', { count: 'exact' })
+        .eq('exam_id', examId)
+
+      const submittedAttempts = attempts?.filter(a => a.status === 'submitted') || []
+      const averageScore = submittedAttempts.length > 0
+        ? Math.round(submittedAttempts.reduce((sum, a) => sum + (a.score || 0), 0) / submittedAttempts.length)
+        : 0
+      const completionRate = totalAttempts && totalAttempts > 0
+        ? Math.round((submittedAttempts.length / totalAttempts) * 100)
+        : 0
+      const averageTime = submittedAttempts.length > 0
+        ? Math.round(
+            submittedAttempts
+              .filter(a => a.time_taken_minutes)
+              .reduce((sum, a) => sum + (a.time_taken_minutes || 0), 0) /
+            submittedAttempts.filter(a => a.time_taken_minutes).length
+          )
+        : 0
+
+      setStats({
+        totalAttempts: totalAttempts || 0,
+        submittedAttempts: submittedAttempts.length,
+        averageScore,
+        completionRate,
+        averageTime,
+      })
+
       setLoading(false)
     }
 
@@ -120,10 +159,20 @@ export default function ExamDetailsPage() {
             <h1 className="text-3xl font-bold text-gray-900">{exam.title}</h1>
             <p className="text-gray-600 mt-1">Status: <span className="font-medium capitalize">{exam.status}</span></p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <Link href={`/admin/exams/${examId}/questions`}>
               <Button variant="primary">
                 Manage Questions
+              </Button>
+            </Link>
+            <Link href={`/admin/exams/${examId}/results`}>
+              <Button variant="outline">
+                View Results
+              </Button>
+            </Link>
+            <Link href={`/admin/exams/${examId}/analytics`}>
+              <Button variant="outline">
+                View Analytics
               </Button>
             </Link>
             {exam.status === 'draft' && (
@@ -154,6 +203,34 @@ export default function ExamDetailsPage() {
         </div>
       </div>
 
+      {/* Real-time Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard
+          title="Total Attempts"
+          value={stats.totalAttempts}
+          icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+          color="blue"
+        />
+        <StatsCard
+          title="Submitted"
+          value={stats.submittedAttempts}
+          icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          color="green"
+        />
+        <StatsCard
+          title="Average Score"
+          value={stats.averageScore}
+          icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+          color="purple"
+        />
+        <StatsCard
+          title="Completion Rate"
+          value={`${stats.completionRate}%`}
+          icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          color="green"
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Exam Details</h2>
@@ -174,6 +251,12 @@ export default function ExamDetailsPage() {
               <span className="text-sm text-gray-500">Passing Score:</span>
               <p className="text-gray-900 mt-1">{exam.passing_score || 'Not set'}</p>
             </div>
+            {stats.averageTime > 0 && (
+              <div>
+                <span className="text-sm text-gray-500">Average Time Taken:</span>
+                <p className="text-gray-900 mt-1">{stats.averageTime} minutes</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -194,6 +277,12 @@ export default function ExamDetailsPage() {
                 {exam.scheduled_end
                   ? new Date(exam.scheduled_end).toLocaleString('en-IN')
                   : 'Not scheduled'}
+              </p>
+            </div>
+            <div>
+              <span className="text-sm text-gray-500">Created:</span>
+              <p className="text-gray-900 mt-1">
+                {new Date(exam.created_at).toLocaleString('en-IN')}
               </p>
             </div>
           </div>
