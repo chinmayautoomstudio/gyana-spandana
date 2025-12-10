@@ -12,6 +12,7 @@ interface ExportButtonProps {
   exportType?: 'csv' | 'pdf' | 'both'
   pdfTitle?: string
   columns?: { header: string; dataKey: string }[]
+  size?: 'sm' | 'md' | 'lg'
 }
 
 export function ExportButton({
@@ -20,6 +21,7 @@ export function ExportButton({
   exportType = 'both',
   pdfTitle,
   columns,
+  size = 'md',
 }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false)
 
@@ -91,6 +93,7 @@ export function ExportButton({
   return (
     <Button
       variant="outline"
+      size={size}
       onClick={handleExport}
       isLoading={isExporting}
       disabled={data.length === 0}

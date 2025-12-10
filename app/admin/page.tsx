@@ -6,7 +6,11 @@ import Link from 'next/link'
 import { StatsCard } from '@/components/admin/StatsCard'
 import { RecentExamSessions } from '@/components/admin/RecentExamSessions'
 import { QuickLinkCard } from '@/components/admin/QuickLinkCard'
+import { AdminList } from '@/components/admin/AdminList'
+import { AddAdminModal } from '@/components/admin/AddAdminModal'
 import { Button } from '@/components/ui/Button'
+import { getAllAdmins } from '@/app/actions/admin'
+import type { AdminUser } from '@/types/admin'
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -17,6 +21,10 @@ export default function AdminDashboard() {
   })
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [admins, setAdmins] = useState<AdminUser[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [adminError, setAdminError] = useState<string | null>(null)
 
   const fetchDashboardData = async () => {
     const supabase = createClient()
@@ -60,13 +68,44 @@ export default function AdminDashboard() {
     setRefreshing(false)
   }
 
+  const fetchAdmins = async () => {
+    setAdminError(null)
+    const result = await getAllAdmins()
+    if (result.error) {
+      setAdminError(result.error)
+    } else {
+      setAdmins(result.data || [])
+    }
+  }
+
   useEffect(() => {
-    fetchDashboardData()
+    const initializeDashboard = async () => {
+      await fetchDashboardData()
+      
+      // Fetch current user ID for admin management
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+        await fetchAdmins()
+      }
+    }
+    
+    initializeDashboard()
   }, [])
 
   const handleRefresh = async () => {
     setRefreshing(true)
     await fetchDashboardData()
+    await fetchAdmins()
+  }
+
+  const handleAddSuccess = () => {
+    fetchAdmins()
+  }
+
+  const handleRemoveSuccess = () => {
+    fetchAdmins()
   }
 
   if (loading) {
@@ -80,44 +119,38 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Exam Dashboard</h1>
-          <p className="text-gray-600 mt-1">Overview of your exam system.</p>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Exam Dashboard</h1>
+          <p className="text-gray-600 mt-1 text-xs sm:text-sm lg:text-base">Overview of your exam system.</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <Button
+            variant="outline"
+            size="md"
             onClick={handleRefresh}
-            disabled={refreshing}
-            className="px-4 py-2.5 bg-white border-2 border-[#C0392B] text-[#C0392B] font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#C0392B] disabled:opacity-50 disabled:cursor-not-allowed flex items-center text-base"
+            isLoading={refreshing}
           >
-            {refreshing ? (
-              <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            )}
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
             Refresh
-          </button>
+          </Button>
           <Link href="/admin/exams/new">
-            <button className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 flex items-center text-base">
+            <Button variant="primary" size="md" className="bg-teal-600 hover:bg-teal-700 focus:ring-teal-500">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Create Exam
-            </button>
+            </Button>
           </Link>
           <Link href="/admin/exams/schedule">
-            <button className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 flex items-center text-base">
+            <Button variant="secondary" size="md">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               Quick Create
-            </button>
+            </Button>
           </Link>
         </div>
       </div>
@@ -153,6 +186,88 @@ export default function AdminDashboard() {
 
       {/* Recent Exam Sessions Table */}
       <RecentExamSessions />
+
+      {/* Admin Management Section */}
+      <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
+          <div>
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900">Admin Management</h3>
+            <p className="text-gray-600 mt-1 text-xs sm:text-sm">Manage admin users and permissions.</p>
+          </div>
+          <Button variant="primary" size="md" onClick={() => setShowAddModal(true)} className="w-full sm:w-auto">
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Admin
+          </Button>
+        </div>
+
+        {/* Error Message */}
+        {adminError && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <p className="text-xs sm:text-sm text-red-800">{adminError}</p>
+              <button
+                onClick={() => setAdminError(null)}
+                className="ml-auto text-red-600 hover:text-red-800"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Admin List */}
+        {admins.length > 0 ? (
+          <>
+            <AdminList admins={admins.slice(0, 5)} currentUserId={currentUserId} onRemove={handleRemoveSuccess} />
+            {admins.length > 5 && (
+              <div className="mt-4 text-center">
+                <Link
+                  href="/admin/admins"
+                  className="text-sm text-[#C0392B] hover:text-[#A93226] font-medium"
+                >
+                  View All Admins ({admins.length}) →
+                </Link>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-8">
+            <svg
+              className="w-12 h-12 text-gray-400 mx-auto mb-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+              />
+            </svg>
+            <p className="text-sm text-gray-500">No admins found. Add your first admin to get started.</p>
+          </div>
+        )}
+
+        {/* Add Admin Modal */}
+        <AddAdminModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleAddSuccess}
+        />
+      </div>
 
       {/* Quick Link Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

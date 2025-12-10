@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 
 /**
@@ -107,5 +108,305 @@ export async function checkScheduleConflicts(
     .or(`and(scheduled_start.lte.${endTime},scheduled_end.gte.${startTime})`)
 
   return conflicts || []
+}
+
+/**
+ * Admin Management Functions
+ */
+
+import type { AdminUser } from '@/types/admin'
+
+// Re-export for backward compatibility
+export type { AdminUser }
+
+/**
+ * Get all admin users
+ */
+export async function getAllAdmins(): Promise<{ data: AdminUser[] | null; error: string | null }> {
+  try {
+    await requireAdmin()
+    const supabase = await createClient()
+
+    // Get all admin profiles
+    const { data: profiles, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('user_id, name, created_at')
+      .eq('role', 'admin')
+      .order('created_at', { ascending: false })
+
+    if (profileError) {
+      return { data: null, error: profileError.message }
+    }
+
+    if (!profiles || profiles.length === 0) {
+      return { data: [], error: null }
+    }
+
+    // Get user details from auth.users (requires admin client)
+    const adminClient = createAdminClient()
+    const userIds = profiles.map(p => p.user_id)
+    
+    const { data: users, error: usersError } = await adminClient.auth.admin.listUsers()
+    
+    if (usersError) {
+      return { data: null, error: usersError.message }
+    }
+
+    // Combine profile and user data
+    const admins: AdminUser[] = profiles
+      .map(profile => {
+        const user = users?.users?.find(u => u.id === profile.user_id)
+        if (!user) return null
+        
+        return {
+          id: user.id,
+          email: user.email || '',
+          name: profile.name || user.user_metadata?.name || null,
+          created_at: profile.created_at || user.created_at,
+          last_sign_in_at: user.last_sign_in_at || null,
+        }
+      })
+      .filter((admin): admin is AdminUser => admin !== null)
+
+    return { data: admins, error: null }
+  } catch (error: any) {
+    return { data: null, error: error.message || 'Failed to fetch admins' }
+  }
+}
+
+/**
+ * Create admin account directly
+ */
+export async function createAdminDirect(
+  email: string,
+  name: string,
+  password: string
+): Promise<{ success: boolean; error: string | null; userId?: string }> {
+  try {
+    await requireAdmin()
+
+    // Validate inputs
+    if (!email || !email.includes('@')) {
+      return { success: false, error: 'Invalid email address' }
+    }
+    if (!name || name.trim().length < 2) {
+      return { success: false, error: 'Name must be at least 2 characters' }
+    }
+    if (!password || password.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters' }
+    }
+
+    const adminClient = createAdminClient()
+
+    // Check if user already exists
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find(u => u.email === email)
+
+    if (existingUser) {
+      // User exists, update to admin
+      const { data: updatedUser, error: updateError } = await adminClient.auth.admin.updateUserById(
+        existingUser.id,
+        {
+          user_metadata: {
+            name,
+            role: 'admin',
+          },
+        }
+      )
+
+      if (updateError) {
+        return { success: false, error: updateError.message }
+      }
+
+      // Update user_profiles
+      const supabase = await createClient()
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .upsert(
+          {
+            user_id: existingUser.id,
+            role: 'admin',
+            name,
+          },
+          { onConflict: 'user_id' }
+        )
+
+      if (profileError) {
+        return { success: false, error: `User updated but profile update failed: ${profileError.message}` }
+      }
+
+      return { success: true, error: null, userId: existingUser.id }
+    }
+
+    // Create new user
+    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name,
+        role: 'admin',
+      },
+    })
+
+    if (createError) {
+      return { success: false, error: createError.message }
+    }
+
+    if (!newUser.user) {
+      return { success: false, error: 'User creation failed: No user data returned' }
+    }
+
+    // Create user_profiles record
+    const supabase = await createClient()
+    const { error: profileError } = await supabase.from('user_profiles').insert({
+      user_id: newUser.user.id,
+      role: 'admin',
+      name,
+    })
+
+    if (profileError) {
+      return { success: false, error: `User created but profile creation failed: ${profileError.message}` }
+    }
+
+    return { success: true, error: null, userId: newUser.user.id }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to create admin' }
+  }
+}
+
+/**
+ * Invite admin via email
+ */
+export async function inviteAdmin(
+  email: string,
+  name: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    await requireAdmin()
+
+    // Validate inputs
+    if (!email || !email.includes('@')) {
+      return { success: false, error: 'Invalid email address' }
+    }
+    if (!name || name.trim().length < 2) {
+      return { success: false, error: 'Name must be at least 2 characters' }
+    }
+
+    const adminClient = createAdminClient()
+
+    // Check if user already exists
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find(u => u.email === email)
+
+    if (existingUser) {
+      // User exists, update to admin
+      const { data: updatedUser, error: updateError } = await adminClient.auth.admin.updateUserById(
+        existingUser.id,
+        {
+          user_metadata: {
+            name,
+            role: 'admin',
+          },
+        }
+      )
+
+      if (updateError) {
+        return { success: false, error: updateError.message }
+      }
+
+      // Update user_profiles
+      const supabase = await createClient()
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .upsert(
+          {
+            user_id: existingUser.id,
+            role: 'admin',
+            name,
+          },
+          { onConflict: 'user_id' }
+        )
+
+      if (profileError) {
+        return { success: false, error: `User updated but profile update failed: ${profileError.message}` }
+      }
+
+      return { success: true, error: null }
+    }
+
+    // Invite new user
+    const { data: invitedUser, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: {
+        name,
+        role: 'admin',
+      },
+    })
+
+    if (inviteError) {
+      return { success: false, error: inviteError.message }
+    }
+
+    // If user was created immediately, create profile
+    if (invitedUser?.user?.id) {
+      const supabase = await createClient()
+      await supabase.from('user_profiles').upsert(
+        {
+          user_id: invitedUser.user.id,
+          role: 'admin',
+          name,
+        },
+        { onConflict: 'user_id' }
+      )
+    }
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to invite admin' }
+  }
+}
+
+/**
+ * Remove admin role (convert to participant)
+ */
+export async function removeAdmin(userId: string): Promise<{ success: boolean; error: string | null }> {
+  try {
+    await requireAdmin()
+
+    // Get current user to prevent self-removal
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    if (user.id === userId) {
+      return { success: false, error: 'You cannot remove your own admin role' }
+    }
+
+    // Update user_profiles
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .update({ role: 'participant' })
+      .eq('user_id', userId)
+      .eq('role', 'admin') // Only update if currently admin
+
+    if (profileError) {
+      return { success: false, error: profileError.message }
+    }
+
+    // Optionally update user_metadata for backward compatibility
+    const adminClient = createAdminClient()
+    await adminClient.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        role: 'participant',
+      },
+    })
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to remove admin' }
+  }
 }
 

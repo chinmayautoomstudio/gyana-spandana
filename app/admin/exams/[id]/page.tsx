@@ -136,7 +136,7 @@ export default function ExamDetailsPage() {
       <div className="text-center py-12">
         <p className="text-gray-600">Exam not found</p>
         <Link href="/admin/exams">
-          <Button variant="outline" className="mt-4">Back to Exams</Button>
+          <Button variant="outline" size="md" className="mt-4">Back to Exams</Button>
         </Link>
       </div>
     )
@@ -161,23 +161,24 @@ export default function ExamDetailsPage() {
           </div>
           <div className="flex gap-3 flex-wrap">
             <Link href={`/admin/exams/${examId}/questions`}>
-              <Button variant="primary">
+              <Button variant="primary" size="md">
                 Manage Questions
               </Button>
             </Link>
             <Link href={`/admin/exams/${examId}/results`}>
-              <Button variant="outline">
+              <Button variant="outline" size="md">
                 View Results
               </Button>
             </Link>
             <Link href={`/admin/exams/${examId}/analytics`}>
-              <Button variant="outline">
+              <Button variant="outline" size="md">
                 View Analytics
               </Button>
             </Link>
             {exam.status === 'draft' && (
               <Button
                 variant="outline"
+                size="md"
                 onClick={() => handleStatusChange('scheduled')}
               >
                 Schedule Exam
@@ -186,6 +187,7 @@ export default function ExamDetailsPage() {
             {exam.status === 'scheduled' && (
               <Button
                 variant="primary"
+                size="md"
                 onClick={() => handleStatusChange('active')}
               >
                 Activate Exam
@@ -194,6 +196,7 @@ export default function ExamDetailsPage() {
             {exam.status === 'active' && (
               <Button
                 variant="outline"
+                size="md"
                 onClick={() => handleStatusChange('completed')}
               >
                 Complete Exam

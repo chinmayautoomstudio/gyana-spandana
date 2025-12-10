@@ -103,7 +103,7 @@ export default function ExamResultsPage() {
       <div className="text-center py-12">
         <p className="text-gray-600">Exam not found</p>
         <Link href="/admin/exams">
-          <Button variant="outline" className="mt-4">Back to Exams</Button>
+          <Button variant="outline" size="md" className="mt-4">Back to Exams</Button>
         </Link>
       </div>
     )

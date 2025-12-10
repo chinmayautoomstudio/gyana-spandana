@@ -212,13 +212,13 @@ export default function ExamsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Exams</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Exams</h1>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0 border border-gray-300 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode('list')}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
                 viewMode === 'list'
                   ? 'bg-[#C0392B] text-white'
                   : 'text-gray-600 hover:bg-gray-100 bg-white'
@@ -228,7 +228,7 @@ export default function ExamsPage() {
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+              className={`px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
                 viewMode === 'calendar'
                   ? 'bg-[#C0392B] text-white'
                   : 'text-gray-600 hover:bg-gray-100 bg-white'
@@ -260,7 +260,7 @@ export default function ExamsPage() {
             ]}
           />
           <Link href="/admin/exams/new">
-            <Button variant="primary">
+            <Button variant="primary" size="md">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
@@ -384,21 +384,21 @@ export default function ExamsPage() {
       {viewMode === 'list' && (
         <>
           {filteredExams.length === 0 ? (
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 text-center">
+            <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 flex flex-col items-center justify-center text-center min-h-[400px]">
               <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {exams.length === 0 ? 'No exams yet' : 'No exams match your filters'}
               </h3>
-              <p className="text-gray-500 mb-6">
+              <p className="text-gray-500 mb-4">
                 {exams.length === 0
                   ? 'Create your first exam to get started'
                   : 'Try adjusting your search or filters'}
               </p>
               {exams.length === 0 && (
                 <Link href="/admin/exams/new">
-                  <Button variant="primary">Create Exam</Button>
+                  <Button variant="primary" size="md">Create Exam</Button>
                 </Link>
               )}
             </div>

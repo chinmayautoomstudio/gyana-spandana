@@ -102,7 +102,7 @@ export default function NewExamPage() {
           </svg>
           Back to Exams
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Create New Exam</h1>
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Create New Exam</h1>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8 space-y-6">
@@ -185,13 +185,13 @@ export default function NewExamPage() {
           <Button
             type="submit"
             variant="primary"
-            size="lg"
+            size="md"
             isLoading={isSubmitting}
           >
             Create Exam
           </Button>
           <Link href="/admin/exams">
-            <Button variant="outline" size="lg">
+            <Button variant="outline" size="md">
               Cancel
             </Button>
           </Link>

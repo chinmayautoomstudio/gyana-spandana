@@ -88,9 +88,9 @@ export function RecentExamSessions() {
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-gray-900">Recent Exam Sessions</h3>
+    <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+        <h3 className="text-lg sm:text-xl font-bold text-gray-900">Recent Exam Sessions</h3>
         <Link
           href="/admin/exams"
           className="text-sm text-[#C0392B] hover:text-[#A93226] font-medium"
@@ -104,26 +104,26 @@ export function RecentExamSessions() {
           <p className="text-gray-500 text-sm">No exam sessions yet</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Candidate
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                   Exam Title
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Score
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                   Started
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -131,25 +131,28 @@ export function RecentExamSessions() {
             <tbody className="bg-white divide-y divide-gray-200">
               {sessions.map((session) => (
                 <tr key={session.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-2 sm:px-4 py-3">
                     <div className="text-sm font-medium text-gray-900">{session.participant_name}</div>
-                    <div className="text-xs text-gray-500">{session.participant_email}</div>
+                    <div className="text-xs text-gray-500 md:hidden">{session.exam_title}</div>
+                    <div className="text-xs text-gray-500 lg:hidden mt-1">
+                      {format(new Date(session.started_at), 'dd/MM/yyyy')}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-2 sm:px-4 py-3 whitespace-nowrap hidden md:table-cell">
                     <div className="text-sm text-gray-900">{session.exam_title}</div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-2 sm:px-4 py-3 whitespace-nowrap">
                     {getStatusBadge(session.status)}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     {session.status === 'submitted' && session.score !== null
                       ? `${session.score}%`
                       : '-'}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
                     {format(new Date(session.started_at), 'dd/MM/yyyy')}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                  <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/admin/exams/${session.exam_id}/results`}

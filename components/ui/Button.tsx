@@ -5,6 +5,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost'
   size?: 'sm' | 'md' | 'lg'
   isLoading?: boolean
+  loadingText?: string
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -13,6 +14,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       variant = 'primary',
       size = 'md',
       isLoading = false,
+      loadingText = 'Loading...',
       className,
       children,
       disabled,
@@ -20,7 +22,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    const baseStyles = 'font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
+    const baseStyles = 'flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
     
     const variants = {
       primary: 'bg-[#C0392B] text-white hover:bg-[#A93226] focus:ring-[#C0392B]',
@@ -30,9 +32,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
 
     const sizes = {
-      sm: 'px-3 py-1.5 text-sm',
-      md: 'px-4 py-2.5 text-base',
-      lg: 'px-6 py-3 text-lg',
+      sm: 'px-2.5 py-1.5 text-xs sm:text-sm min-h-[36px] sm:min-h-[40px]',
+      md: 'px-2.5 py-2 sm:px-3 sm:py-2 text-xs sm:text-sm min-h-[44px]',
+      lg: 'px-3 py-2.5 sm:px-4 sm:py-2.5 text-sm sm:text-base min-h-[44px] sm:min-h-[48px]',
     }
 
     return (
@@ -64,7 +66,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            Loading...
+            {loadingText}
           </span>
         ) : (
           children
