@@ -269,7 +269,7 @@ export async function getExamStats(examId?: string): Promise<{
   const scores = submittedAttempts.map((a: any) => a.score || 0).filter((s: number) => s > 0)
 
   const examTitle = examId && attemptsData.length > 0
-    ? attemptsData[0].exams?.title
+    ? (attemptsData[0] as any).exams?.title
     : undefined
 
   return {
