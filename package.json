@@ -18,7 +18,7 @@
     "ics": "^3.8.1",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
-    "next": "16.0.3",
+    "next": "16.0.8",
     "papaparse": "^5.5.3",
     "react": "19.2.0",
     "react-big-calendar": "^1.19.4",
@@ -37,7 +37,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.0.3",
+    "eslint-config-next": "16.0.8",
     "tailwindcss": "^4",
     "tsx": "^4.7.0",
     "typescript": "^5"
