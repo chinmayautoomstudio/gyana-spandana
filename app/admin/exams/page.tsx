@@ -70,8 +70,8 @@ export default function ExamsPage() {
 
     // Apply sorting
     filtered.sort((a, b) => {
-      let aValue: any
-      let bValue: any
+      let aValue: any = 0
+      let bValue: any = 0
 
       switch (sortBy) {
         case 'title':

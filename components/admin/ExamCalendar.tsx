@@ -83,8 +83,8 @@ export function ExamCalendar({
   }
 
   let days: Date[] = []
-  let startDate: Date
-  let endDate: Date
+  let startDate: Date = startOfWeek(currentDate, { weekStartsOn: 1 })
+  let endDate: Date = endOfWeek(currentDate, { weekStartsOn: 1 })
 
   if (viewMode === 'month') {
     startDate = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 })
