@@ -1,269 +1,277 @@
 'use client'
 
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { PasswordStrength } from '@/components/ui/PasswordStrength'
 import { createAdminDirect, inviteAdmin } from '@/app/actions/admin'
+import { createAdminSchema, inviteAdminSchema, type CreateAdminFormData, type InviteAdminFormData } from '@/lib/validations'
 
 interface AddAdminModalProps {
-  isOpen: boolean
   onClose: () => void
   onSuccess: () => void
 }
 
-type Mode = 'invite' | 'direct'
+type Mode = 'create' | 'invite'
 
-export function AddAdminModal({ isOpen, onClose, onSuccess }: AddAdminModalProps) {
-  const [mode, setMode] = useState<Mode>('invite')
-  const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [loading, setLoading] = useState(false)
+export function AddAdminModal({ onClose, onSuccess }: AddAdminModalProps) {
+  const [mode, setMode] = useState<Mode>('create')
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  if (!isOpen) return null
+  const createForm = useForm<CreateAdminFormData>({
+    resolver: zodResolver(createAdminSchema),
+    defaultValues: {
+      email: '',
+      name: '',
+      password: '',
+    },
+  })
 
-  const validateEmail = (email: string): boolean => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  }
+  const inviteForm = useForm<InviteAdminFormData>({
+    resolver: zodResolver(inviteAdminSchema),
+    defaultValues: {
+      email: '',
+      name: '',
+    },
+  })
 
-  const validatePassword = (password: string): boolean => {
-    return (
-      password.length >= 8 &&
-      /[A-Z]/.test(password) &&
-      /[a-z]/.test(password) &&
-      /\d/.test(password)
-    )
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCreateSubmit = async (data: CreateAdminFormData) => {
+    setIsSubmitting(true)
     setError(null)
-    setSuccess(false)
-
-    // Validation
-    if (!email || !validateEmail(email)) {
-      setError('Please enter a valid email address')
-      return
-    }
-
-    if (!name || name.trim().length < 2) {
-      setError('Name must be at least 2 characters')
-      return
-    }
-
-    if (mode === 'direct') {
-      if (!password) {
-        setError('Password is required')
-        return
-      }
-
-      if (!validatePassword(password)) {
-        setError('Password must be at least 8 characters and contain uppercase, lowercase, and a number')
-        return
-      }
-
-      if (password !== confirmPassword) {
-        setError('Passwords do not match')
-        return
-      }
-    }
-
-    setLoading(true)
+    setSuccess(null)
 
     try {
-      let result
-      if (mode === 'invite') {
-        result = await inviteAdmin(email.trim(), name.trim())
-      } else {
-        result = await createAdminDirect(email.trim(), name.trim(), password)
-      }
+      const result = await createAdminDirect(data.email, data.name, data.password)
 
       if (result.success) {
-        setSuccess(true)
+        setSuccess('Admin account created successfully!')
         setTimeout(() => {
           onSuccess()
-          handleClose()
+          onClose()
         }, 1500)
       } else {
-        setError(result.error || 'Failed to add admin')
+        setError(result.error || 'Failed to create admin account')
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred')
     } finally {
-      setLoading(false)
+      setIsSubmitting(false)
     }
   }
 
-  const handleClose = () => {
-    setEmail('')
-    setName('')
-    setPassword('')
-    setConfirmPassword('')
+  const handleInviteSubmit = async (data: InviteAdminFormData) => {
+    setIsSubmitting(true)
     setError(null)
-    setSuccess(false)
-    setMode('invite')
-    onClose()
+    setSuccess(null)
+
+    try {
+      const result = await inviteAdmin(data.email, data.name)
+
+      if (result.success) {
+        setSuccess('Admin invitation sent successfully!')
+        setTimeout(() => {
+          onSuccess()
+          onClose()
+        }, 1500)
+      } else {
+        setError(result.error || 'Failed to send admin invitation')
+      }
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
+  const handleModeChange = (newMode: Mode) => {
+    setMode(newMode)
+    setError(null)
+    setSuccess(null)
+    createForm.reset()
+    inviteForm.reset()
+  }
+
+  const passwordValue = createForm.watch('password')
+
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto">
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={handleClose} />
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900">Add Admin</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              disabled={isSubmitting}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-gray-600 mt-1">Create a new admin account or send an invitation</p>
+        </div>
 
-      {/* Modal Content */}
-      <div className="relative z-10 flex items-center justify-center min-h-screen px-3 py-4 sm:px-4 sm:py-8">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-auto transform transition-all">
-          <div className="bg-white px-3 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-4">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h3 className="text-base sm:text-lg font-medium text-gray-900">Add Admin</h3>
-              <button
-                onClick={handleClose}
-                className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors touch-manipulation"
-                disabled={loading}
-                aria-label="Close"
-              >
-                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        <div className="p-6">
+          {/* Mode Toggle */}
+          <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => handleModeChange('create')}
+              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                mode === 'create'
+                  ? 'bg-white text-[#C0392B] shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Create Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange('invite')}
+              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                mode === 'invite'
+                  ? 'bg-white text-[#C0392B] shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Invite Admin
+            </button>
+          </div>
+
+          {/* Success Message */}
+          {success && (
+            <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
-              </button>
-            </div>
-
-            {/* Mode Toggle */}
-            <div className="mb-4 sm:mb-6">
-              <div className="flex gap-1.5 sm:gap-2 p-0.5 sm:p-1 bg-gray-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('invite')
-                    setError(null)
-                  }}
-                  className={`flex-1 px-2.5 py-2 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors min-h-[44px] ${
-                    mode === 'invite'
-                      ? 'bg-white text-[#C0392B] shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  disabled={loading}
-                >
-                  Invite Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('direct')
-                    setError(null)
-                  }}
-                  className={`flex-1 px-2.5 py-2 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors min-h-[44px] ${
-                    mode === 'direct'
-                      ? 'bg-white text-[#C0392B] shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  disabled={loading}
-                >
-                  Create Directly
-                </button>
+                <p className="text-sm text-green-800">{success}</p>
               </div>
             </div>
+          )}
 
-            {/* Success Message */}
-            {success && (
-              <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-xs sm:text-sm text-green-800">
-                  {mode === 'invite'
-                    ? 'Invitation sent successfully!'
-                    : 'Admin account created successfully!'}
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Create Admin Form */}
+          {mode === 'create' && (
+            <form onSubmit={createForm.handleSubmit(handleCreateSubmit)} className="space-y-4">
+              <Input
+                label="Email"
+                type="email"
+                placeholder="admin@example.com"
+                required
+                {...createForm.register('email')}
+                error={createForm.formState.errors.email?.message}
+              />
+
+              <Input
+                label="Name"
+                type="text"
+                placeholder="Admin Name"
+                required
+                {...createForm.register('name')}
+                error={createForm.formState.errors.name?.message}
+              />
+
+              <div>
+                <Input
+                  label="Password"
+                  type="password"
+                  placeholder="Enter password"
+                  required
+                  {...createForm.register('password')}
+                  error={createForm.formState.errors.password?.message}
+                />
+                {passwordValue && <PasswordStrength password={passwordValue} />}
+                <p className="mt-1 text-xs text-gray-500">
+                  Password must be at least 8 characters long
                 </p>
               </div>
-            )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-xs sm:text-sm text-red-800">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-3 sm:space-y-4">
-                <Input
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                  placeholder="admin@example.com"
-                />
-
-                <Input
-                  label="Name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  disabled={loading}
-                  placeholder="Admin Name"
-                  minLength={2}
-                />
-
-                {mode === 'direct' && (
-                  <>
-                    <Input
-                      label="Password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={loading}
-                      placeholder="Enter password"
-                      helperText="Must be at least 8 characters with uppercase, lowercase, and a number"
-                    />
-
-                    <Input
-                      label="Confirm Password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                      disabled={loading}
-                      placeholder="Confirm password"
-                    />
-                  </>
-                )}
-
-                {mode === 'invite' && (
-                  <div className="p-2.5 sm:p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs sm:text-sm text-blue-800">
-                      An invitation email will be sent to the provided email address. The user will need to accept the invitation and set their password.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 sm:mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={loading || success}
-                  isLoading={loading}
-                  className="w-full sm:w-auto min-h-[44px]"
-                >
-                  {mode === 'invite' ? 'Send Invitation' : 'Create Admin'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  disabled={loading}
-                  className="w-full sm:w-auto min-h-[44px]"
-                >
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
                   Cancel
+                </Button>
+                <Button type="submit" variant="primary" isLoading={isSubmitting} disabled={isSubmitting}>
+                  Create Admin
                 </Button>
               </div>
             </form>
-          </div>
+          )}
+
+          {/* Invite Admin Form */}
+          {mode === 'invite' && (
+            <form onSubmit={inviteForm.handleSubmit(handleInviteSubmit)} className="space-y-4">
+              <Input
+                label="Email"
+                type="email"
+                placeholder="admin@example.com"
+                required
+                {...inviteForm.register('email')}
+                error={inviteForm.formState.errors.email?.message}
+              />
+
+              <Input
+                label="Name"
+                type="text"
+                placeholder="Admin Name"
+                required
+                {...inviteForm.register('name')}
+                error={inviteForm.formState.errors.name?.message}
+              />
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">Email Invitation</p>
+                    <p>An invitation email will be sent to the provided email address. The recipient will need to set their password when accepting the invitation.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" isLoading={isSubmitting} disabled={isSubmitting}>
+                  Send Invitation
+                </Button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>

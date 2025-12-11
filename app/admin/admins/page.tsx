@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/Button'
 import { AdminList } from '@/components/admin/AdminList'
 import { AddAdminModal } from '@/components/admin/AddAdminModal'
+import { Button } from '@/components/ui/Button'
 import { getAllAdmins } from '@/app/actions/admin'
 import type { AdminUser } from '@/types/admin'
 
@@ -14,8 +14,8 @@ export default function AdminManagementPage() {
   const [admins, setAdmins] = useState<AdminUser[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showAddModal, setShowAddModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
     const checkAdminAndFetch = async () => {
@@ -63,11 +63,11 @@ export default function AdminManagementPage() {
     setLoading(false)
   }
 
-  const handleAddSuccess = () => {
+  const handleRemoveSuccess = () => {
     fetchAdmins()
   }
 
-  const handleRemoveSuccess = () => {
+  const handleAddSuccess = () => {
     fetchAdmins()
   }
 
@@ -85,14 +85,28 @@ export default function AdminManagementPage() {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Admin Management</h1>
           <p className="text-gray-600 mt-1 text-xs sm:text-sm lg:text-base">Manage admin users and permissions.</p>
         </div>
-        <Button variant="primary" size="md" onClick={() => setShowAddModal(true)} className="w-full sm:w-auto">
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        <Button
+          variant="primary"
+          onClick={() => setShowAddModal(true)}
+          className="w-full sm:w-auto"
+        >
+          <svg
+            className="w-4 h-4 mr-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v16m8-8H4"
+            />
           </svg>
           Add Admin
         </Button>
@@ -127,11 +141,12 @@ export default function AdminManagementPage() {
       <AdminList admins={admins} currentUserId={currentUserId} onRemove={handleRemoveSuccess} />
 
       {/* Add Admin Modal */}
-      <AddAdminModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSuccess={handleAddSuccess}
-      />
+      {showAddModal && (
+        <AddAdminModal
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleAddSuccess}
+        />
+      )}
     </div>
   )
 }

@@ -196,9 +196,23 @@ export const editProfileSchema = z.object({
     .or(z.literal('')),
 })
 
+// Admin creation validation schemas
+export const createAdminSchema = z.object({
+  email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+})
+
+export const inviteAdminSchema = z.object({
+  email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+})
+
 export type TeamRegistrationFormData = z.infer<typeof teamRegistrationSchema>
 export type LoginFormData = z.infer<typeof loginSchema>
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
 export type ProfileCompletionFormData = z.infer<typeof profileCompletionSchema>
 export type EditProfileFormData = z.infer<typeof editProfileSchema>
+export type CreateAdminFormData = z.infer<typeof createAdminSchema>
+export type InviteAdminFormData = z.infer<typeof inviteAdminSchema>
 

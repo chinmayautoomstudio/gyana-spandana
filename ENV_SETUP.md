@@ -16,6 +16,10 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 RESEND_API_KEY=re_your_resend_api_key
 RESEND_FROM_EMAIL=GYANA SPARDHA <noreply@yourdomain.com>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# AI Assistant Configuration (Required for admin AI assistant)
+# Get your API key from https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-your_openai_api_key_here
 ```
 
 ## How to get your Supabase credentials:
@@ -59,6 +63,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 RESEND_API_KEY=re_xxxxxxxxxxxxx
 RESEND_FROM_EMAIL=GYANA SPARDHA <noreply@yourdomain.com>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+OPENAI_API_KEY=sk-xxxxxxxxxxxxx
 ```
 
 **Important formatting rules:**
