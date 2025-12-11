@@ -74,8 +74,8 @@ export function AdminList({ admins, currentUserId, onRemove }: AdminListProps) {
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden">
-      <div className="overflow-x-auto -mx-4 sm:mx-0">
+    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden max-w-full">
+      <div className="overflow-x-auto max-w-full -mx-4 sm:mx-0 px-4 sm:px-0">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>

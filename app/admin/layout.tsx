@@ -73,7 +73,7 @@ export default function AdminLayout({
   ]
 
   return (
-    <div className="min-h-screen bg-[#ECF0F1]">
+    <div className="min-h-screen bg-[#ECF0F1] overflow-x-hidden max-w-full">
       <div className="flex">
         {/* Sidebar Navigation */}
         <aside
@@ -132,9 +132,9 @@ export default function AdminLayout({
         )}
 
         {/* Main Content */}
-        <div className="flex-1 lg:ml-64">
+        <div className="flex-1 lg:ml-64 min-w-0 max-w-full overflow-x-hidden">
           <AdminHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-          <main className="p-4 sm:p-6 lg:p-8">
+          <main className="p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
             {children}
           </main>
         </div>

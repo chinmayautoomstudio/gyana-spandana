@@ -81,9 +81,9 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden max-w-full">
+        <div className="overflow-x-auto max-w-full">
+          <table className="w-full min-w-max">
             <thead className="bg-gray-50">
               <tr>
                 {columns.map((column) => (

@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from 'date-fns'
 
 interface Exam {
@@ -18,9 +16,20 @@ interface ExamCalendarProps {
   currentDate: Date
   onDateChange: (date: Date) => void
   viewMode: 'month' | 'week' | 'day'
+  onDateClick?: (date: Date) => void
+  onExamClick?: (exam: Exam) => void
+  selectedStatuses?: string[]
 }
 
-export function ExamCalendar({ exams, currentDate, onDateChange, viewMode }: ExamCalendarProps) {
+export function ExamCalendar({ 
+  exams, 
+  currentDate, 
+  onDateChange, 
+  viewMode,
+  onDateClick,
+  onExamClick,
+  selectedStatuses = ['active', 'scheduled', 'completed', 'draft']
+}: ExamCalendarProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -39,9 +48,24 @@ export function ExamCalendar({ exams, currentDate, onDateChange, viewMode }: Exa
   const getExamsForDate = (date: Date) => {
     return exams.filter((exam) => {
       if (!exam.scheduled_start) return false
+      if (!selectedStatuses.includes(exam.status)) return false
       const examDate = new Date(exam.scheduled_start)
       return isSameDay(examDate, date)
     })
+  }
+
+  const handleDateClick = (date: Date) => {
+    if (onDateClick) {
+      onDateClick(date)
+    }
+  }
+
+  const handleExamClick = (e: React.MouseEvent, exam: Exam) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (onExamClick) {
+      onExamClick(exam)
+    }
   }
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -133,23 +157,25 @@ export function ExamCalendar({ exams, currentDate, onDateChange, viewMode }: Exa
           return (
             <div
               key={day.toString()}
-              className={`min-h-[100px] p-2 border border-gray-200 rounded-lg ${
-                !isCurrentMonth ? 'bg-gray-50 opacity-50' : 'bg-white'
+              onClick={() => handleDateClick(day)}
+              className={`min-h-[100px] p-2 border border-gray-200 rounded-lg cursor-pointer transition-all ${
+                !isCurrentMonth ? 'bg-gray-50 opacity-50' : 'bg-white hover:bg-gray-50'
               } ${isToday ? 'ring-2 ring-[#C0392B]' : ''}`}
+              title={onDateClick ? 'Click to schedule an exam' : ''}
             >
               <div className={`text-sm font-medium mb-1 ${isToday ? 'text-[#C0392B]' : 'text-gray-900'}`}>
                 {format(day, 'd')}
               </div>
               <div className="space-y-1">
                 {dayExams.slice(0, 3).map((exam) => (
-                  <Link
+                  <div
                     key={exam.id}
-                    href={`/admin/exams/${exam.id}`}
-                    className={`block p-1.5 rounded text-xs text-white truncate ${getStatusColor(exam.status)} hover:opacity-80 transition-opacity`}
-                    title={exam.title}
+                    onClick={(e) => handleExamClick(e, exam)}
+                    className={`block p-1.5 rounded text-xs text-white truncate cursor-pointer ${getStatusColor(exam.status)} hover:opacity-80 transition-opacity`}
+                    title={`${exam.title} - Click to edit schedule`}
                   >
                     {format(new Date(exam.scheduled_start!), 'HH:mm')} - {exam.title.substring(0, 20)}
-                  </Link>
+                  </div>
                 ))}
                 {dayExams.length > 3 && (
                   <div className="text-xs text-gray-500 p-1">
@@ -163,24 +189,30 @@ export function ExamCalendar({ exams, currentDate, onDateChange, viewMode }: Exa
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
+      <div className="flex items-center gap-4 pt-4 border-t border-gray-200 flex-wrap">
         <span className="text-sm font-medium text-gray-700">Legend:</span>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 rounded"></div>
-          <span className="text-xs text-gray-600">Active</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-500 rounded"></div>
-          <span className="text-xs text-gray-600">Scheduled</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-gray-500 rounded"></div>
-          <span className="text-xs text-gray-600">Completed</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-yellow-500 rounded"></div>
-          <span className="text-xs text-gray-600">Draft</span>
-        </div>
+        {['active', 'scheduled', 'completed', 'draft'].map((status) => {
+          const isSelected = selectedStatuses.includes(status)
+          const statusColors: Record<string, string> = {
+            active: 'bg-green-500',
+            scheduled: 'bg-blue-500',
+            completed: 'bg-gray-500',
+            draft: 'bg-yellow-500',
+          }
+          return (
+            <div
+              key={status}
+              className={`flex items-center gap-2 px-2 py-1 rounded ${
+                isSelected ? 'bg-gray-100' : ''
+              }`}
+            >
+              <div className={`w-4 h-4 ${statusColors[status]} rounded ${!isSelected ? 'opacity-50' : ''}`}></div>
+              <span className={`text-xs ${isSelected ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -100,7 +100,7 @@ export function HeroCarousel({ slides, autoSlideInterval = 6000 }: HeroCarouselP
                   {slide.description}
                 </p>
                 {slide.ctaText && slide.ctaLink && (
-                  <div className="animate-fade-in-delay-2">
+                  <div className="animate-fade-in-delay-2 flex justify-center">
                     <Link href={slide.ctaLink}>
                       <Button variant="primary" size="lg" className="bg-white text-[#C0392B] hover:bg-gray-100">
                         {slide.ctaText}
