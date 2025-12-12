@@ -7,7 +7,10 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showDropdown, setShowDropdown] = useState(false)
   const [notifications, setNotifications] = useState<any[]>([])
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownMenuRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -22,7 +25,12 @@ export function NotificationBell() {
 
     // Close dropdown when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const isClickInside =
+        (containerRef.current && containerRef.current.contains(target)) ||
+        (dropdownMenuRef.current && dropdownMenuRef.current.contains(target))
+      
+      if (!isClickInside) {
         setShowDropdown(false)
       }
     }
@@ -31,9 +39,75 @@ export function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const calculatePosition = () => {
+    if (!buttonRef.current) return
+
+    const buttonRect = buttonRef.current.getBoundingClientRect()
+    const dropdownWidth = 320 // w-80 = 20rem = 320px
+    const dropdownMaxHeight = 384 // max-h-96 = 24rem = 384px
+    const dropdownMinHeight = 120 // Minimum height (header + empty state)
+    const spacing = 8 // mt-2 = 0.5rem = 8px
+    const viewportPadding = 16 // Padding from viewport edges
+    
+    // Calculate initial position: below button, aligned to right
+    let top = buttonRect.bottom + spacing
+    let right = window.innerWidth - buttonRect.right
+
+    // Ensure dropdown doesn't overflow viewport bottom
+    // If dropdown would go off bottom, position it above the button
+    if (top + dropdownMaxHeight > window.innerHeight - viewportPadding) {
+      // Try positioning above
+      const topAbove = buttonRect.top - dropdownMaxHeight - spacing
+      if (topAbove >= viewportPadding) {
+        top = topAbove
+      } else {
+        // If it doesn't fit above either, position at top of viewport and limit height
+        top = viewportPadding
+      }
+    }
+
+    // Ensure dropdown doesn't overflow viewport right edge
+    if (right < viewportPadding) {
+      right = viewportPadding
+    }
+
+    // Ensure dropdown doesn't overflow viewport left edge
+    if (right + dropdownWidth > window.innerWidth - viewportPadding) {
+      right = window.innerWidth - dropdownWidth - viewportPadding
+    }
+
+    setDropdownPosition({ top, right })
+  }
+
+  useEffect(() => {
+    // Calculate dropdown position when it opens or window resizes
+    if (showDropdown) {
+      calculatePosition()
+
+      // Recalculate on window resize
+      const handleResize = () => {
+        calculatePosition()
+      }
+
+      // Recalculate on scroll (in case header scrolls)
+      const handleScroll = () => {
+        calculatePosition()
+      }
+
+      window.addEventListener('resize', handleResize)
+      window.addEventListener('scroll', handleScroll, true) // Use capture to catch all scroll events
+
+      return () => {
+        window.removeEventListener('resize', handleResize)
+        window.removeEventListener('scroll', handleScroll, true)
+      }
+    }
+  }, [showDropdown])
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative z-10" ref={containerRef}>
       <button
+        ref={buttonRef}
         onClick={() => setShowDropdown(!showDropdown)}
         className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
       >
@@ -48,7 +122,14 @@ export function NotificationBell() {
       </button>
 
       {showDropdown && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
+        <div
+          ref={dropdownMenuRef}
+          className="fixed w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-[60] max-h-96 overflow-y-auto"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            right: `${dropdownPosition.right}px`,
+          }}
+        >
           <div className="p-4 border-b border-gray-200">
             <h3 className="font-semibold text-gray-900">Notifications</h3>
           </div>

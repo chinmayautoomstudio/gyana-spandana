@@ -13,7 +13,7 @@ export function AssistantChat() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Hello! I\'m your AI assistant. I can help you query information about participants, their performance, exam statistics, and more. What would you like to know?',
+      content: 'Hello! I\'m your AI assistant. I can help you query information about participants, exams, questions, performance statistics, and more. What would you like to know?',
       timestamp: new Date(),
     },
   ])
@@ -118,7 +118,7 @@ export function AssistantChat() {
       setMessages([
         {
           role: 'assistant',
-          content: 'Hello! I\'m your AI assistant. I can help you query information about participants, their performance, exam statistics, and more. What would you like to know?',
+          content: 'Hello! I\'m your AI assistant. I can help you query information about participants, exams, questions, performance statistics, and more. What would you like to know?',
           timestamp: new Date(),
         },
       ])
@@ -153,7 +153,7 @@ export function AssistantChat() {
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">AI Assistant</h2>
-            <p className="text-xs text-gray-600">Ask me anything about participants, exams, and performance</p>
+            <p className="text-xs text-gray-600">Ask me anything about participants, exams, questions, and performance</p>
           </div>
         </div>
         <Button
@@ -219,7 +219,7 @@ export function AssistantChat() {
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question about participants, exams, or performance..."
+            placeholder="Ask a question about participants, exams, questions, or performance..."
             className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C0392B]/50 focus:border-transparent resize-none text-sm overflow-y-auto disabled:bg-gray-100 disabled:text-gray-500"
             rows={1}
             style={{ minHeight: '48px', maxHeight: '120px' }}

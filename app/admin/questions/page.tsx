@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
-import { QuestionCard, type Question } from '@/components/admin/QuestionCard'
+import { type Question } from '@/components/admin/QuestionCard'
+import { QuestionsTable } from '@/components/admin/QuestionsTable'
 import { QuestionForm } from '@/components/admin/QuestionForm'
 import { QuestionSearch } from '@/components/admin/QuestionSearch'
 import { QuestionFilters } from '@/components/admin/QuestionFilters'
@@ -369,25 +370,18 @@ export default function QuestionBankPage() {
           )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {filteredQuestions.map((question, index) => (
-            <QuestionCard
-              key={question.id}
-              question={question}
-              index={index}
-              showExam={true}
-              onEdit={(q) => {
-                setEditingQuestion(q)
-                setShowAddForm(true)
-              }}
-              onDelete={handleDelete}
-              onPreview={setPreviewQuestion}
-              selectable={true}
-              selected={selectedQuestions.has(question.id)}
-              onSelect={handleSelectQuestion}
-            />
-          ))}
-        </div>
+        <QuestionsTable
+          questions={filteredQuestions}
+          selectedQuestions={selectedQuestions}
+          onSelectQuestion={handleSelectQuestion}
+          onSelectAll={handleSelectAll}
+          onEdit={(q) => {
+            setEditingQuestion(q)
+            setShowAddForm(true)
+          }}
+          onDelete={handleDelete}
+          onPreview={setPreviewQuestion}
+        />
       )}
 
       {/* Preview Modal */}

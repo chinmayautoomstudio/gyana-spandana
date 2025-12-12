@@ -392,3 +392,201 @@ export async function searchExams(query: string): Promise<Array<{ id: string; ti
   }))
 }
 
+export interface QuestionInfo {
+  id: string
+  question_text: string
+  category: string | null
+  difficulty_level: string | null
+  points: number
+  exam_id: string | null
+  exam_title?: string | null
+}
+
+/**
+ * Get question statistics
+ */
+export async function getQuestionStats(): Promise<{
+  totalQuestions: number
+  questionsByCategory: Array<{ category: string; count: number }>
+  questionsByDifficulty: Array<{ difficulty: string; count: number }>
+  questionsByExam: Array<{ examTitle: string; count: number }>
+  unassignedQuestions: number
+}> {
+  const supabase = createAdminClient()
+
+  const { data: questions, error } = await supabase
+    .from('questions')
+    .select('category, difficulty_level, exam_id, exams(title)')
+
+  if (error) {
+    throw new Error(`Failed to get question stats: ${error.message}`)
+  }
+
+  const questionsData = questions || []
+  const totalQuestions = questionsData.length
+
+  // Count by category
+  const categoryCounts: Record<string, number> = {}
+  questionsData.forEach((q: any) => {
+    const category = q.category || 'Uncategorized'
+    categoryCounts[category] = (categoryCounts[category] || 0) + 1
+  })
+
+  // Count by difficulty
+  const difficultyCounts: Record<string, number> = {}
+  questionsData.forEach((q: any) => {
+    const difficulty = q.difficulty_level || 'medium'
+    difficultyCounts[difficulty] = (difficultyCounts[difficulty] || 0) + 1
+  })
+
+  // Count by exam
+  const examCounts: Record<string, number> = {}
+  let unassignedCount = 0
+  questionsData.forEach((q: any) => {
+    if (q.exam_id && q.exams?.title) {
+      const examTitle = q.exams.title
+      examCounts[examTitle] = (examCounts[examTitle] || 0) + 1
+    } else {
+      unassignedCount++
+    }
+  })
+
+  return {
+    totalQuestions,
+    questionsByCategory: Object.entries(categoryCounts).map(([category, count]) => ({
+      category,
+      count,
+    })),
+    questionsByDifficulty: Object.entries(difficultyCounts).map(([difficulty, count]) => ({
+      difficulty,
+      count,
+    })),
+    questionsByExam: Object.entries(examCounts).map(([examTitle, count]) => ({
+      examTitle,
+      count,
+    })),
+    unassignedQuestions: unassignedCount,
+  }
+}
+
+/**
+ * Search questions by various criteria
+ */
+export async function searchQuestions(query: {
+  text?: string
+  category?: string
+  difficulty?: string
+  examId?: string
+  limit?: number
+}): Promise<QuestionInfo[]> {
+  const supabase = createAdminClient()
+  let queryBuilder = supabase
+    .from('questions')
+    .select('id, question_text, category, difficulty_level, points, exam_id, exams(title)')
+    .limit(query.limit || 50)
+
+  if (query.text) {
+    queryBuilder = queryBuilder.ilike('question_text', `%${query.text}%`)
+  }
+  if (query.category) {
+    queryBuilder = queryBuilder.eq('category', query.category)
+  }
+  if (query.difficulty) {
+    queryBuilder = queryBuilder.eq('difficulty_level', query.difficulty)
+  }
+  if (query.examId) {
+    queryBuilder = queryBuilder.eq('exam_id', query.examId)
+  }
+
+  const { data: questions, error } = await queryBuilder.order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to search questions: ${error.message}`)
+  }
+
+  return (questions || []).map((q: any) => ({
+    id: q.id,
+    question_text: q.question_text,
+    category: q.category,
+    difficulty_level: q.difficulty_level,
+    points: q.points || 1,
+    exam_id: q.exam_id,
+    exam_title: q.exams?.title || null,
+  }))
+}
+
+/**
+ * Get questions grouped by category
+ */
+export async function getQuestionsByCategory(): Promise<Record<string, QuestionInfo[]>> {
+  const supabase = createAdminClient()
+  const { data: questions, error } = await supabase
+    .from('questions')
+    .select('id, question_text, category, difficulty_level, points, exam_id, exams(title)')
+    .order('category', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to get questions by category: ${error.message}`)
+  }
+
+  const grouped: Record<string, QuestionInfo[]> = {}
+  ;(questions || []).forEach((q: any) => {
+    const category = q.category || 'Uncategorized'
+    if (!grouped[category]) {
+      grouped[category] = []
+    }
+    grouped[category].push({
+      id: q.id,
+      question_text: q.question_text,
+      category: q.category,
+      difficulty_level: q.difficulty_level,
+      points: q.points || 1,
+      exam_id: q.exam_id,
+      exam_title: q.exams?.title || null,
+    })
+  })
+
+  return grouped
+}
+
+/**
+ * Get questions grouped by difficulty
+ */
+export async function getQuestionsByDifficulty(): Promise<Record<string, QuestionInfo[]>> {
+  const supabase = createAdminClient()
+  const { data: questions, error } = await supabase
+    .from('questions')
+    .select('id, question_text, category, difficulty_level, points, exam_id, exams(title)')
+    .order('difficulty_level', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to get questions by difficulty: ${error.message}`)
+  }
+
+  const grouped: Record<string, QuestionInfo[]> = {}
+  ;(questions || []).forEach((q: any) => {
+    const difficulty = q.difficulty_level || 'medium'
+    if (!grouped[difficulty]) {
+      grouped[difficulty] = []
+    }
+    grouped[difficulty].push({
+      id: q.id,
+      question_text: q.question_text,
+      category: q.category,
+      difficulty_level: q.difficulty_level,
+      points: q.points || 1,
+      exam_id: q.exam_id,
+      exam_title: q.exams?.title || null,
+    })
+  })
+
+  return grouped
+}
+
+/**
+ * Get questions for a specific exam
+ */
+export async function getQuestionsByExam(examId: string): Promise<QuestionInfo[]> {
+  return searchQuestions({ examId })
+}
+

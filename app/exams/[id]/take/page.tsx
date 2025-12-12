@@ -69,15 +69,6 @@ export default function TakeExamPage() {
 
       setParticipantId(participant.id)
 
-      // Check for existing attempt
-      const { data: existingAttempt } = await supabase
-        .from('exam_attempts')
-        .select('*')
-        .eq('exam_id', examId)
-        .eq('participant_id', participant.id)
-        .eq('status', 'in_progress')
-        .single()
-
       // Fetch exam
       const { data: examData } = await supabase
         .from('exams')
@@ -89,6 +80,38 @@ export default function TakeExamPage() {
         router.push('/exams')
         return
       }
+
+      // Check if exam has participant assignments
+      const { data: allAssignments } = await supabase
+        .from('exam_participants')
+        .select('exam_id')
+        .eq('exam_id', examId)
+
+      // If exam has assignments, verify participant is assigned
+      if (allAssignments && allAssignments.length > 0) {
+        const { data: participantAssignment } = await supabase
+          .from('exam_participants')
+          .select('id')
+          .eq('exam_id', examId)
+          .eq('participant_id', participant.id)
+          .single()
+
+        if (!participantAssignment) {
+          // Participant not assigned to this exam
+          alert('You are not assigned to this exam. Please contact an administrator.')
+          router.push('/exams')
+          return
+        }
+      }
+
+      // Check for existing attempt
+      const { data: existingAttempt } = await supabase
+        .from('exam_attempts')
+        .select('*')
+        .eq('exam_id', examId)
+        .eq('participant_id', participant.id)
+        .eq('status', 'in_progress')
+        .single()
 
       setExam(examData)
 

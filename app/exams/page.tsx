@@ -57,7 +57,34 @@ export default function AvailableExamsPage() {
           .in('status', ['scheduled', 'active'])
           .order('scheduled_start', { ascending: true })
 
-        setExams(examsData || [])
+        // Check which exams have participant assignments
+        const { data: assignmentsData } = await supabase
+          .from('exam_participants')
+          .select('exam_id')
+          .eq('participant_id', participant.id)
+
+        const assignedExamIds = new Set((assignmentsData || []).map(a => a.exam_id))
+
+        // Filter exams based on assignments:
+        // - If exam has assignments, only show if participant is assigned
+        // - If exam has no assignments, show to all (backward compatibility)
+        const { data: allAssignmentsData } = await supabase
+          .from('exam_participants')
+          .select('exam_id')
+          .in('exam_id', (examsData || []).map(e => e.id))
+
+        const examsWithAssignments = new Set((allAssignmentsData || []).map(a => a.exam_id))
+
+        const filteredExams = (examsData || []).filter(exam => {
+          // If exam has assignments, only show if participant is assigned
+          if (examsWithAssignments.has(exam.id)) {
+            return assignedExamIds.has(exam.id)
+          }
+          // If exam has no assignments, show to all (backward compatibility)
+          return true
+        })
+
+        setExams(filteredExams)
 
         // Fetch user's attempts
         const { data: attemptsData } = await supabase

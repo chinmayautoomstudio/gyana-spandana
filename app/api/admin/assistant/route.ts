@@ -9,6 +9,11 @@ import {
   getOverallStats,
   searchExams,
   searchTeamsByName,
+  getQuestionStats,
+  searchQuestions,
+  getQuestionsByCategory,
+  getQuestionsByDifficulty,
+  getQuestionsByExam,
 } from '@/lib/utils/assistant-queries'
 
 interface Message {
@@ -25,16 +30,126 @@ interface AssistantRequest {
  * Parse user query to determine what data to fetch
  */
 async function parseAndQueryDatabase(query: string): Promise<string> {
-  const lowerQuery = query.toLowerCase()
+  const lowerQuery = query.toLowerCase().trim()
 
   try {
-    // Overall statistics
+    // Question queries - check this FIRST to avoid conflicts with "total" in other queries
+    // Check for explicit question bank mentions or question-related queries
+    const isQuestionQuery = 
+      lowerQuery.includes('question bank') ||
+      lowerQuery.includes('questionbank') ||
+      (lowerQuery.includes('question') && (
+        lowerQuery.includes('how many') ||
+        lowerQuery.includes('total') ||
+        lowerQuery.includes('count') ||
+        lowerQuery.includes('statistics') ||
+        lowerQuery.includes('stats') ||
+        lowerQuery.includes('category') ||
+        lowerQuery.includes('difficulty')
+      )) ||
+      lowerQuery.includes('question')
+    
+    if (isQuestionQuery) {
+      // Question statistics - check for any stats-related keywords or if query contains "total" or "how many"
+      if (
+        lowerQuery.includes('total') ||
+        lowerQuery.includes('how many') ||
+        lowerQuery.includes('count') ||
+        lowerQuery.includes('statistics') ||
+        lowerQuery.includes('stats') ||
+        lowerQuery.includes('distribution') ||
+        lowerQuery.includes('breakdown') ||
+        // If query mentions question bank and asks for information, assume stats
+        lowerQuery.includes('question bank')
+      ) {
+        try {
+          const questionStats = await getQuestionStats()
+          return JSON.stringify({
+            type: 'question_stats',
+            data: questionStats,
+          })
+        } catch (error: any) {
+          // If there's an error, still return error info so AI can respond
+          return JSON.stringify({
+            type: 'question_stats_error',
+            error: error.message,
+          })
+        }
+      }
+
+      // Questions by category
+      if (lowerQuery.includes('category') || lowerQuery.includes('by category')) {
+        const questionsByCategory = await getQuestionsByCategory()
+        return JSON.stringify({
+          type: 'questions_by_category',
+          data: questionsByCategory,
+        })
+      }
+
+      // Questions by difficulty
+      if (lowerQuery.includes('difficulty') || lowerQuery.includes('by difficulty')) {
+        const questionsByDifficulty = await getQuestionsByDifficulty()
+        return JSON.stringify({
+          type: 'questions_by_difficulty',
+          data: questionsByDifficulty,
+        })
+      }
+
+      // Questions for specific exam
+      const examMatch = query.match(/(?:exam|test|quiz)\s+(?:named|called|titled)?\s*["']?([^"']+)["']?/i)
+      if (examMatch) {
+        const exams = await searchExams(examMatch[1].trim())
+        if (exams.length > 0) {
+          const questions = await getQuestionsByExam(exams[0].id)
+          return JSON.stringify({
+            type: 'questions_by_exam',
+            exam: exams[0],
+            data: questions,
+            count: questions.length,
+          })
+        }
+      }
+
+      // Search questions by text
+      const textMatch = query.match(/(?:question|find|search)\s+(?:about|on|regarding)?\s*["']?([^"']+)["']?/i)
+      if (textMatch) {
+        const questions = await searchQuestions({ text: textMatch[1].trim(), limit: 20 })
+        return JSON.stringify({
+          type: 'questions_search',
+          data: questions,
+          count: questions.length,
+        })
+      }
+
+      // Default for question queries: return question stats
+      const questionStats = await getQuestionStats()
+      return JSON.stringify({
+        type: 'question_stats',
+        data: questionStats,
+      })
+    }
+
+    // Participant count queries - check BEFORE participant search to get accurate total count
+    const isParticipantCountQuery = 
+      (lowerQuery.includes('how many') || lowerQuery.includes('total') || lowerQuery.includes('count')) &&
+      (lowerQuery.includes('participant') || lowerQuery.includes('candidate') || lowerQuery.includes('student'))
+    
+    if (isParticipantCountQuery) {
+      const stats = await getOverallStats()
+      return JSON.stringify({
+        type: 'participant_count',
+        data: stats,
+        totalParticipants: stats.totalParticipants,
+      })
+    }
+
+    // Overall statistics (moved after question queries and participant count)
     if (
       lowerQuery.includes('overall') ||
-      lowerQuery.includes('total') ||
+      (lowerQuery.includes('total') && !lowerQuery.includes('question') && !lowerQuery.includes('participant') && !lowerQuery.includes('candidate') && !lowerQuery.includes('student')) ||
       lowerQuery.includes('summary') ||
-      lowerQuery.includes('statistics') ||
-      lowerQuery.includes('stats')
+      (lowerQuery.includes('statistics') && !lowerQuery.includes('question')) ||
+      (lowerQuery.includes('stats') && !lowerQuery.includes('question'))
     ) {
       const stats = await getOverallStats()
       return JSON.stringify({
@@ -227,7 +342,7 @@ export async function POST(request: Request) {
     // Build system message with context
     const systemMessage: Message = {
       role: 'system',
-      content: `You are an AI assistant for an exam management system. You help admins query information about participants, exams, teams, and performance metrics.
+      content: `You are an AI assistant for an exam management system. You help admins query information about participants, exams, teams, questions, and performance metrics.
 
 Database Context:
 ${dbContext}
@@ -235,10 +350,21 @@ ${dbContext}
 Instructions:
 - Use the provided database context to answer questions accurately
 - Be concise and helpful
-- If the context shows no data, mention that
+- If the context shows no data or empty arrays, mention that (e.g., "There are 0 questions")
 - Format numbers and statistics clearly
 - For participant queries, provide relevant details like name, email, school, team
 - For performance queries, include scores, completion rates, and statistics
+- For participant count queries (when context type is "participant_count"):
+  * Always use the totalParticipants value from the data, which represents the accurate total count from the database
+  * Clearly state the total number (e.g., "There are X candidates" or "The total number of participants is X")
+  * Do not use the count from limited search results - always use totalParticipants for accuracy
+- For question queries:
+  * If type is "question_stats", the data contains: totalQuestions, questionsByCategory, questionsByDifficulty, questionsByExam, unassignedQuestions
+  * Always provide the totalQuestions number when asked about total questions
+  * Include breakdown by category and difficulty when relevant
+  * Mention unassigned questions if asked about question bank
+- If the context type is "question_stats" and totalQuestions is 0, say "There are currently 0 questions in the question bank"
+- If the context type is "participant_count" and totalParticipants is 0, say "There are currently 0 candidates/participants"
 - If you don't have enough information in the context, say so politely
 
 Answer the user's question based on the database context provided.`,

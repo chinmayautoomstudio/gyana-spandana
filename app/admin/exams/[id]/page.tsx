@@ -165,6 +165,11 @@ export default function ExamDetailsPage() {
                 Manage Questions
               </Button>
             </Link>
+            <Link href={`/admin/exams/${examId}/participants`}>
+              <Button variant="primary" size="md">
+                Assign Participants
+              </Button>
+            </Link>
             <Link href={`/admin/exams/${examId}/results`}>
               <Button variant="outline" size="md">
                 View Results
