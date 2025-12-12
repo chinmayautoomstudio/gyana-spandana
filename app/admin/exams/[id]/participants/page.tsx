@@ -80,8 +80,8 @@ export default function ExamParticipantsPage() {
       const response = await fetch(`/api/admin/exams/${examId}/participants`)
       if (response.ok) {
         const { assignments } = await response.json()
-        const assignedIds = new Set(
-          assignments.map((a: AssignedParticipant) => a.participant.id)
+        const assignedIds = new Set<string>(
+          assignments.map((a: AssignedParticipant) => a.participant.id as string)
         )
         setAssignedParticipants(assignedIds)
       }
