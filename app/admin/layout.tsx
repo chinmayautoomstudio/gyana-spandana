@@ -15,9 +15,19 @@ export default function AdminLayout({
   const pathname = usePathname()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Set mounted to true after component mounts on client
+  // This ensures server and client render the same initial HTML
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    // Only run auth check after component is mounted on client
+    if (!mounted) return
+
     const checkAdmin = async () => {
       const supabase = createClient()
       const { data: { user: currentUser } } = await supabase.auth.getUser()
@@ -47,14 +57,19 @@ export default function AdminLayout({
     }
 
     checkAdmin()
-  }, [router])
+  }, [router, mounted])
 
-  if (loading) {
+  // Always render the same loading state on both server and client
+  // This prevents hydration mismatch - both will render this identical structure initially
+  // Only after mount + auth check will client switch to full layout
+  if (!mounted || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#ECF0F1]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#C0392B] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className="min-h-screen bg-[#ECF0F1] overflow-x-hidden max-w-full">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#C0392B] mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
         </div>
       </div>
     )
