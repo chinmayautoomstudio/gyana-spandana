@@ -724,7 +724,7 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
                   <li>Run the migration script: docs/fix-questions-rls-policy.sql</li>
                   <li>Ensure the questions table exists and has data</li>
                   <li>Check browser console (F12) for detailed error messages</li>
-                  <li>If direct query count > 0 but questions loaded = 0, RLS policy needs fixing</li>
+                  <li>If direct query count &gt; 0 but questions loaded = 0, RLS policy needs fixing</li>
                 </ul>
               </div>
             </div>
