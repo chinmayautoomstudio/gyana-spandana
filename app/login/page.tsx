@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, use } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -52,7 +52,7 @@ const carouselSlides = [
 
 function LoginPageContent() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = use(useSearchParams())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
   const [showForgotPassword, setShowForgotPassword] = useState(false)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -12,6 +12,13 @@ import { Input } from '@/components/ui/Input'
 import { QuestionSelectionModal } from '@/components/admin/QuestionSelectionModal'
 import { QuestionSetSelector } from '@/components/admin/QuestionSetSelector'
 import { useSearchParams } from 'next/navigation'
+
+interface Team {
+  id: string
+  team_name: string
+  team_code: string
+  participant_count: number
+}
 
 const examSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
@@ -26,7 +33,7 @@ type ExamFormData = z.infer<typeof examSchema>
 
 export default function NewExamPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = use(useSearchParams())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showQuestionModal, setShowQuestionModal] = useState(false)
@@ -34,6 +41,10 @@ export default function NewExamPage() {
   const [selectedSetId, setSelectedSetId] = useState<string | null>(
     searchParams.get('questionSetId')
   )
+  const [teams, setTeams] = useState<Team[]>([])
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
+  const [teamSearchTerm, setTeamSearchTerm] = useState('')
+  const [loadingTeams, setLoadingTeams] = useState(true)
 
   const {
     register,
@@ -42,6 +53,64 @@ export default function NewExamPage() {
   } = useForm<ExamFormData>({
     resolver: zodResolver(examSchema),
   })
+
+  // Fetch teams on component mount
+  useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        const supabase = createClient()
+        const { data: teamsData, error: teamsError } = await supabase
+          .from('teams')
+          .select('id, team_name, team_code, participants(id)')
+          .order('team_name')
+
+        if (teamsError) {
+          console.error('Error fetching teams:', teamsError)
+          return
+        }
+
+        // Transform data to include participant count
+        const teamsWithCounts: Team[] = (teamsData || []).map((team: any) => ({
+          id: team.id,
+          team_name: team.team_name,
+          team_code: team.team_code,
+          participant_count: team.participants?.length || 0,
+        }))
+
+        setTeams(teamsWithCounts)
+      } catch (err) {
+        console.error('Error fetching teams:', err)
+      } finally {
+        setLoadingTeams(false)
+      }
+    }
+
+    fetchTeams()
+  }, [])
+
+  // Filter teams based on search term
+  const filteredTeams = teams.filter((team) =>
+    team.team_name.toLowerCase().includes(teamSearchTerm.toLowerCase()) ||
+    team.team_code.toLowerCase().includes(teamSearchTerm.toLowerCase())
+  )
+
+  // Handle team selection
+  const handleTeamToggle = (teamId: string) => {
+    setSelectedTeamIds((prev) =>
+      prev.includes(teamId)
+        ? prev.filter((id) => id !== teamId)
+        : [...prev, teamId]
+    )
+  }
+
+  // Handle select all teams
+  const handleSelectAllTeams = () => {
+    if (selectedTeamIds.length === filteredTeams.length) {
+      setSelectedTeamIds([])
+    } else {
+      setSelectedTeamIds(filteredTeams.map((team) => team.id))
+    }
+  }
 
   const onSubmit = async (data: ExamFormData) => {
     setIsSubmitting(true)
@@ -115,6 +184,69 @@ export default function NewExamPage() {
             console.error(`Error assigning question ${update.id}:`, updateError)
             // Continue with other questions even if one fails
           }
+        }
+      }
+
+      // Assign participants from selected teams
+      if (selectedTeamIds.length > 0) {
+        try {
+          // Fetch all participants from selected teams
+          const { data: participants, error: participantsError } = await supabase
+            .from('participants')
+            .select('id, team_id, teams(id, team_name)')
+            .in('team_id', selectedTeamIds)
+
+          if (participantsError) {
+            console.error('Error fetching participants:', participantsError)
+            // Don't throw - allow exam creation to succeed even if team assignment fails
+          } else if (participants && participants.length > 0) {
+            // Check for teams without participants
+            const teamsWithParticipants = new Set(participants.map((p: any) => p.team_id))
+            const teamsWithoutParticipants = selectedTeamIds.filter(
+              (teamId) => !teamsWithParticipants.has(teamId)
+            )
+
+            if (teamsWithoutParticipants.length > 0) {
+              const teamNames = teamsWithoutParticipants
+                .map((teamId) => teams.find((t) => t.id === teamId)?.team_name)
+                .filter(Boolean)
+                .join(', ')
+              console.warn(`Teams without participants: ${teamNames}`)
+            }
+
+            // Create exam_participants entries
+            const assignments = participants.map((participant) => ({
+              exam_id: exam.id,
+              participant_id: participant.id,
+              assigned_by: user.id,
+            }))
+
+            // Insert assignments (using upsert to handle duplicates gracefully)
+            const { data: assignedData, error: assignError } = await supabase
+              .from('exam_participants')
+              .upsert(assignments, {
+                onConflict: 'exam_id,participant_id',
+                ignoreDuplicates: true,
+              })
+              .select()
+
+            if (assignError) {
+              console.error('Error assigning participants:', assignError)
+              // Don't throw - allow exam creation to succeed even if team assignment fails
+            } else {
+              const assignedCount = assignedData?.length || 0
+              const skippedCount = participants.length - assignedCount
+              if (skippedCount > 0) {
+                console.info(`${skippedCount} participant(s) were already assigned to this exam`)
+              }
+            }
+          } else {
+            // No participants found in selected teams
+            console.warn('No participants found in selected teams')
+          }
+        } catch (teamAssignError: any) {
+          console.error('Error in team assignment:', teamAssignError)
+          // Don't throw - allow exam creation to succeed even if team assignment fails
         }
       }
 
@@ -278,6 +410,134 @@ export default function NewExamPage() {
               {selectedQuestionIds.length > 0 ? 'Change Questions' : 'Select Questions'}
             </Button>
           </div>
+        </div>
+
+        {/* Team Selection Section */}
+        <div className="border-t border-gray-200 pt-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Assign Teams (Optional)
+            </label>
+            <p className="text-sm text-gray-500 mb-4">
+              Select teams to automatically assign all participants from those teams to this exam
+            </p>
+          </div>
+
+          {loadingTeams ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#C0392B]"></div>
+              <span className="ml-2 text-sm text-gray-600">Loading teams...</span>
+            </div>
+          ) : teams.length === 0 ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+              <p className="text-sm text-gray-600">No teams available</p>
+            </div>
+          ) : (
+            <>
+              {/* Team Search */}
+              <div>
+                <input
+                  type="text"
+                  value={teamSearchTerm}
+                  onChange={(e) => setTeamSearchTerm(e.target.value)}
+                  placeholder="Search teams by name or code..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white placeholder:text-gray-400"
+                />
+              </div>
+
+              {/* Select All Teams */}
+              {filteredTeams.length > 0 && (
+                <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedTeamIds.length === filteredTeams.length && filteredTeams.length > 0}
+                      onChange={handleSelectAllTeams}
+                      className="w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Select All Teams ({filteredTeams.length} team{filteredTeams.length !== 1 ? 's' : ''})
+                    </span>
+                  </div>
+                  {selectedTeamIds.length > 0 && (
+                    <span className="text-sm text-[#C0392B] font-medium">
+                      {selectedTeamIds.length} selected
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Teams List */}
+              <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-200">
+                {filteredTeams.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-gray-500">
+                    No teams match your search
+                  </div>
+                ) : (
+                  filteredTeams.map((team) => {
+                    const isSelected = selectedTeamIds.includes(team.id)
+                    return (
+                      <label
+                        key={team.id}
+                        className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
+                          isSelected ? 'bg-[#C0392B]/5' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleTeamToggle(team.id)}
+                          className="w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{team.team_name}</span>
+                            {team.team_code && (
+                              <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded">
+                                {team.team_code}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {team.participant_count === 0 ? (
+                              <span className="text-yellow-600">No participants</span>
+                            ) : (
+                              <span>{team.participant_count} participant{team.participant_count !== 1 ? 's' : ''}</span>
+                            )}
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <svg
+                            className="w-5 h-5 text-[#C0392B]"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Selected Teams Summary */}
+              {selectedTeamIds.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm text-blue-800">
+                    <strong>{selectedTeamIds.length}</strong> team{selectedTeamIds.length !== 1 ? 's' : ''} selected.
+                    All participants from these teams will be assigned to this exam.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {error && (
