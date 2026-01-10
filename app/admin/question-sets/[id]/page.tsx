@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
@@ -24,7 +24,7 @@ interface SetQuestion {
 }
 
 export default function QuestionSetDetailsPage() {
-  const params = use(useParams())
+  const params = useParams()
   const router = useRouter()
   const setId = params.id as string
   const [questionSet, setQuestionSet] = useState<QuestionSet | null>(null)

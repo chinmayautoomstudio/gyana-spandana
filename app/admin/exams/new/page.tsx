@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { QuestionSelectionModal } from '@/components/admin/QuestionSelectionModal'
 import { QuestionSetSelector } from '@/components/admin/QuestionSetSelector'
-import { useSearchParams } from 'next/navigation'
 
 interface Team {
   id: string
@@ -33,14 +32,21 @@ type ExamFormData = z.infer<typeof examSchema>
 
 export default function NewExamPage() {
   const router = useRouter()
-  const searchParams = use(useSearchParams())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showQuestionModal, setShowQuestionModal] = useState(false)
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([])
-  const [selectedSetId, setSelectedSetId] = useState<string | null>(
-    searchParams.get('questionSetId')
-  )
+  
+  // Initialize selectedSetId from URL query parameter using client-side parsing
+  const getQuestionSetIdFromUrl = () => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search)
+      return searchParams.get('questionSetId')
+    }
+    return null
+  }
+  
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(getQuestionSetIdFromUrl())
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
   const [teamSearchTerm, setTeamSearchTerm] = useState('')
@@ -53,6 +59,29 @@ export default function NewExamPage() {
   } = useForm<ExamFormData>({
     resolver: zodResolver(examSchema),
   })
+
+  // Update selectedSetId when URL changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search)
+      const questionSetId = searchParams.get('questionSetId')
+      setSelectedSetId(questionSetId)
+    }
+
+    // Listen for URL changes (browser back/forward navigation)
+    const handleLocationChange = () => {
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search)
+        const questionSetId = searchParams.get('questionSetId')
+        setSelectedSetId(questionSetId)
+      }
+    }
+
+    window.addEventListener('popstate', handleLocationChange)
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange)
+    }
+  }, [])
 
   // Fetch teams on component mount
   useEffect(() => {

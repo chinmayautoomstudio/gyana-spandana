@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -24,7 +24,7 @@ interface Attempt {
 }
 
 export default function ExamReportPage() {
-  const params = use(useParams())
+  const params = useParams()
   const examId = params.id as string
   const [exam, setExam] = useState<Exam | null>(null)
   const [attempts, setAttempts] = useState<Attempt[]>([])

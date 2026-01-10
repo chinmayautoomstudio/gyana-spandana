@@ -196,6 +196,52 @@ export async function registerTeam(
             console.error('Failed to send authority notification email:', emailError)
         }
 
+        // Send confirmation emails to both participants (non-blocking)
+        try {
+            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+            const registrationDate = new Date().toISOString()
+            
+            // Send email to Participant 1
+            await fetch(`${siteUrl}/api/send-registration-confirmation`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    participantEmail: data.participant1.email,
+                    participantName: data.participant1.name,
+                    participantSchool: data.participant1.schoolName,
+                    teammateName: data.participant2.name,
+                    teammateSchool: data.participant2.schoolName,
+                    teamName: data.teamName,
+                    teamCode: teamCode,
+                    registrationDate: registrationDate,
+                }),
+            })
+
+            // Send email to Participant 2
+            await fetch(`${siteUrl}/api/send-registration-confirmation`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    participantEmail: data.participant2.email,
+                    participantName: data.participant2.name,
+                    participantSchool: data.participant2.schoolName,
+                    teammateName: data.participant1.name,
+                    teammateSchool: data.participant1.schoolName,
+                    teamName: data.teamName,
+                    teamCode: teamCode,
+                    registrationDate: registrationDate,
+                }),
+            })
+        } catch (emailError) {
+            // Log error but don't fail registration
+            console.error('Failed to send participant confirmation emails:', emailError)
+        }
+
         return { success: true, teamCode: teamCode }
     } catch (error: any) {
         console.error('Registration Error:', error)

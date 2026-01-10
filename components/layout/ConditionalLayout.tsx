@@ -5,7 +5,7 @@ import { Navbar } from './Navbar'
 import { Footer } from './Footer'
 
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname() || ''
+  const pathname = usePathname()
   
   // Pages that should NOT have Navbar and Footer
   const hideNavFooter = 
@@ -13,9 +13,6 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/profile/edit')
-  
-  // Pages that should have transparent navbar (homepage)
-  const isHomePage = pathname === '/'
 
   return (
     <>
