@@ -31,6 +31,7 @@ export default function ExamDetailsPage() {
     averageScore: 0,
     completionRate: 0,
     averageTime: 0,
+    totalTeams: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -72,12 +73,25 @@ export default function ExamDetailsPage() {
           )
         : 0
 
+      // Fetch teams assigned to exam
+      let totalTeams = 0
+      try {
+        const teamsResponse = await fetch(`/api/admin/exams/${examId}/teams`)
+        if (teamsResponse.ok) {
+          const { teams: teamsData } = await teamsResponse.json()
+          totalTeams = teamsData?.length || 0
+        }
+      } catch (err) {
+        console.error('Error fetching teams count:', err)
+      }
+
       setStats({
         totalAttempts: totalAttempts || 0,
         submittedAttempts: submittedAttempts.length,
         averageScore,
         completionRate,
         averageTime,
+        totalTeams,
       })
 
       setLoading(false)
@@ -170,6 +184,14 @@ export default function ExamDetailsPage() {
                 Assign Participants
               </Button>
             </Link>
+            <Link href={`/admin/exams/${examId}/teams`}>
+              <Button variant="outline" size="md">
+                <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                View Teams
+              </Button>
+            </Link>
             <Link href={`/admin/exams/${examId}/results`}>
               <Button variant="outline" size="md">
                 View Results
@@ -212,7 +234,7 @@ export default function ExamDetailsPage() {
       </div>
 
       {/* Real-time Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard
           title="Total Attempts"
           value={stats.totalAttempts}
@@ -236,6 +258,12 @@ export default function ExamDetailsPage() {
           value={`${stats.completionRate}%`}
           icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
           color="green"
+        />
+        <StatsCard
+          title="Assigned Teams"
+          value={stats.totalTeams}
+          icon="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+          color="orange"
         />
       </div>
 
