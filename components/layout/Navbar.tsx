@@ -37,9 +37,11 @@ export function Navbar() {
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white/80 backdrop-blur-xl shadow-lg border-b border-white/20'
-          : 'bg-transparent'
+        mobileMenuOpen
+          ? 'bg-white shadow-lg border-b border-gray-200'
+          : scrolled
+            ? 'bg-white/95 backdrop-blur-xl shadow-lg border-b border-white/20'
+            : 'bg-transparent'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -51,7 +53,7 @@ export function Navbar() {
             </div>
             <span
               className={`text-xl font-bold bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent ${
-                scrolled ? 'text-gray-900' : ''
+                scrolled || mobileMenuOpen ? 'text-gray-900' : ''
               }`}
             >
               GYANA SPARDHA
@@ -66,7 +68,7 @@ export function Navbar() {
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
                 className={`text-sm font-medium transition-colors ${
-                  scrolled
+                  scrolled || mobileMenuOpen
                     ? 'text-gray-700 hover:text-[#C0392B]'
                     : 'text-white hover:text-[#E67E22]'
                 }`}
@@ -82,7 +84,7 @@ export function Navbar() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={scrolled ? 'text-gray-700' : 'text-white'}
+                className={scrolled || mobileMenuOpen ? 'text-gray-700' : 'text-white'}
               >
                 Login
               </Button>
@@ -98,7 +100,7 @@ export function Navbar() {
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className={`md:hidden p-2 rounded-lg transition-colors ${
-              scrolled ? 'text-gray-700' : 'text-white'
+              scrolled || mobileMenuOpen ? 'text-gray-700' : 'text-white'
             }`}
             aria-label="Toggle menu"
           >
@@ -129,7 +131,7 @@ export function Navbar() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden pb-4 border-t border-gray-200/20 mt-4 pt-4">
+          <div className="md:hidden pb-4 border-t border-gray-200/20 mt-4 pt-4 bg-white rounded-b-lg">
             <div className="flex flex-col gap-4">
               {navLinks.map((link) => (
                 <a
