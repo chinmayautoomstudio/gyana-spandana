@@ -60,6 +60,7 @@ export default function LoginForm() {
   const [isResettingPassword, setIsResettingPassword] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [registered, setRegistered] = useState(false)
+  const [loginSuccess, setLoginSuccess] = useState(false)
 
   const {
     register,
@@ -122,11 +123,17 @@ export default function LoginForm() {
         // Fallback to user_metadata if profile doesn't exist
         const role = profile?.role || authData.user.user_metadata?.role || 'participant'
 
-        if (role === 'admin') {
-          router.push('/admin')
-        } else {
-          router.push('/dashboard')
-        }
+        // Show success message before redirecting
+        setLoginSuccess(true)
+        
+        // Delay redirect to show success message
+        setTimeout(() => {
+          if (role === 'admin') {
+            router.push('/admin')
+          } else {
+            router.push('/dashboard')
+          }
+        }, 1500)
       }
     } catch (error: any) {
       // Handle connection errors specifically
@@ -379,6 +386,14 @@ export default function LoginForm() {
                   Forgot Password?
                 </button>
               </div>
+
+              {loginSuccess && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 text-sm">
+                    ✓ Login successful! Redirecting...
+                  </p>
+                </div>
+              )}
 
               {loginError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
