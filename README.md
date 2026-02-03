@@ -28,18 +28,20 @@ A beautiful, modern quiz competition website for Odisha's culture, traditions, h
 
 ### Installation
 
-1. Clone the repository or navigate to the project directory:
+1. Clone the repository, then navigate to the project root (the folder that contains `package.json` and `proxy.ts`):
    ```bash
-   cd gyana-spandana
+   cd <your-clone-path>
    ```
+   
+   **Important:** This folder is the only project root. Always run `npm run dev` and `npm run build` from this folder (the one that contains `package.json` and `proxy.ts`).
 
 2. Install dependencies:
    ```bash
    npm install
    ```
 
-3. Set up environment variables:
-   - Copy `.env.local.example` to `.env.local`
+3. Set up environment variables (see [ENV_SETUP.md](ENV_SETUP.md) for details):
+   - Copy `.env.example` to `.env` or `.env.local` in the project root
    - Fill in your Supabase credentials:
      ```
      NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
@@ -69,31 +71,33 @@ npm run dev
 ## Project Structure
 
 ```
-gyana-spandana/
+<project-root>/
 ├── app/
 │   ├── auth/
 │   │   └── callback/          # Supabase auth callback
 │   ├── dashboard/             # User dashboard (protected)
 │   ├── login/                 # Login page
 │   ├── register/              # Team registration page
-│   ├── layout.tsx             # Root layout
-│   ├── page.tsx               # Landing page
-│   └── globals.css            # Global styles
+│   ├── admin/                 # Admin dashboard
+│   ├── exams/                 # Exam listing and take/results
+│   ├── layout.tsx              # Root layout
+│   ├── page.tsx                # Landing page
+│   └── globals.css             # Global styles
 ├── components/
-│   └── ui/                    # Reusable UI components
-│       ├── Button.tsx
-│       ├── Input.tsx
-│       └── PasswordStrength.tsx
+│   ├── ui/                    # Reusable UI components
+│   ├── home/                   # Homepage sections
+│   └── layout/                 # Navbar, Footer, etc.
 ├── lib/
 │   ├── supabase/
 │   │   ├── client.ts          # Browser Supabase client
-│   │   └── server.ts          # Server Supabase client
-│   ├── validations.ts         # Zod schemas
-│   └── utils.ts               # Utility functions
+│   │   ├── server.ts          # Server Supabase client
+│   │   └── admin.ts            # Admin/service-role client
+│   ├── validations.ts          # Zod schemas
+│   └── utils.ts                # Utility functions
 ├── docs/
-│   └── database-schema.sql    # Database schema
-├── middleware.ts              # Next.js middleware for auth
-└── .env.local.example         # Environment variables template
+│   └── database-schema.sql     # Database schema
+├── proxy.ts                    # Next.js 16 proxy (auth, route protection)
+└── .env.example                # Environment variables template (copy to .env)
 ```
 
 ## Key Features Implementation
@@ -147,7 +151,7 @@ See `docs/database-schema.sql` for the complete schema with RLS policies.
 - Password hashing handled by Supabase Auth
 - Row Level Security (RLS) policies on all tables
 - Secure authentication with JWT tokens
-- Protected routes via middleware
+- Protected routes via proxy (Next.js 16)
 - Input validation and sanitization
 
 ## Development

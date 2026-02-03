@@ -963,7 +963,7 @@ Stores aggregated team scores for leaderboards.
 ### Project Structure
 
 ```
-gyana-spandana/
+<project-root>/
 ├── app/
 │   ├── admin/
 │   │   ├── exams/

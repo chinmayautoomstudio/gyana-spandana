@@ -1,6 +1,6 @@
 # Environment Variables Setup
 
-Create a `.env.local` file in the root directory (`gyana-spandana/`) with the following variables:
+Create a `.env` or `.env.local` file in the **project root** (the folder that contains `package.json`, `next.config.ts`, and `proxy.ts`) with the following variables:
 
 ```env
 # Supabase Configuration
@@ -46,7 +46,7 @@ To enable email notifications to school authorities:
 
 ## Important Notes:
 
-- **File Name**: Use `.env.local` (not `.env`) - Next.js prefers `.env.local` for local development
+- **File location**: Put `.env` or `.env.local` in the **project root** (same folder as `package.json` and `proxy.ts`). Next.js loads env from there.
 - Never commit `.env.local` to version control (it's already in `.gitignore`)
 - The `NEXT_PUBLIC_` prefix makes these variables available in the browser
 - `SUPABASE_SERVICE_ROLE_KEY` is **server-side only** - never use it in client components
@@ -81,12 +81,12 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxx
 This error occurs when environment variables are not being read correctly. Follow these steps:
 
 1. **Check file name and location:**
-   - File must be named `.env.local` (not `.env`)
-   - File must be in the project root: `gyana-spandana/.env.local`
-   - Verify the file exists: `ls .env.local` (or `dir .env.local` on Windows)
+   - File must be named `.env` or `.env.local`
+   - File must be in the **project root** (the folder that contains `package.json` and `proxy.ts`)
+   - Verify the file exists: `ls .env` or `ls .env.local` (or `dir .env` / `dir .env.local` on Windows)
 
 2. **Verify file format:**
-   - Open `.env.local` and check:
+   - Open `.env` or `.env.local` and check:
      - No quotes around values
      - No spaces around `=`
      - All three variables are present and filled in
@@ -134,12 +134,12 @@ This happens when:
 - Server-side variables work (registration uses server actions)
 - Client-side variables are missing (login uses browser client)
 
-**Solution:** Ensure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set in `.env.local`
+**Solution:** Ensure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set in `.env` or `.env.local` in the project root.
 
 ### Still having issues?
 
 1. Check the browser console for detailed error messages
-2. Verify your `.env.local` file format matches the example above exactly
-3. Try creating a fresh `.env.local` file and copying values again
+2. Verify your `.env` or `.env.local` file format matches the example above exactly
+3. Try creating a fresh `.env` or `.env.local` file in the project root and copying values again
 4. Make sure you're using the correct Supabase project credentials
 

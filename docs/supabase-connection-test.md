@@ -73,9 +73,8 @@ WHERE tablename = 'participants';
 
 ## Step 3: Test Registration Flow
 
-1. **Start development server:**
+1. **Start development server:** From the project root (the folder that contains `package.json` and `proxy.ts`):
    ```bash
-   cd gyana-spandana
    npm run dev
    ```
 
