@@ -182,18 +182,8 @@ const steps = [
   },
   {
     number: 4,
-    title: 'Final Round',
-    description: 'Qualified teams compete in the final round. Showcase your knowledge and compete for the top positions.',
-    icon: (
-      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-      </svg>
-    ),
-  },
-  {
-    number: 5,
     title: 'Prize Distribution',
-    description: 'Winners are announced and prizes are distributed. Top teams receive certificates, recognition, and rewards.',
+    description: 'Winners are announced and prizes are distributed on 30th April 2026. Top teams receive certificates, recognition, and rewards.',
     icon: (
       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2v-1m0 0V5.5A2.5 2.5 0 1019 8v.5m0 0v9m0-9h-2m2 0h2m-2 0h-2m2 9h-2m2 0h2m-2 0h-2" />

@@ -28,7 +28,7 @@ export function HowItWorks({ steps }: HowItWorksProps) {
           {/* Timeline Line - Desktop */}
           <div className="hidden lg:block absolute top-24 left-0 right-0 h-1 bg-gradient-to-r from-[#C0392B]/30 via-[#E67E22]/30 to-[#F39C12]/30" />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 items-stretch">
             {steps.map((step, index) => (
               <div key={index} className="relative flex h-full">
                 {/* Step Card */}
