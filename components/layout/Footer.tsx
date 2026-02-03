@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
@@ -25,8 +26,14 @@ export function Footer() {
           {/* Brand Column */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-[#C0392B] to-[#E67E22] rounded-lg flex items-center justify-center text-white font-bold text-lg">
-                GS
+              <div className="relative w-10 h-10 flex-shrink-0">
+                <Image
+                  src="/images/logo.png"
+                  alt="GYANA SPARDHA"
+                  width={40}
+                  height={40}
+                  className="object-contain rounded-lg"
+                />
               </div>
               <span className="text-xl font-bold">GYANA SPARDHA</span>
             </div>

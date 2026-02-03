@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { loginSchema, type LoginFormData } from '@/lib/validations'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
@@ -296,6 +297,15 @@ export default function LoginForm() {
         <div className="flex-1 flex items-center justify-center px-6 sm:px-8 py-8 sm:py-12">
           <div className="w-full max-w-md">
             <div className="mb-8">
+              <div className="flex justify-center mb-4">
+                <Image
+                  src="/images/logo.png"
+                  alt="GYANA SPARDHA"
+                  width={56}
+                  height={56}
+                  className="object-contain rounded-lg"
+                />
+              </div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
                 Welcome Back to GYANA SPARDHA!
               </h1>
