@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -27,7 +27,8 @@ interface Team {
 export default function ExamTeamsPage() {
   const params = useParams()
   const router = useRouter()
-  const examId = params.id as string
+  const resolvedParams = params instanceof Promise ? use(params) : params
+  const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<{ id: string; title: string } | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +43,8 @@ export default function ExamTeamsPage() {
   }, [examId])
 
   const fetchData = async () => {
+    if (!examId) return
+    
     setLoading(true)
     setError(null)
     const supabase = createClient()

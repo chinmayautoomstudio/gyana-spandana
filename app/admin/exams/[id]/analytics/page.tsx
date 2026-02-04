@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -32,8 +32,9 @@ interface ScoreDistribution {
 }
 
 export default function ExamAnalyticsPage() {
-  const params = useParams() as { id: string }
-  const examId = params.id || ''
+  const params = useParams()
+  const resolvedParams = params instanceof Promise ? use(params) : params
+  const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<Exam | null>(null)
   const [questionAnalytics, setQuestionAnalytics] = useState<QuestionAnalytics[]>([])
   const [scoreDistribution, setScoreDistribution] = useState<ScoreDistribution[]>([])
@@ -41,6 +42,8 @@ export default function ExamAnalyticsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!examId) return
+    
     const fetchAnalytics = async () => {
       const supabase = createClient()
 

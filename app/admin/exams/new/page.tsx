@@ -52,6 +52,7 @@ export default function NewExamPage() {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
   const [teamSearchTerm, setTeamSearchTerm] = useState('')
   const [loadingTeams, setLoadingTeams] = useState(true)
+  const [availabilityMode, setAvailabilityMode] = useState<'now' | 'scheduled'>('now')
 
   const {
     register,
@@ -172,28 +173,6 @@ export default function NewExamPage() {
         return
       }
 
-      const examData = {
-        title: data.title,
-        description: data.description || null,
-        duration_minutes: data.duration_minutes,
-        passing_score: data.passing_score || null,
-        questions_per_participant: data.questions_per_participant || null,
-        scheduled_start: data.scheduled_start ? new Date(data.scheduled_start).toISOString() : null,
-        scheduled_end: data.scheduled_end ? new Date(data.scheduled_end).toISOString() : null,
-        status: 'draft',
-        created_by: user.id,
-      }
-
-      const { data: exam, error: examError } = await supabase
-        .from('exams')
-        .insert(examData)
-        .select()
-        .single()
-
-      if (examError) {
-        throw new Error(examError.message)
-      }
-
       // Validate that questions are selected
       if (selectedQuestionIds.length === 0) {
         throw new Error('Please select at least one question or a question set')
@@ -209,6 +188,53 @@ export default function NewExamPage() {
         }
       }
 
+      // Validate scheduled exams
+      if (availabilityMode === 'scheduled') {
+        if (!data.scheduled_start || !data.scheduled_end) {
+          throw new Error('Scheduled start and end times are required when scheduling an exam')
+        }
+        if (new Date(data.scheduled_end) <= new Date(data.scheduled_start)) {
+          throw new Error('Scheduled end time must be after start time')
+        }
+      }
+
+      // Determine status based on availability mode
+      let examStatus: 'draft' | 'active' | 'scheduled' = 'draft'
+      if (availabilityMode === 'now') {
+        examStatus = 'active'
+      } else if (availabilityMode === 'scheduled' && data.scheduled_start && data.scheduled_end) {
+        const now = new Date()
+        const start = new Date(data.scheduled_start)
+        if (start <= now) {
+          examStatus = 'active'  // Scheduled time has passed, activate immediately
+        } else {
+          examStatus = 'scheduled'
+        }
+      }
+
+      const examData = {
+        title: data.title,
+        description: data.description || null,
+        duration_minutes: data.duration_minutes,
+        passing_score: data.passing_score || null,
+        total_questions: selectedQuestionIds.length,
+        questions_per_participant: data.questions_per_participant || null,
+        scheduled_start: data.scheduled_start ? new Date(data.scheduled_start).toISOString() : null,
+        scheduled_end: data.scheduled_end ? new Date(data.scheduled_end).toISOString() : null,
+        status: examStatus,
+        created_by: user.id,
+      }
+
+      const { data: exam, error: examError } = await supabase
+        .from('exams')
+        .insert(examData)
+        .select()
+        .single()
+
+      if (examError) {
+        throw new Error(examError.message)
+      }
+
       // Assign selected questions to the exam
       if (selectedQuestionIds.length > 0) {
         const questionUpdates = selectedQuestionIds.map((questionId, index) => ({
@@ -216,6 +242,10 @@ export default function NewExamPage() {
           exam_id: exam.id,
           order_index: index + 1,
         }))
+
+        // Track failed assignments
+        const failedAssignments: string[] = []
+        const failedErrors: Array<{ id: string; error: any }> = []
 
         // Update each question to assign it to the exam
         for (const update of questionUpdates) {
@@ -226,8 +256,24 @@ export default function NewExamPage() {
 
           if (updateError) {
             console.error(`Error assigning question ${update.id}:`, updateError)
+            failedAssignments.push(update.id)
+            failedErrors.push({ id: update.id, error: updateError })
             // Continue with other questions even if one fails
           }
+        }
+
+        // Report failed assignments
+        if (failedAssignments.length > 0) {
+          const errorMessage = `Warning: ${failedAssignments.length} out of ${selectedQuestionIds.length} question(s) failed to assign to exam.`
+          console.error(errorMessage, {
+            failedIds: failedAssignments,
+            errors: failedErrors
+          })
+          
+          // Show warning to user
+          alert(`${errorMessage}\n\nFailed question IDs: ${failedAssignments.slice(0, 5).join(', ')}${failedAssignments.length > 5 ? '...' : ''}\n\nPlease check the exam questions page and manually assign any missing questions.`)
+        } else {
+          console.log(`Successfully assigned all ${selectedQuestionIds.length} questions to exam ${exam.id}`)
         }
       }
 
@@ -378,28 +424,73 @@ export default function NewExamPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Exam Availability Section */}
+        <div className="border-t border-gray-200 pt-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Scheduled Start
+              Exam Availability *
             </label>
-            <input
-              type="datetime-local"
-              {...register('scheduled_start')}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setAvailabilityMode('now')}
+                className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  availabilityMode === 'now'
+                    ? 'border-[#C0392B] bg-[#C0392B]/5'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                <h3 className="font-semibold text-gray-900 mb-1">Create & Activate Now</h3>
+                <p className="text-sm text-gray-600">Exam starts immediately and is available to participants right away</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvailabilityMode('scheduled')}
+                className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  availabilityMode === 'scheduled'
+                    ? 'border-[#C0392B] bg-[#C0392B]/5'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                <h3 className="font-semibold text-gray-900 mb-1">Schedule for Later</h3>
+                <p className="text-sm text-gray-600">Set specific start and end times for the exam</p>
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Scheduled End
-            </label>
-            <input
-              type="datetime-local"
-              {...register('scheduled_end')}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
-            />
-          </div>
+          {availabilityMode === 'scheduled' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Scheduled Start *
+                </label>
+                <input
+                  type="datetime-local"
+                  {...register('scheduled_start')}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                  required={availabilityMode === 'scheduled'}
+                />
+                {errors.scheduled_start && (
+                  <p className="mt-1 text-sm text-red-600">{errors.scheduled_start.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Scheduled End *
+                </label>
+                <input
+                  type="datetime-local"
+                  {...register('scheduled_end')}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                  required={availabilityMode === 'scheduled'}
+                />
+                {errors.scheduled_end && (
+                  <p className="mt-1 text-sm text-red-600">{errors.scheduled_end.message}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Question Selection Section */}

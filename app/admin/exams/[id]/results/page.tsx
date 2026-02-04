@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -38,12 +38,15 @@ interface Exam {
 export default function ExamResultsPage() {
   const params = useParams()
   const router = useRouter()
-  const examId = params.id as string
+  const resolvedParams = params instanceof Promise ? use(params) : params
+  const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<Exam | null>(null)
   const [attempts, setAttempts] = useState<ExamAttempt[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!examId) return
+    
     const fetchData = async () => {
       const supabase = createClient()
 
@@ -172,6 +175,23 @@ export default function ExamResultsPage() {
       ),
       sortable: true,
     },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (attempt: ExamAttempt) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            router.push(`/admin/exams/${examId}/attempts/${attempt.id}`)
+          }}
+        >
+          View Details
+        </Button>
+      ),
+      sortable: false,
+    },
   ]
 
   const exportData = attempts.map((attempt) => ({
@@ -274,8 +294,7 @@ export default function ExamResultsPage() {
           searchable
           searchPlaceholder="Search by participant name or team..."
           onRowClick={(attempt) => {
-            // Could navigate to detailed attempt view
-            console.log('View attempt:', attempt.id)
+            router.push(`/admin/exams/${examId}/attempts/${attempt.id}`)
           }}
         />
       )}

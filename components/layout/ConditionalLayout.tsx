@@ -12,7 +12,8 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
     ['/login', '/register'].includes(pathname) ||
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/admin') ||
-    pathname.startsWith('/profile/edit')
+    pathname.startsWith('/profile/edit') ||
+    pathname.startsWith('/exams/')  // Hide footer on all exam pages
 
   return (
     <>

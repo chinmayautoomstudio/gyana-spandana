@@ -145,7 +145,7 @@ export async function POST(
       
       <p>Dear ${participant.name},</p>
       
-      <p>You have been invited to take the following exam:</p>
+      <p>You have been invited to take the following exam individually. Each participant in your team will take this exam separately, and your team's final score will be calculated by summing both participants' individual scores.</p>
 
       <!-- Exam Details -->
       <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #C0392B;">
@@ -187,6 +187,17 @@ export async function POST(
         <a href="${examUrl}" style="display: inline-block; background: linear-gradient(135deg, #C0392B 0%, #E67E22 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
           Take Exam
         </a>
+      </div>
+
+      <!-- Individual Participation Notice -->
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196f3;">
+        <h4 style="color: #1565c0; margin-top: 0;">Individual Exam Participation:</h4>
+        <ul style="margin: 10px 0; padding-left: 20px; color: #1565c0;">
+          <li>You must take this exam individually using your own account</li>
+          <li>Each participant in your team will receive their own exam link</li>
+          <li>Your team's final score will be the sum of both participants' individual scores</li>
+          <li>You cannot share your exam link or answers with your teammate</li>
+        </ul>
       </div>
 
       <!-- Instructions -->
@@ -232,7 +243,7 @@ GYANA SPARDHA - Odisha Quiz Competition
 
 Dear ${participant.name},
 
-You have been invited to take the following exam:
+You have been invited to take the following exam individually. Each participant in your team will take this exam separately, and your team's final score will be calculated by summing both participants' individual scores.
 
 Exam: ${exam.title}
 Duration: ${exam.duration_minutes} minutes
@@ -243,6 +254,12 @@ ${exam.scheduled_end ? `End Time: ${formatDate(exam.scheduled_end)}` : ''}
 ${customMessage ? `\nMessage:\n${customMessage}\n` : ''}
 
 Take the exam: ${examUrl}
+
+Individual Exam Participation:
+- You must take this exam individually using your own account
+- Each participant in your team will receive their own exam link
+- Your team's final score will be the sum of both participants' individual scores
+- You cannot share your exam link or answers with your teammate
 
 Important Instructions:
 - You must be logged in to access the exam

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -38,7 +38,8 @@ interface Answer {
 export default function ExamResultsPage() {
   const params = useParams()
   const router = useRouter()
-  const examId = params.id as string
+  const resolvedParams = params instanceof Promise ? use(params) : params
+  const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<Exam | null>(null)
   const [attempt, setAttempt] = useState<Attempt | null>(null)
   const [answers, setAnswers] = useState<Answer[]>([])
@@ -49,6 +50,8 @@ export default function ExamResultsPage() {
   const [isGotoInputFocused, setIsGotoInputFocused] = useState(false)
 
   useEffect(() => {
+    if (!examId) return
+    
     const fetchResults = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -171,6 +174,14 @@ export default function ExamResultsPage() {
     fetchResults()
   }, [examId, router])
 
+  // Clear goto input when question index changes
+  // IMPORTANT: This must be before any early returns to follow Rules of Hooks
+  useEffect(() => {
+    if (!isGotoInputFocused) {
+      setGotoInputValue('')
+    }
+  }, [currentQuestionIndex, isGotoInputFocused])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#ECF0F1]">
@@ -195,9 +206,13 @@ export default function ExamResultsPage() {
     )
   }
 
-  // Calculate total possible score (assuming 1 point per question for now)
-  // In a real scenario, you'd sum up all question points
-  const totalPossibleScore = exam.total_questions
+  // Calculate total possible score from attempt's total_questions or answers length
+  // Use attempt.total_questions if available, otherwise calculate from answers
+  const totalPossibleScore = attempt.total_questions > 0 
+    ? attempt.total_questions 
+    : answers.length > 0 
+      ? answers.length 
+      : exam.total_questions || 0
   
   const percentage = totalPossibleScore > 0 
     ? Math.round((attempt.score / totalPossibleScore) * 100)
@@ -233,20 +248,13 @@ export default function ExamResultsPage() {
     }
   }
 
-  // Clear goto input when question index changes
-  useEffect(() => {
-    if (!isGotoInputFocused) {
-      setGotoInputValue('')
-    }
-  }, [currentQuestionIndex, isGotoInputFocused])
-
   const currentAnswer = answers[currentQuestionIndex] || null
   const wrongAnswers = answers.filter(a => !a.is_correct).length
-  const skippedQuestions = exam.total_questions - answers.length
+  const skippedQuestions = Math.max(0, (attempt.total_questions || answers.length) - answers.length)
 
   return (
-    <div className="min-h-screen bg-[#ECF0F1]">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-[#ECF0F1] pb-0">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <Link
           href="/exams"
           className="text-[#C0392B] hover:text-[#A93226] flex items-center gap-2 mb-6"
@@ -275,14 +283,24 @@ export default function ExamResultsPage() {
 
               {/* Score Card */}
               <div className={`${getScoreBgColor(percentage)} rounded-xl p-6 mb-6`}>
-                <div className="text-5xl font-bold mb-2">{percentage}%</div>
-                <div className="text-sm text-gray-600 mb-4">Your Score</div>
+                <div className={`text-5xl font-bold mb-2 ${
+                  percentage >= 80 ? 'text-green-800' :
+                  percentage >= 60 ? 'text-blue-800' :
+                  percentage >= 40 ? 'text-yellow-800' :
+                  'text-red-800'
+                }`}>{percentage}%</div>
+                <div className="text-sm text-gray-700 mb-4">Your Score</div>
                 <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${
                   isPassed ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
                 }`}>
                   {isPassed ? 'PASSED' : 'NEEDS IMPROVEMENT'}
                 </div>
-                <div className="mt-4 text-lg font-semibold">
+                <div className={`mt-4 text-lg font-semibold ${
+                  percentage >= 80 ? 'text-green-800' :
+                  percentage >= 60 ? 'text-blue-800' :
+                  percentage >= 40 ? 'text-yellow-800' :
+                  'text-red-800'
+                }`}>
                   {attempt.score} / {totalPossibleScore} points
                 </div>
               </div>
@@ -318,7 +336,7 @@ export default function ExamResultsPage() {
         ) : (
           <>
             {/* Question Review Header */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 mb-6">
+            <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4 mb-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4">
                   <Button
@@ -343,7 +361,7 @@ export default function ExamResultsPage() {
 
             {/* Question Card */}
             {currentAnswer && (
-              <div className={`bg-white/70 backdrop-blur-xl rounded-2xl border-2 shadow-lg p-6 sm:p-8 mb-6 ${
+              <div className={`bg-white/70 backdrop-blur-xl rounded-xl border-2 shadow-lg p-6 mb-4 ${
                 currentAnswer.is_correct ? 'border-green-200' : 'border-red-200'
               }`}>
                 <div className="flex items-start justify-between mb-4">
@@ -392,8 +410,16 @@ export default function ExamResultsPage() {
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{option}.</span>
-                          <span className="flex-1">{optionText}</span>
+                          <span className={`font-medium ${
+                            isCorrect ? 'text-green-900' :
+                            isSelected ? 'text-red-900' :
+                            'text-gray-900'
+                          }`}>{option}.</span>
+                          <span className={`flex-1 ${
+                            isCorrect ? 'text-green-900' :
+                            isSelected ? 'text-red-900' :
+                            'text-gray-900'
+                          }`}>{optionText}</span>
                           {isCorrect && (
                             <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full">Correct</span>
                           )}
@@ -409,7 +435,7 @@ export default function ExamResultsPage() {
             )}
 
             {/* Navigation */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6">
+            <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <Button
                   variant="outline"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -43,7 +43,8 @@ interface Answer {
 export default function TakeExamPage() {
   const params = useParams()
   const router = useRouter()
-  const examId = params.id as string
+  const resolvedParams = params instanceof Promise ? use(params) : params
+  const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<Exam | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
@@ -55,8 +56,11 @@ export default function TakeExamPage() {
   const [loading, setLoading] = useState(true)
   const [showInstructions, setShowInstructions] = useState(true)
   const [examStarted, setExamStarted] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!examId) return
+    
     const initializeExam = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -92,6 +96,48 @@ export default function TakeExamPage() {
         return
       }
 
+      // Validate exam status and availability
+      if (examData.status === 'draft') {
+        alert('This exam is still in draft mode and not available yet.')
+        router.push('/exams')
+        return
+      }
+
+      if (examData.status === 'cancelled') {
+        alert('This exam has been cancelled.')
+        router.push('/exams')
+        return
+      }
+
+      if (examData.status === 'completed') {
+        alert('This exam has been completed and is no longer accepting submissions.')
+        router.push('/exams')
+        return
+      }
+
+      // Check scheduling for scheduled exams
+      if (examData.status === 'scheduled') {
+        const now = new Date()
+        const start = examData.scheduled_start ? new Date(examData.scheduled_start) : null
+        const end = examData.scheduled_end ? new Date(examData.scheduled_end) : null
+
+        if (start && now < start) {
+          const startTime = start.toLocaleString('en-IN', {
+            dateStyle: 'long',
+            timeStyle: 'short'
+          })
+          alert(`This exam is not yet available. It will start on ${startTime}.`)
+          router.push('/exams')
+          return
+        }
+
+        if (end && now > end) {
+          alert('The scheduled time for this exam has passed.')
+          router.push('/exams')
+          return
+        }
+      }
+
       // Check if exam has participant assignments
       const { data: allAssignments } = await supabase
         .from('exam_participants')
@@ -115,19 +161,35 @@ export default function TakeExamPage() {
         }
       }
 
-      // Check for existing attempt
-      const { data: existingAttempt } = await supabase
+      // Check for existing attempt (any status)
+      const { data: existingAttempt, error: checkError } = await supabase
         .from('exam_attempts')
         .select('*')
         .eq('exam_id', examId)
         .eq('participant_id', participant.id)
-        .eq('status', 'in_progress')
-        .single()
+        .maybeSingle()
+
+      if (checkError) {
+        console.error('Error checking existing attempt:', checkError)
+        // Continue anyway - might be a transient error
+      }
+
+      if (existingAttempt) {
+        if (existingAttempt.status === 'submitted') {
+          // Already submitted - redirect to results
+          alert('You have already completed this exam.')
+          router.push(`/exams/${examId}/results`)
+          return
+        } else if (existingAttempt.status === 'in_progress') {
+          // Resume existing attempt
+          // Will be handled below
+        }
+      }
 
       setExam(examData)
 
       // Create or resume attempt
-      let attempt = existingAttempt
+      let attempt = existingAttempt && existingAttempt.status === 'in_progress' ? existingAttempt : null
       let participantQuestionIds: string[] = []
       let participantQuestions: Question[] = []
 
@@ -145,6 +207,9 @@ export default function TakeExamPage() {
           router.push('/exams')
           return
         }
+
+        // Debug logging: Track initial question pool size
+        console.log(`[Exam Init] Fetched ${allQuestionsData.length} questions from exam pool`)
 
         // Get questions_per_participant from exam (or use all if NULL)
         const questionsPerParticipant = examData.questions_per_participant || null
@@ -168,6 +233,9 @@ export default function TakeExamPage() {
           questionsPerParticipant
         )
 
+        // Debug logging: Track selected question IDs count
+        console.log(`[Exam Init] Selected ${participantQuestionIds.length} question IDs (requested: ${questionsPerParticipant || 'all'})`)
+
         // Ensure we have at least one question
         if (participantQuestionIds.length === 0) {
           alert('No questions available for this exam')
@@ -175,32 +243,149 @@ export default function TakeExamPage() {
           return
         }
 
-        // Create attempt with selected question IDs
-        const { data: newAttempt, error } = await supabase
-          .from('exam_attempts')
-          .insert({
-            exam_id: examId,
-            participant_id: participant.id,
-            question_ids: participantQuestionIds,
-            total_questions: participantQuestionIds.length,
-            status: 'in_progress',
-          })
-          .select()
-          .single()
+        // Fetch the selected questions by IDs FIRST to ensure we get exactly what we selected
+        // This prevents issues where questions might be missing from allQuestionsData
+        const { data: selectedQuestionsData, error: fetchError } = await supabase
+          .from('questions')
+          .select('*')
+          .in('id', participantQuestionIds)
+          .eq('exam_id', examId) // Ensure they belong to this exam
 
-        if (error) {
-          console.error('Error creating attempt:', error)
+        if (fetchError) {
+          console.error('Error fetching selected questions:', fetchError)
+          alert('Failed to load exam questions. Please try again.')
           router.push('/exams')
           return
         }
-        attempt = newAttempt
 
-        // Fetch the selected questions in the shuffled order
-        // We need to preserve the order from participantQuestionIds
-        const questionsMap = new Map(allQuestionsData.map(q => [q.id, q]))
+        if (!selectedQuestionsData || selectedQuestionsData.length === 0) {
+          alert('No questions found for this attempt')
+          router.push('/exams')
+          return
+        }
+
+        // Debug logging: Track fetched questions count
+        console.log(`[Exam Init] Fetched ${selectedQuestionsData.length} questions by IDs (expected: ${participantQuestionIds.length})`)
+
+        // Validate we got all questions and update IDs if some are missing
+        if (selectedQuestionsData.length < participantQuestionIds.length) {
+          const missingIds = participantQuestionIds.filter(
+            id => !selectedQuestionsData.some(q => q.id === id)
+          )
+          console.warn(`[Exam Init] Missing ${missingIds.length} questions:`, missingIds)
+          
+          // Update participantQuestionIds to only include found questions
+          participantQuestionIds = selectedQuestionsData.map(q => q.id)
+        }
+
+        // Now create attempt with validated question IDs and count
+        let attemptData: any = {
+          exam_id: examId,
+          participant_id: participant.id,
+          total_questions: participantQuestionIds.length,
+          status: 'in_progress',
+          started_at: new Date().toISOString(),
+        }
+
+        // Only include question_ids if we have questions (for backward compatibility)
+        if (participantQuestionIds.length > 0) {
+          attemptData.question_ids = participantQuestionIds
+        }
+
+        let { data: newAttempt, error } = await supabase
+          .from('exam_attempts')
+          .insert(attemptData)
+          .select()
+          .single()
+
+        // If error is due to missing column, retry without question_ids
+        if (error && error.code === '42703' && error.message?.includes('question_ids')) {
+          console.warn('question_ids column not found, creating attempt without it')
+          delete attemptData.question_ids
+          
+          const retryResult = await supabase
+            .from('exam_attempts')
+            .insert(attemptData)
+            .select()
+            .single()
+          
+          newAttempt = retryResult.data
+          error = retryResult.error
+        }
+
+        // Handle unique constraint violation (race condition)
+        if (error && error.code === '23505') {
+          // Race condition: attempt was created between check and insert
+          console.log('Attempt already exists (race condition), fetching existing attempt...')
+          const { data: raceAttempt, error: fetchError } = await supabase
+            .from('exam_attempts')
+            .select('*')
+            .eq('exam_id', examId)
+            .eq('participant_id', participant.id)
+            .single()
+          
+          if (fetchError || !raceAttempt) {
+            console.error('Error fetching existing attempt after race condition:', fetchError)
+            alert('Failed to start exam. Please refresh the page and try again.')
+            router.push('/exams')
+            return
+          }
+
+          // Handle existing attempt based on status
+          if (raceAttempt.status === 'submitted') {
+            alert('You have already completed this exam.')
+            router.push(`/exams/${examId}/results`)
+            return
+          } else if (raceAttempt.status === 'in_progress' || raceAttempt.status === 'timeout') {
+            // Resume existing attempt
+            attempt = raceAttempt
+            console.log('Resuming existing attempt:', attempt.id)
+          } else {
+            // Unknown status
+            console.error('Unexpected attempt status:', raceAttempt.status)
+            alert('An error occurred. Please contact support.')
+            router.push('/exams')
+            return
+          }
+        } else if (error) {
+          // Other errors
+          console.error('Error creating attempt:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+            fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
+          })
+          
+          // User-friendly error message
+          let errorMessage = 'Failed to start exam. '
+          if (error.code === '42703') { // Undefined column
+            errorMessage += 'Database migration may be required. Please contact an administrator.'
+          } else {
+            errorMessage += error.message || 'Please try again or contact support.'
+          }
+          
+          alert(errorMessage)
+          router.push('/exams')
+          return
+        } else {
+          // Success - use the new attempt
+          attempt = newAttempt
+        }
+
+        // Preserve the order from participantQuestionIds
+        const questionsMap = new Map(selectedQuestionsData.map(q => [q.id, q]))
         participantQuestions = participantQuestionIds
           .map(id => questionsMap.get(id))
           .filter((q): q is Question => q !== undefined)
+
+        // Debug logging: Track final questions count
+        console.log(`[Exam Init] Final questions count: ${participantQuestions.length} (expected: ${participantQuestionIds.length})`)
+
+        // Warn if there's still a mismatch after validation
+        if (participantQuestions.length !== participantQuestionIds.length) {
+          console.error(`[Exam Init] CRITICAL: Question count mismatch! Expected ${participantQuestionIds.length}, got ${participantQuestions.length}`)
+        }
       } else {
         // Resuming existing attempt: Load question IDs from attempt
         if (attempt.question_ids && Array.isArray(attempt.question_ids)) {
@@ -416,13 +601,33 @@ export default function TakeExamPage() {
           status: 'submitted',
           score: totalScore,
           correct_answers: correctAnswers,
+          total_questions: questionsWithAnswers.length,
           submitted_at: new Date().toISOString(),
           time_taken_minutes: timeTaken,
         })
         .eq('id', attemptId)
 
       if (updateError) {
-        throw updateError
+        // Enhanced error logging
+        console.error('Error submitting exam:', {
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint,
+          code: updateError.code,
+          fullError: JSON.stringify(updateError, Object.getOwnPropertyNames(updateError))
+        })
+        
+        // User-friendly error message
+        let errorMessage = 'Failed to submit exam. '
+        if (updateError.code === '42501' || updateError.message?.includes('row-level security')) {
+          errorMessage += 'Permission denied. Please ensure you are logged in and try again. If the problem persists, contact support.'
+        } else {
+          errorMessage += updateError.message || 'Please try again or contact support.'
+        }
+        
+        setSubmitError(errorMessage)
+        setIsSubmitting(false)
+        return
       }
 
       // Stop security monitoring before navigation
@@ -433,8 +638,16 @@ export default function TakeExamPage() {
       // Navigate to results
       router.push(`/exams/${examId}/results`)
     } catch (error: any) {
-      console.error('Error submitting exam:', error)
-      alert('Error submitting exam: ' + error.message)
+      console.error('Error submitting exam:', {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
+      })
+      
+      const errorMessage = error?.message || 'An unexpected error occurred. Please try again.'
+      setSubmitError(`Error submitting exam: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -517,62 +730,75 @@ export default function TakeExamPage() {
       examDurationMinutes={exam.duration_minutes}
       warningMessage="This exam is monitored for security purposes. Fullscreen mode and security monitoring will be activated. Please ensure you follow all exam rules."
     >
-      <div className="min-h-screen bg-[#ECF0F1]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 mb-6">
-            <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+      <div className="min-h-screen bg-[#ECF0F1] pb-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          {/* Compact Header */}
+          <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4 mb-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{exam.title}</h1>
-                <p className="text-gray-600 mt-1">
+                <h1 className="text-xl font-bold text-gray-900">{exam.title}</h1>
+                <p className="text-sm text-gray-600">
                   Question {currentQuestionIndex + 1} of {questions.length}
                 </p>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <ExamTimer
                   durationSeconds={timeRemaining}
                   onTimeUp={handleTimeUp}
                   onWarning={handleTimeWarning}
                   isActive={examStarted}
                 />
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (confirm('Are you sure you want to submit the exam?')) {
-                      submitExam()
-                    }
-                  }}
-                  disabled={isSubmitting}
-                >
-                  Submit Exam
-                </Button>
+                <div className="flex flex-col items-end gap-2">
+                  {submitError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                      <p className="text-red-800 text-xs">{submitError}</p>
+                    </div>
+                  )}
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSubmitError(null)
+                      if (confirm('Are you sure you want to submit the exam?')) {
+                        submitExam()
+                      }
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Submitting...' : 'Submit Exam'}
+                  </Button>
+                </div>
               </div>
             </div>
 
-            {/* Enhanced Progress Bar */}
-            <ExamProgressBar
-              currentQuestion={currentQuestionIndex + 1}
-              totalQuestions={questions.length}
-              answeredQuestions={answeredCount}
-              timeRemaining={timeRemaining}
-              totalDuration={exam.duration_minutes * 60}
-            />
+            {/* Progress Bar - more prominent */}
+            <div className="mt-3">
+              <ExamProgressBar
+                currentQuestion={currentQuestionIndex + 1}
+                totalQuestions={questions.length}
+                answeredQuestions={answeredCount}
+                timeRemaining={timeRemaining}
+                totalDuration={exam.duration_minutes * 60}
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Question Navigation Sidebar */}
+          {/* Main Content Grid - optimized spacing */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {/* Question Navigation Sidebar - make sticky */}
             <div className="lg:col-span-1">
-              <QuestionNavigator
-                questions={questions}
-                currentQuestionIndex={currentQuestionIndex}
-                answeredQuestionIds={answeredQuestionIds}
-                onQuestionSelect={handleQuestionSelect}
-              />
+              <div className="lg:sticky lg:top-4">
+                <QuestionNavigator
+                  questions={questions}
+                  currentQuestionIndex={currentQuestionIndex}
+                  answeredQuestionIds={answeredQuestionIds}
+                  onQuestionSelect={handleQuestionSelect}
+                />
+              </div>
             </div>
 
             {/* Question Content */}
             <div className="lg:col-span-3">
-              <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
+              <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-6">
                 <MCQQuestion
                   question={currentQuestion}
                   selectedAnswer={currentAnswer}

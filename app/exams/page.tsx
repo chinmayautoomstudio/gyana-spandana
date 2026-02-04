@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
+import { updateExamStatuses } from '@/lib/utils/examScheduler'
 
 interface Exam {
   id: string
@@ -33,6 +34,10 @@ export default function AvailableExamsPage() {
   useEffect(() => {
     const fetchData = async () => {
       const supabase = createClient()
+      
+      // Update exam statuses based on schedule
+      await updateExamStatuses(supabase)
+      
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
@@ -179,7 +184,16 @@ export default function AvailableExamsPage() {
                   key={exam.id}
                   className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 hover:shadow-xl transition-all"
                 >
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">{exam.title}</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xl font-bold text-gray-900">{exam.title}</h3>
+                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                      exam.status === 'active' ? 'bg-green-100 text-green-800' :
+                      exam.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {exam.status.charAt(0).toUpperCase() + exam.status.slice(1)}
+                    </span>
+                  </div>
                   {exam.description && (
                     <p className="text-gray-600 text-sm mb-4 line-clamp-2">{exam.description}</p>
                   )}
@@ -225,7 +239,15 @@ export default function AvailableExamsPage() {
                     </Link>
                   ) : (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
-                      <p className="text-sm text-yellow-800">Not available yet</p>
+                      <p className="text-sm text-yellow-800 font-medium">Not available yet</p>
+                      {exam.status === 'scheduled' && exam.scheduled_start && (
+                        <p className="text-xs text-yellow-700 mt-1">
+                          Starts: {new Date(exam.scheduled_start).toLocaleString('en-IN', {
+                            dateStyle: 'long',
+                            timeStyle: 'short'
+                          })}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

@@ -45,6 +45,7 @@ export async function GET(
           name,
           email,
           school_name,
+          is_participant1,
           teams(team_name, team_code)
         )
       `)

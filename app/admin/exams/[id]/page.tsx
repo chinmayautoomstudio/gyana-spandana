@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { StatsCard } from '@/components/admin/StatsCard'
-import { ExamLinkDisplay } from '@/components/admin/ExamLinkDisplay'
+import { ParticipantExamLinks } from '@/components/admin/ParticipantExamLinks'
 import { ExamInvitationModal } from '@/components/admin/ExamInvitationModal'
 
 interface Exam {
@@ -26,7 +26,8 @@ interface Exam {
 export default function ExamDetailsPage() {
   const params = useParams()
   const router = useRouter()
-  const examId = params.id as string
+  const resolvedParams = params instanceof Promise ? use(params) : params
+  const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<Exam | null>(null)
   const [stats, setStats] = useState({
     totalAttempts: 0,
@@ -42,6 +43,8 @@ export default function ExamDetailsPage() {
   const [assignedParticipantsCount, setAssignedParticipantsCount] = useState(0)
 
   useEffect(() => {
+    if (!examId) return
+    
     const fetchExam = async () => {
       const supabase = createClient()
       const { data, error } = await supabase
@@ -170,7 +173,7 @@ export default function ExamDetailsPage() {
     )
   }
 
-  if (!exam) {
+  if (!examId || !exam) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-600">Exam not found</p>
@@ -240,30 +243,59 @@ export default function ExamDetailsPage() {
               </Button>
             )}
             {exam.status === 'draft' && (
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => handleStatusChange('scheduled')}
-              >
-                Schedule Exam
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleStatusChange('active')}
+                >
+                  Activate Now
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Navigate to edit page or show schedule modal
+                    if (confirm('To schedule this exam, you need to set start and end times. Would you like to edit the exam?')) {
+                      // For now, just activate - edit functionality can be added later
+                      handleStatusChange('active')
+                    }
+                  }}
+                >
+                  Edit & Schedule
+                </Button>
+              </>
             )}
             {exam.status === 'scheduled' && (
               <Button
                 variant="primary"
-                size="md"
+                size="sm"
                 onClick={() => handleStatusChange('active')}
               >
-                Activate Exam
+                Activate Now
               </Button>
             )}
             {exam.status === 'active' && (
               <Button
-                variant="outline"
-                size="md"
+                variant="secondary"
+                size="sm"
                 onClick={() => handleStatusChange('completed')}
               >
-                Complete Exam
+                Mark as Completed
+              </Button>
+            )}
+            {(exam.status === 'scheduled' || exam.status === 'active') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-red-500 text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  if (confirm('Are you sure you want to cancel this exam? This action cannot be undone.')) {
+                    handleStatusChange('cancelled')
+                  }
+                }}
+              >
+                Cancel Exam
               </Button>
             )}
           </div>
@@ -304,8 +336,8 @@ export default function ExamDetailsPage() {
         />
       </div>
 
-      {/* Exam Link Display */}
-      <ExamLinkDisplay
+      {/* Participant Exam Links */}
+      <ParticipantExamLinks
         examId={examId}
         examTitle={exam.title}
       />

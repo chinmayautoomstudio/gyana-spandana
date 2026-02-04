@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -29,7 +29,8 @@ interface AssignedParticipant {
 export default function ExamParticipantsPage() {
   const params = useParams()
   const router = useRouter()
-  const examId = params.id as string
+  const resolvedParams = params instanceof Promise ? use(params) : params
+  const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<{ id: string; title: string } | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [assignedParticipants, setAssignedParticipants] = useState<Set<string>>(new Set())
@@ -48,10 +49,12 @@ export default function ExamParticipantsPage() {
   const [roleFilter, setRoleFilter] = useState('')
 
   useEffect(() => {
+    if (!examId) return
     fetchData()
   }, [examId])
 
   const fetchData = async () => {
+    if (!examId) return
     setLoading(true)
     const supabase = createClient()
 
@@ -224,7 +227,7 @@ export default function ExamParticipantsPage() {
     )
   }
 
-  if (!exam) {
+  if (!examId || !exam) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-600">Exam not found</p>
