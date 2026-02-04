@@ -26,6 +26,7 @@ const examSchema = z.object({
   passing_score: z.number().optional().nullable(),
   scheduled_start: z.string().optional().nullable(),
   scheduled_end: z.string().optional().nullable(),
+  questions_per_participant: z.number().min(1).optional().nullable(),
 })
 
 type ExamFormData = z.infer<typeof examSchema>
@@ -55,10 +56,13 @@ export default function NewExamPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<ExamFormData>({
     resolver: zodResolver(examSchema),
   })
+
+  const questionsPerParticipant = watch('questions_per_participant')
 
   // Update selectedSetId when URL changes
   useEffect(() => {
@@ -173,6 +177,7 @@ export default function NewExamPage() {
         description: data.description || null,
         duration_minutes: data.duration_minutes,
         passing_score: data.passing_score || null,
+        questions_per_participant: data.questions_per_participant || null,
         scheduled_start: data.scheduled_start ? new Date(data.scheduled_start).toISOString() : null,
         scheduled_end: data.scheduled_end ? new Date(data.scheduled_end).toISOString() : null,
         status: 'draft',
@@ -192,6 +197,16 @@ export default function NewExamPage() {
       // Validate that questions are selected
       if (selectedQuestionIds.length === 0) {
         throw new Error('Please select at least one question or a question set')
+      }
+
+      // Validate questions_per_participant if provided
+      if (data.questions_per_participant !== null && data.questions_per_participant !== undefined) {
+        if (data.questions_per_participant < 1) {
+          throw new Error('Questions per participant must be at least 1')
+        }
+        if (data.questions_per_participant > selectedQuestionIds.length) {
+          throw new Error(`Questions per participant (${data.questions_per_participant}) cannot exceed total questions selected (${selectedQuestionIds.length})`)
+        }
       }
 
       // Assign selected questions to the exam
@@ -346,6 +361,21 @@ export default function NewExamPage() {
               placeholder="50"
             />
           </div>
+        </div>
+
+        <div>
+          <Input
+            label="Questions Per Participant (optional)"
+            type="number"
+            {...register('questions_per_participant', { valueAsNumber: true })}
+            error={errors.questions_per_participant?.message}
+            placeholder="Leave empty to use all questions (shuffled)"
+          />
+          {selectedQuestionIds.length > 0 && (
+            <p className="mt-1 text-sm text-gray-500">
+              Each participant will get {questionsPerParticipant || selectedQuestionIds.length} random question{questionsPerParticipant === 1 || (!questionsPerParticipant && selectedQuestionIds.length === 1) ? '' : 's'} from {selectedQuestionIds.length} total question{selectedQuestionIds.length !== 1 ? 's' : ''} (shuffled differently per participant)
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

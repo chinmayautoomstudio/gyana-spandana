@@ -63,11 +63,11 @@ export function FilterBar({ filters, onReset }: FilterBarProps) {
               <select
                 value={filter.value}
                 onChange={(e) => filter.onChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white text-sm"
               >
-                <option value="">All</option>
+                <option value="" className="text-gray-900">All</option>
                 {filter.options.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option key={option.value} value={option.value} className="text-gray-900">
                     {option.label}
                   </option>
                 ))}

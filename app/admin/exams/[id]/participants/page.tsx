@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
+import { ExamInvitationModal } from '@/components/admin/ExamInvitationModal'
 
 interface Participant {
   id: string
@@ -37,6 +38,8 @@ export default function ExamParticipantsPage() {
   const [isAssigning, setIsAssigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [showInvitationModal, setShowInvitationModal] = useState(false)
+  const [examDetails, setExamDetails] = useState<{ duration_minutes: number; scheduled_start: string | null; scheduled_end: string | null } | null>(null)
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -55,12 +58,17 @@ export default function ExamParticipantsPage() {
     // Fetch exam details
     const { data: examData } = await supabase
       .from('exams')
-      .select('id, title')
+      .select('id, title, duration_minutes, scheduled_start, scheduled_end')
       .eq('id', examId)
       .single()
 
     if (examData) {
       setExam(examData)
+      setExamDetails({
+        duration_minutes: examData.duration_minutes,
+        scheduled_start: examData.scheduled_start,
+        scheduled_end: examData.scheduled_end,
+      })
     }
 
     // Fetch all participants
@@ -356,6 +364,50 @@ export default function ExamParticipantsPage() {
           </span>
         </div>
         <div className="flex gap-2">
+          {assignedParticipants.size > 0 && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                // Select all assigned participants for sending invitations
+                const assignedIds = new Set(
+                  participants
+                    .filter(p => assignedParticipants.has(p.id))
+                    .map(p => p.id)
+                )
+                setSelectedParticipants(assignedIds)
+                setShowInvitationModal(true)
+              }}
+            >
+              <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Send Invitations to All Assigned
+            </Button>
+          )}
+          {selectedParticipants.size > 0 && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                // Check if selected participants are assigned
+                const selectedAssigned = Array.from(selectedParticipants).filter(id =>
+                  assignedParticipants.has(id)
+                )
+                if (selectedAssigned.length === 0) {
+                  setError('Please select participants that are assigned to this exam')
+                  return
+                }
+                setSelectedParticipants(new Set(selectedAssigned))
+                setShowInvitationModal(true)
+              }}
+            >
+              <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Send Invitations ({selectedParticipants.size})
+            </Button>
+          )}
           <Button
             variant="primary"
             size="md"
@@ -470,6 +522,26 @@ export default function ExamParticipantsPage() {
           </table>
         </div>
       </div>
+
+      {/* Exam Invitation Modal */}
+      {exam && examDetails && (
+        <ExamInvitationModal
+          isOpen={showInvitationModal}
+          onClose={() => setShowInvitationModal(false)}
+          examId={examId}
+          examTitle={exam.title}
+          examDuration={examDetails.duration_minutes}
+          scheduledStart={examDetails.scheduled_start}
+          scheduledEnd={examDetails.scheduled_end}
+          participants={participants.filter(p => 
+            selectedParticipants.has(p.id) && assignedParticipants.has(p.id)
+          )}
+          onSuccess={() => {
+            setSuccess('Invitations sent successfully')
+            setSelectedParticipants(new Set())
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import type { AdminUser } from '@/types/admin'
 
 /**
  * Verify if the current user is an admin
@@ -113,11 +114,6 @@ export async function checkScheduleConflicts(
 /**
  * Admin Management Functions
  */
-
-import type { AdminUser } from '@/types/admin'
-
-// Re-export for backward compatibility
-export type { AdminUser }
 
 /**
  * Get all admin users

@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { DataTable } from '@/components/admin/DataTable'
 import { FilterBar } from '@/components/admin/FilterBar'
 import { ExportButton } from '@/components/admin/ExportButton'
+import { Button } from '@/components/ui/Button'
 
 interface Participant {
   id: string
@@ -109,6 +111,18 @@ export default function ParticipantsPage() {
         </span>
       ),
       sortable: true,
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (p: Participant) => (
+        <Link href={`/admin/reports/participant/${p.id}`}>
+          <Button variant="outline" size="sm">
+            View
+          </Button>
+        </Link>
+      ),
+      sortable: false,
     },
   ]
 

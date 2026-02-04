@@ -6,6 +6,14 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { calculateTotalScore } from '@/lib/utils/scoring'
+import { FullScreenExam } from '@/components/exam/FullScreenExam'
+import { SecurityViolation } from '@/lib/services/examSecurityService'
+import { MCQQuestion } from '@/components/exam/MCQQuestion'
+import { ExamTimer } from '@/components/exam/ExamTimer'
+import { ExamProgressBar } from '@/components/exam/ExamProgressBar'
+import { QuestionNavigator } from '@/components/exam/QuestionNavigator'
+import { ExamInstructions } from '@/components/exam/ExamInstructions'
+import { selectAndShuffleQuestions } from '@/lib/utils/randomQuestions'
 
 interface Question {
   id: string
@@ -24,6 +32,7 @@ interface Exam {
   title: string
   duration_minutes: number
   total_questions: number
+  questions_per_participant: number | null
 }
 
 interface Answer {
@@ -44,6 +53,8 @@ export default function TakeExamPage() {
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showInstructions, setShowInstructions] = useState(true)
+  const [examStarted, setExamStarted] = useState(false)
 
   useEffect(() => {
     const initializeExam = async () => {
@@ -115,31 +126,63 @@ export default function TakeExamPage() {
 
       setExam(examData)
 
-      // Fetch questions
-      const { data: questionsData } = await supabase
-        .from('questions')
-        .select('*')
-        .eq('exam_id', examId)
-        .order('order_index', { ascending: true, nullsFirst: false })
-        .order('created_at', { ascending: true })
-
-      if (!questionsData || questionsData.length === 0) {
-        alert('No questions found for this exam')
-        router.push('/exams')
-        return
-      }
-
-      setQuestions(questionsData)
-
       // Create or resume attempt
       let attempt = existingAttempt
+      let participantQuestionIds: string[] = []
+      let participantQuestions: Question[] = []
+
       if (!attempt) {
+        // New attempt: Fetch all questions from exam pool and randomly select/shuffle
+        const { data: allQuestionsData } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('exam_id', examId)
+          .order('order_index', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true })
+
+        if (!allQuestionsData || allQuestionsData.length === 0) {
+          alert('No questions found for this exam')
+          router.push('/exams')
+          return
+        }
+
+        // Get questions_per_participant from exam (or use all if NULL)
+        const questionsPerParticipant = examData.questions_per_participant || null
+
+        // Validate: Ensure at least 1 question per participant
+        if (questionsPerParticipant !== null && questionsPerParticipant < 1) {
+          alert('Invalid exam configuration: Questions per participant must be at least 1')
+          router.push('/exams')
+          return
+        }
+
+        // Validate: Ensure questions_per_participant doesn't exceed pool size
+        if (questionsPerParticipant !== null && questionsPerParticipant > allQuestionsData.length) {
+          console.warn(`questions_per_participant (${questionsPerParticipant}) exceeds pool size (${allQuestionsData.length}). Using all questions.`)
+          // Use all questions if requested count exceeds pool
+        }
+
+        // Randomly select and shuffle questions for this participant
+        participantQuestionIds = selectAndShuffleQuestions(
+          allQuestionsData,
+          questionsPerParticipant
+        )
+
+        // Ensure we have at least one question
+        if (participantQuestionIds.length === 0) {
+          alert('No questions available for this exam')
+          router.push('/exams')
+          return
+        }
+
+        // Create attempt with selected question IDs
         const { data: newAttempt, error } = await supabase
           .from('exam_attempts')
           .insert({
             exam_id: examId,
             participant_id: participant.id,
-            total_questions: questionsData.length,
+            question_ids: participantQuestionIds,
+            total_questions: participantQuestionIds.length,
             status: 'in_progress',
           })
           .select()
@@ -151,7 +194,66 @@ export default function TakeExamPage() {
           return
         }
         attempt = newAttempt
+
+        // Fetch the selected questions in the shuffled order
+        // We need to preserve the order from participantQuestionIds
+        const questionsMap = new Map(allQuestionsData.map(q => [q.id, q]))
+        participantQuestions = participantQuestionIds
+          .map(id => questionsMap.get(id))
+          .filter((q): q is Question => q !== undefined)
+      } else {
+        // Resuming existing attempt: Load question IDs from attempt
+        if (attempt.question_ids && Array.isArray(attempt.question_ids)) {
+          participantQuestionIds = attempt.question_ids as string[]
+        } else {
+          // Fallback: If question_ids is not set (old attempts), fetch all exam questions
+          const { data: allQuestionsData } = await supabase
+            .from('questions')
+            .select('*')
+            .eq('exam_id', examId)
+            .order('order_index', { ascending: true, nullsFirst: false })
+            .order('created_at', { ascending: true })
+
+          if (!allQuestionsData || allQuestionsData.length === 0) {
+            alert('No questions found for this exam')
+            router.push('/exams')
+            return
+          }
+
+          participantQuestionIds = allQuestionsData.map(q => q.id)
+        }
+
+        // Fetch questions by IDs, preserving order
+        const { data: questionsData } = await supabase
+          .from('questions')
+          .select('*')
+          .in('id', participantQuestionIds)
+
+        if (!questionsData || questionsData.length === 0) {
+          alert('No questions found for this attempt')
+          router.push('/exams')
+          return
+        }
+
+        // Preserve the order from participantQuestionIds
+        const questionsMap = new Map(questionsData.map(q => [q.id, q]))
+        participantQuestions = participantQuestionIds
+          .map(id => questionsMap.get(id))
+          .filter((q): q is Question => q !== undefined)
+
+        // Handle case where some question IDs don't exist (questions may have been deleted)
+        if (participantQuestions.length < participantQuestionIds.length) {
+          console.warn(`Some questions from attempt are missing. Expected ${participantQuestionIds.length}, found ${participantQuestions.length}`)
+          // Update attempt with valid question IDs only
+          const validQuestionIds = participantQuestions.map(q => q.id)
+          await supabase
+            .from('exam_attempts')
+            .update({ question_ids: validQuestionIds, total_questions: validQuestionIds.length })
+            .eq('id', attempt.id)
+        }
       }
+
+      setQuestions(participantQuestions)
 
       setAttemptId(attempt.id)
 
@@ -185,22 +287,14 @@ export default function TakeExamPage() {
     initializeExam()
   }, [examId, router])
 
-  // Timer countdown
-  useEffect(() => {
-    if (timeRemaining <= 0 || !attemptId) return
+  // Timer countdown - handled by ExamTimer component now
+  const handleTimeUp = async () => {
+    await handleAutoSubmit()
+  }
 
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          handleAutoSubmit()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [timeRemaining, attemptId])
+  const handleTimeWarning = (secondsRemaining: number) => {
+    console.warn(`Time warning: ${secondsRemaining} seconds remaining`)
+  }
 
   // Auto-save answers
   useEffect(() => {
@@ -243,6 +337,15 @@ export default function TakeExamPage() {
     }))
   }
 
+  const handleQuestionSelect = (index: number) => {
+    setCurrentQuestionIndex(index)
+  }
+
+  const handleStartExam = () => {
+    setShowInstructions(false)
+    setExamStarted(true)
+  }
+
   const handleAutoSubmit = async () => {
     if (!attemptId || !exam) return
 
@@ -257,11 +360,20 @@ export default function TakeExamPage() {
     try {
       const supabase = createClient()
 
-      // Get all questions with correct answers for scoring
+      // Get questions for this participant's attempt (from question_ids stored in attempt)
+      const { data: attemptData } = await supabase
+        .from('exam_attempts')
+        .select('question_ids')
+        .eq('id', attemptId)
+        .single()
+
+      const participantQuestionIds = attemptData?.question_ids as string[] | null || questions.map(q => q.id)
+
+      // Get all questions with correct answers for scoring (only participant's questions)
       const { data: questionsWithAnswers } = await supabase
         .from('questions')
         .select('id, correct_answer, points')
-        .eq('exam_id', examId)
+        .in('id', participantQuestionIds)
 
       if (!questionsWithAnswers) {
         throw new Error('Failed to fetch questions for scoring')
@@ -319,6 +431,10 @@ export default function TakeExamPage() {
         throw updateError
       }
 
+      // Stop security monitoring before navigation
+      const { examSecurityService } = await import('@/lib/services/examSecurityService')
+      examSecurityService.stopSecurityForExamCompletion()
+
       // Trigger team score calculation (handled by database trigger)
       // Navigate to results
       router.push(`/exams/${examId}/results`)
@@ -330,11 +446,6 @@ export default function TakeExamPage() {
     }
   }
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
 
   if (loading) {
     return (
@@ -363,153 +474,148 @@ export default function TakeExamPage() {
   const currentQuestion = questions[currentQuestionIndex]
   const currentAnswer = answers[currentQuestion.id]?.selectedAnswer || null
   const answeredCount = Object.values(answers).filter(a => a.selectedAnswer !== null).length
+  const answeredQuestionIds = new Set(
+    Object.entries(answers)
+      .filter(([_, answer]) => answer.selectedAnswer !== null)
+      .map(([questionId, _]) => questionId)
+  )
+
+  // Handle security violations
+  const handleViolation = (violation: SecurityViolation) => {
+    console.warn('🚨 Security Violation:', violation)
+    // Optionally log to database or show warning to user
+    // For now, just log to console
+  }
+
+  // Handle exam start
+  const handleExamStart = () => {
+    console.log('✅ Exam started with security monitoring')
+    setExamStarted(true)
+  }
+
+  // Handle exam end
+  const handleExamEnd = () => {
+    console.log('🏁 Exam ended, security monitoring stopped')
+  }
+
+  // Show instructions modal if not started
+  if (showInstructions && !examStarted) {
+    return (
+      <ExamInstructions
+        isOpen={showInstructions}
+        onClose={() => router.push('/exams')}
+        onStartExam={handleStartExam}
+        examDetails={{
+          title: exam?.title || '',
+          duration: exam?.duration_minutes || 0,
+          totalQuestions: questions.length
+        }}
+        canStart={true}
+      />
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-[#ECF0F1]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{exam.title}</h1>
-              <p className="text-gray-600 mt-1">
-                Question {currentQuestionIndex + 1} of {questions.length}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className={`px-4 py-2 rounded-lg font-mono text-lg font-bold ${
-                timeRemaining < 300 ? 'bg-red-500/10 text-red-700' : 'bg-[#C0392B]/10 text-[#C0392B]'
-              }`}>
-                {formatTime(timeRemaining)}
+    <FullScreenExam
+      onViolation={handleViolation}
+      onExamStart={handleExamStart}
+      onExamEnd={handleExamEnd}
+      examDurationMinutes={exam.duration_minutes}
+      warningMessage="This exam is monitored for security purposes. Fullscreen mode and security monitoring will be activated. Please ensure you follow all exam rules."
+    >
+      <div className="min-h-screen bg-[#ECF0F1]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 mb-6">
+            <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{exam.title}</h1>
+                <p className="text-gray-600 mt-1">
+                  Question {currentQuestionIndex + 1} of {questions.length}
+                </p>
               </div>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  if (confirm('Are you sure you want to submit the exam?')) {
-                    submitExam()
-                  }
-                }}
-                disabled={isSubmitting}
-              >
-                Submit Exam
-              </Button>
+              <div className="flex items-center gap-4">
+                <ExamTimer
+                  durationSeconds={timeRemaining}
+                  onTimeUp={handleTimeUp}
+                  onWarning={handleTimeWarning}
+                  isActive={examStarted}
+                />
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (confirm('Are you sure you want to submit the exam?')) {
+                      submitExam()
+                    }
+                  }}
+                  disabled={isSubmitting}
+                >
+                  Submit Exam
+                </Button>
+              </div>
             </div>
+
+            {/* Enhanced Progress Bar */}
+            <ExamProgressBar
+              currentQuestion={currentQuestionIndex + 1}
+              totalQuestions={questions.length}
+              answeredQuestions={answeredCount}
+              timeRemaining={timeRemaining}
+              totalDuration={exam.duration_minutes * 60}
+            />
           </div>
 
-          {/* Progress Bar */}
-          <div className="mt-4">
-            <div className="flex justify-between text-sm text-gray-600 mb-2">
-              <span>Progress: {answeredCount} / {questions.length} answered</span>
-              <span>{Math.round((answeredCount / questions.length) * 100)}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-[#C0392B] h-2 rounded-full transition-all"
-                style={{ width: `${(answeredCount / questions.length) * 100}%` }}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Question Navigation Sidebar */}
+            <div className="lg:col-span-1">
+              <QuestionNavigator
+                questions={questions}
+                currentQuestionIndex={currentQuestionIndex}
+                answeredQuestionIds={answeredQuestionIds}
+                onQuestionSelect={handleQuestionSelect}
               />
             </div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Question Navigation Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-4 sticky top-4">
-              <h3 className="font-semibold text-gray-900 mb-3">Questions</h3>
-              <div className="grid grid-cols-5 lg:grid-cols-1 gap-2 max-h-96 overflow-y-auto">
-                {questions.map((q, index) => {
-                  const isAnswered = answers[q.id]?.selectedAnswer !== null
-                  const isCurrent = index === currentQuestionIndex
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => setCurrentQuestionIndex(index)}
-                      className={`w-10 h-10 rounded-lg font-medium transition-all ${
-                        isCurrent
-                          ? 'bg-[#C0392B] text-white'
-                          : isAnswered
-                          ? 'bg-green-500/20 text-green-700 border border-green-300'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {index + 1}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+            {/* Question Content */}
+            <div className="lg:col-span-3">
+              <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
+                <MCQQuestion
+                  question={currentQuestion}
+                  selectedAnswer={currentAnswer}
+                  onAnswerSelect={(option) => handleAnswerSelect(currentQuestion.id, option)}
+                  disabled={false}
+                  showCorrectAnswer={false}
+                />
 
-          {/* Question Content */}
-          <div className="lg:col-span-3">
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  {currentQuestion.question_text}
-                </h2>
-
-                <div className="space-y-3">
-                  {(['A', 'B', 'C', 'D'] as const).map((option) => {
-                    const optionText = currentQuestion[`option_${option.toLowerCase()}` as keyof Question] as string
-                    const isSelected = currentAnswer === option
-
-                    return (
-                      <button
-                        key={option}
-                        onClick={() => handleAnswerSelect(currentQuestion.id, option)}
-                        className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                          isSelected
-                            ? 'bg-[#C0392B]/10 border-[#C0392B] text-[#C0392B]'
-                            : 'bg-white border-gray-200 hover:border-[#E67E22] text-gray-900'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
-                            isSelected ? 'bg-[#C0392B] text-white' : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {option}
-                          </div>
-                          <span className="flex-1">{optionText}</span>
-                          {isSelected && (
-                            <svg className="w-5 h-5 text-[#C0392B]" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                      </button>
-                    )
-                  })}
+                {/* Navigation Buttons */}
+                <div className="flex justify-between mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+                    disabled={currentQuestionIndex === 0}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
+                    disabled={currentQuestionIndex === questions.length - 1}
+                  >
+                    Next
+                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Button>
                 </div>
-              </div>
-
-              {/* Navigation Buttons */}
-              <div className="flex justify-between mt-6">
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
-                  disabled={currentQuestionIndex === 0}
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                  disabled={currentQuestionIndex === questions.length - 1}
-                >
-                  Next
-                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Button>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </FullScreenExam>
   )
 }
 

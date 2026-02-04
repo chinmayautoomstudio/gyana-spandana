@@ -13,6 +13,7 @@ interface Exam {
   id: string
   title: string
   total_questions: number
+  questions_per_participant: number | null
 }
 
 export default function QuestionsPage() {
@@ -112,7 +113,19 @@ export default function QuestionsPage() {
             Back to Exams
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">{exam?.title}</h1>
-          <p className="text-gray-600 mt-1">Manage Questions ({exam?.total_questions || 0} questions)</p>
+          <p className="text-gray-600 mt-1">
+            Question Pool: {exam?.total_questions || 0} questions
+            {exam?.questions_per_participant && (
+              <span className="ml-2 text-[#C0392B]">
+                • Each participant gets {exam.questions_per_participant} random questions
+              </span>
+            )}
+            {!exam?.questions_per_participant && exam && exam.total_questions > 0 && (
+              <span className="ml-2 text-gray-500">
+                • All questions shown (shuffled per participant)
+              </span>
+            )}
+          </p>
         </div>
         <Button
           variant="primary"

@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { StatsCard } from '@/components/admin/StatsCard'
+import { ExamLinkDisplay } from '@/components/admin/ExamLinkDisplay'
+import { ExamInvitationModal } from '@/components/admin/ExamInvitationModal'
 
 interface Exam {
   id: string
@@ -13,6 +15,7 @@ interface Exam {
   description: string | null
   duration_minutes: number
   total_questions: number
+  questions_per_participant: number | null
   passing_score: number | null
   scheduled_start: string | null
   scheduled_end: string | null
@@ -34,6 +37,9 @@ export default function ExamDetailsPage() {
     totalTeams: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [showInvitationModal, setShowInvitationModal] = useState(false)
+  const [assignedParticipants, setAssignedParticipants] = useState<any[]>([])
+  const [assignedParticipantsCount, setAssignedParticipantsCount] = useState(0)
 
   useEffect(() => {
     const fetchExam = async () => {
@@ -83,6 +89,25 @@ export default function ExamDetailsPage() {
         }
       } catch (err) {
         console.error('Error fetching teams count:', err)
+      }
+
+      // Fetch assigned participants for invitation modal
+      try {
+        const participantsResponse = await fetch(`/api/admin/exams/${examId}/participants`)
+        if (participantsResponse.ok) {
+          const { assignments } = await participantsResponse.json()
+          const participants = (assignments || []).map((a: any) => ({
+            id: a.participant.id,
+            name: a.participant.name,
+            email: a.participant.email,
+            school_name: a.participant.school_name,
+            teams: a.participant.teams,
+          }))
+          setAssignedParticipants(participants)
+          setAssignedParticipantsCount(participants.length)
+        }
+      } catch (err) {
+        console.error('Error fetching assigned participants:', err)
       }
 
       setStats({
@@ -202,6 +227,18 @@ export default function ExamDetailsPage() {
                 View Analytics
               </Button>
             </Link>
+            {(exam.status === 'scheduled' || exam.status === 'active') && assignedParticipantsCount > 0 && (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setShowInvitationModal(true)}
+              >
+                <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Send Invitations ({assignedParticipantsCount})
+              </Button>
+            )}
             {exam.status === 'draft' && (
               <Button
                 variant="outline"
@@ -267,6 +304,12 @@ export default function ExamDetailsPage() {
         />
       </div>
 
+      {/* Exam Link Display */}
+      <ExamLinkDisplay
+        examId={examId}
+        examTitle={exam.title}
+      />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Exam Details</h2>
@@ -280,8 +323,16 @@ export default function ExamDetailsPage() {
               <p className="text-gray-900 mt-1">{exam.duration_minutes} minutes</p>
             </div>
             <div>
-              <span className="text-sm text-gray-500">Total Questions:</span>
-              <p className="text-gray-900 mt-1">{exam.total_questions}</p>
+              <span className="text-sm text-gray-500">Question Pool Size:</span>
+              <p className="text-gray-900 mt-1">{exam.total_questions} questions</p>
+            </div>
+            <div>
+              <span className="text-sm text-gray-500">Questions Per Participant:</span>
+              <p className="text-gray-900 mt-1">
+                {exam.questions_per_participant 
+                  ? `${exam.questions_per_participant} (randomly selected from pool)`
+                  : 'All questions (shuffled per participant)'}
+              </p>
             </div>
             <div>
               <span className="text-sm text-gray-500">Passing Score:</span>
@@ -324,6 +375,35 @@ export default function ExamDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* Exam Invitation Modal */}
+      <ExamInvitationModal
+        isOpen={showInvitationModal}
+        onClose={() => setShowInvitationModal(false)}
+        examId={examId}
+        examTitle={exam.title}
+        examDuration={exam.duration_minutes}
+        scheduledStart={exam.scheduled_start}
+        scheduledEnd={exam.scheduled_end}
+        participants={assignedParticipants}
+        onSuccess={() => {
+          // Refresh participants count if needed
+          fetch(`/api/admin/exams/${examId}/participants`)
+            .then(res => res.json())
+            .then(data => {
+              const participants = (data.assignments || []).map((a: any) => ({
+                id: a.participant.id,
+                name: a.participant.name,
+                email: a.participant.email,
+                school_name: a.participant.school_name,
+                teams: a.participant.teams,
+              }))
+              setAssignedParticipants(participants)
+              setAssignedParticipantsCount(participants.length)
+            })
+            .catch(err => console.error('Error refreshing participants:', err))
+        }}
+      />
     </div>
   )
 }
