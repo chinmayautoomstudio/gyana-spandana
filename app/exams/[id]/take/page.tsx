@@ -361,13 +361,13 @@ export default function TakeExamPage() {
       const supabase = createClient()
 
       // Get questions for this participant's attempt (from question_ids stored in attempt)
-      const { data: attemptData } = await supabase
+      const { data: attemptDataWithQuestions } = await supabase
         .from('exam_attempts')
-        .select('question_ids')
+        .select('question_ids, started_at')
         .eq('id', attemptId)
         .single()
 
-      const participantQuestionIds = attemptData?.question_ids as string[] | null || questions.map(q => q.id)
+      const participantQuestionIds = attemptDataWithQuestions?.question_ids as string[] | null || questions.map(q => q.id)
 
       // Get all questions with correct answers for scoring (only participant's questions)
       const { data: questionsWithAnswers } = await supabase
@@ -406,14 +406,8 @@ export default function TakeExamPage() {
           })
       }
 
-      // Get attempt start time
-      const { data: attemptData } = await supabase
-        .from('exam_attempts')
-        .select('started_at')
-        .eq('id', attemptId)
-        .single()
-
-      const startTime = attemptData?.started_at ? new Date(attemptData.started_at).getTime() : Date.now()
+      // Get attempt start time (already fetched above)
+      const startTime = attemptDataWithQuestions?.started_at ? new Date(attemptDataWithQuestions.started_at).getTime() : Date.now()
       const timeTaken = Math.floor((Date.now() - startTime) / 60000)
 
       const { error: updateError } = await supabase
