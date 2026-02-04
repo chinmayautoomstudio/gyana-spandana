@@ -322,14 +322,28 @@ export default function ExamResultsPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-4 justify-center">
-                <Button
-                  variant="primary"
-                  onClick={() => setShowQuestionReview(true)}
-                  className="px-8 py-3"
-                >
-                  Review Questions & Answers
-                </Button>
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Link href="/exams">
+                    <Button variant="outline" className="w-full sm:w-auto px-6">
+                      Back to Exams
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard">
+                    <Button variant="primary" className="w-full sm:w-auto px-6">
+                      Return to Dashboard
+                    </Button>
+                  </Link>
+                </div>
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowQuestionReview(true)}
+                    className="px-8 py-3"
+                  >
+                    Review Questions & Answers
+                  </Button>
+                </div>
               </div>
             </div>
           </>

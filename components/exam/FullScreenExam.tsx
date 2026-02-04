@@ -225,7 +225,7 @@ export const FullScreenExam: React.FC<FullScreenExamProps> = ({
     <div ref={examContainerRef} className="relative">
       {/* Security Status Bar */}
       {isSecurityActive && (
-        <div className="fixed top-0 left-0 right-0 bg-[#C0392B] text-white px-4 py-2 z-50 flex items-center justify-between text-sm">
+        <div className="fixed top-0 left-0 right-0 bg-[#C0392B] text-white px-4 py-2.5 z-50 flex items-center justify-between text-sm shadow-md">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -258,7 +258,7 @@ export const FullScreenExam: React.FC<FullScreenExamProps> = ({
       )}
 
       {/* Exam Content */}
-      <div className={isSecurityActive ? 'pt-12' : ''}>
+      <div className={isSecurityActive ? 'pt-14' : ''}>
         {children}
       </div>
     </div>

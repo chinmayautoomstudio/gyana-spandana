@@ -49,7 +49,7 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   const unansweredCount = questions.length - answeredCount
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-4">
+    <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-gray-900">Questions</h3>
         <div className="flex gap-2 text-xs">
@@ -74,7 +74,7 @@ export const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
       </div>
 
       {/* Question grid */}
-      <div className="grid grid-cols-5 lg:grid-cols-1 gap-2 max-h-96 overflow-y-auto">
+      <div className="grid grid-cols-5 gap-2 max-h-96 overflow-y-auto">
         {questions.map((question, index) => {
           const status = getQuestionStatus(index, question.id)
           const isCurrent = index === currentQuestionIndex

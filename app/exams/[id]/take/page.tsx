@@ -689,9 +689,13 @@ export default function TakeExamPage() {
 
   // Handle security violations
   const handleViolation = (violation: SecurityViolation) => {
-    console.warn('🚨 Security Violation:', violation)
-    // Optionally log to database or show warning to user
-    // For now, just log to console
+    // Only log real violations (not informational events)
+    // Informational events are logged by the security service itself
+    if (violation.severity !== 'low' || !violation.details.includes('completed')) {
+      console.warn('🚨 Security Violation:', violation)
+      // Optionally show a non-intrusive warning to user
+      // For now, violations are logged but don't interrupt the exam flow
+    }
   }
 
   // Handle exam start
@@ -731,74 +735,12 @@ export default function TakeExamPage() {
       warningMessage="This exam is monitored for security purposes. Fullscreen mode and security monitoring will be activated. Please ensure you follow all exam rules."
     >
       <div className="min-h-screen bg-[#ECF0F1] pb-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          {/* Compact Header */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4 mb-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">{exam.title}</h1>
-                <p className="text-sm text-gray-600">
-                  Question {currentQuestionIndex + 1} of {questions.length}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <ExamTimer
-                  durationSeconds={timeRemaining}
-                  onTimeUp={handleTimeUp}
-                  onWarning={handleTimeWarning}
-                  isActive={examStarted}
-                />
-                <div className="flex flex-col items-end gap-2">
-                  {submitError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-                      <p className="text-red-800 text-xs">{submitError}</p>
-                    </div>
-                  )}
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setSubmitError(null)
-                      if (confirm('Are you sure you want to submit the exam?')) {
-                        submitExam()
-                      }
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? 'Submitting...' : 'Submit Exam'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Progress Bar - more prominent */}
-            <div className="mt-3">
-              <ExamProgressBar
-                currentQuestion={currentQuestionIndex + 1}
-                totalQuestions={questions.length}
-                answeredQuestions={answeredCount}
-                timeRemaining={timeRemaining}
-                totalDuration={exam.duration_minutes * 60}
-              />
-            </div>
-          </div>
-
-          {/* Main Content Grid - optimized spacing */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            {/* Question Navigation Sidebar - make sticky */}
-            <div className="lg:col-span-1">
-              <div className="lg:sticky lg:top-4">
-                <QuestionNavigator
-                  questions={questions}
-                  currentQuestionIndex={currentQuestionIndex}
-                  answeredQuestionIds={answeredQuestionIds}
-                  onQuestionSelect={handleQuestionSelect}
-                />
-              </div>
-            </div>
-
-            {/* Question Content */}
-            <div className="lg:col-span-3">
-              <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
+          {/* Main Content Grid - Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* Left: Question Focus Area (Main Content) */}
+            <div className="lg:col-span-7 order-1 lg:order-1">
+              <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-6 lg:p-8">
                 <MCQQuestion
                   question={currentQuestion}
                   selectedAnswer={currentAnswer}
@@ -808,7 +750,7 @@ export default function TakeExamPage() {
                 />
 
                 {/* Navigation Buttons */}
-                <div className="flex justify-between mt-6">
+                <div className="flex justify-between mt-8">
                   <Button
                     variant="outline"
                     onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
@@ -830,6 +772,87 @@ export default function TakeExamPage() {
                     </svg>
                   </Button>
                 </div>
+              </div>
+            </div>
+
+            {/* Right: Exam Info Sidebar */}
+            <div className="lg:col-span-5 order-2 lg:order-2">
+              <div className="lg:sticky lg:top-4 space-y-4">
+                {/* Exam Title and Question Count */}
+                <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
+                  <h1 className="text-xl font-bold text-gray-900 mb-2">{exam.title}</h1>
+                  <p className="text-sm text-gray-600">
+                    Question {currentQuestionIndex + 1} of {questions.length}
+                  </p>
+                </div>
+
+                {/* Timer */}
+                <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
+                  <ExamTimer
+                    durationSeconds={timeRemaining}
+                    onTimeUp={handleTimeUp}
+                    onWarning={handleTimeWarning}
+                    isActive={examStarted}
+                  />
+                </div>
+
+                {/* Submit Button */}
+                <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
+                  {submitError && (
+                    <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-3">
+                      <div className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-red-800 text-sm font-medium">Submission Error</p>
+                          <p className="text-red-700 text-xs mt-1">{submitError}</p>
+                        </div>
+                        <button
+                          onClick={() => setSubmitError(null)}
+                          className="text-red-600 hover:text-red-800 transition-colors"
+                          aria-label="Dismiss error"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSubmitError(null)
+                      if (confirm('Are you sure you want to submit the exam?')) {
+                        submitExam()
+                      }
+                    }}
+                    disabled={isSubmitting}
+                    className="w-full"
+                  >
+                    {isSubmitting ? 'Submitting...' : 'Submit Exam'}
+                  </Button>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
+                  <ExamProgressBar
+                    currentQuestion={currentQuestionIndex + 1}
+                    totalQuestions={questions.length}
+                    answeredQuestions={answeredCount}
+                    timeRemaining={timeRemaining}
+                    totalDuration={exam.duration_minutes * 60}
+                  />
+                </div>
+
+                {/* Question Navigator */}
+                <QuestionNavigator
+                  questions={questions}
+                  currentQuestionIndex={currentQuestionIndex}
+                  answeredQuestionIds={answeredQuestionIds}
+                  onQuestionSelect={handleQuestionSelect}
+                />
               </div>
             </div>
           </div>

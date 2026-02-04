@@ -260,12 +260,13 @@ export class ExamSecurityService {
       console.log('⏰ Exam duration completed - stopping security monitoring automatically');
       this.stopMonitoring();
       
+      // Log as informational, not a violation
       this.logViolation({
         type: 'tab_switch',
         timestamp: new Date().toISOString(),
         details: 'Exam duration completed - security monitoring stopped automatically',
         severity: 'low'
-      });
+      }, true); // Informational flag
     }, durationMs);
     
     console.log(`⏰ Auto-stop timer set for ${durationMinutes} minutes`);
@@ -282,12 +283,13 @@ export class ExamSecurityService {
       this.autoStopTimer = undefined;
     }
     
+    // Log as informational, not a violation
     this.logViolation({
       type: 'tab_switch',
       timestamp: new Date().toISOString(),
       details: 'Exam completed by candidate - security monitoring stopped',
       severity: 'low'
-    });
+    }, true); // Informational flag
     
     this.stopMonitoring();
   }
@@ -534,20 +536,31 @@ export class ExamSecurityService {
 
   /**
    * Log a security violation
+   * @param violation The security violation to log
+   * @param isInformational If true, this is an informational event (not a real violation)
    */
-  private logViolation(violation: SecurityViolation): void {
+  private logViolation(violation: SecurityViolation, isInformational: boolean = false): void {
     if (!this.config.logViolations) return;
 
-    this.violations.push(violation);
+    // Only add to violations array if it's a real violation
+    if (!isInformational) {
+      this.violations.push(violation);
+    }
     
     if (this.violationCallback) {
       this.violationCallback(violation);
     }
 
-    console.warn('🚨 Security Violation:', violation);
+    // Use appropriate log level
+    if (isInformational) {
+      console.log('ℹ️ Security Event:', violation);
+    } else {
+      console.warn('🚨 Security Violation:', violation);
+    }
 
-    if (this.hasExceededMaxViolations()) {
-      console.error('🚨 Maximum violations exceeded! Exam may be terminated.');
+    // Only check max violations for real violations
+    if (!isInformational && this.hasExceededMaxViolations()) {
+      console.warn('⚠️ Maximum violations exceeded! Exam may be terminated.');
     }
   }
 }
