@@ -11,19 +11,41 @@ export default function ContactPage() {
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle')
+    const [errorMessage, setErrorMessage] = useState('')
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsSubmitting(true)
+        setSubmitStatus('idle')
+        setErrorMessage('')
 
-        // Simulate form submission
-        setTimeout(() => {
-            setIsSubmitting(false)
+        try {
+            const response = await fetch('/api/contact', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+
+            const result = await response.json()
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to submit form')
+            }
+
             setSubmitStatus('success')
             setFormData({ name: '', email: '', subject: '', message: '' })
 
+            // Reset success message after 5 seconds
             setTimeout(() => setSubmitStatus('idle'), 5000)
-        }, 1000)
+        } catch (error) {
+            console.error('Form submission error:', error)
+            setSubmitStatus('error')
+            setErrorMessage(error instanceof Error ? error.message : 'An unexpected error occurred')
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -161,6 +183,12 @@ export default function ContactPage() {
                             </div>
                         )}
 
+                        {submitStatus === 'error' && (
+                            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-red-800 font-medium">✗ {errorMessage || 'Failed to send message. Please try again.'}</p>
+                            </div>
+                        )}
+
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
                                 <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
@@ -173,7 +201,7 @@ export default function ContactPage() {
                                     required
                                     value={formData.name}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                                     placeholder="Enter your full name"
                                 />
                             </div>
@@ -189,7 +217,7 @@ export default function ContactPage() {
                                     required
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                                     placeholder="your.email@example.com"
                                 />
                             </div>
@@ -205,7 +233,7 @@ export default function ContactPage() {
                                     required
                                     value={formData.subject}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                                     placeholder="What is this regarding?"
                                 />
                             </div>
@@ -221,7 +249,7 @@ export default function ContactPage() {
                                     value={formData.message}
                                     onChange={handleChange}
                                     rows={6}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all resize-none"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent transition-all resize-none text-gray-900 placeholder-gray-400"
                                     placeholder="Tell us more about your inquiry..."
                                 />
                             </div>
