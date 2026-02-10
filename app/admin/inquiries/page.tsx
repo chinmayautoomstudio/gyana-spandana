@@ -32,7 +32,6 @@ export default function InquiriesPage() {
 
     async function checkAdminAndFetchInquiries() {
         try {
-            // Check if user is admin
             const { data: { user } } = await supabase.auth.getUser()
 
             if (!user) {
@@ -119,9 +118,6 @@ export default function InquiriesPage() {
             if (error) throw error
 
             await fetchInquiries()
-            if (selectedInquiry?.id === id) {
-                setSelectedInquiry({ ...selectedInquiry, admin_notes: notes })
-            }
         } catch (error) {
             console.error('Error updating notes:', error)
             alert('Failed to update notes')
@@ -195,108 +191,162 @@ export default function InquiriesPage() {
                         <p className="text-gray-600">No inquiries found</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Inquiries List */}
-                        <div className="space-y-4">
-                            {inquiries.map((inquiry) => (
-                                <div
-                                    key={inquiry.id}
-                                    onClick={() => setSelectedInquiry(inquiry)}
-                                    className={`bg-white rounded-lg shadow-sm p-6 cursor-pointer transition-all hover:shadow-md ${selectedInquiry?.id === inquiry.id ? 'ring-2 ring-[#E67E22]' : ''
-                                        }`}
-                                >
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-900 mb-1">{inquiry.name}</h3>
-                                            <p className="text-sm text-gray-600">{inquiry.email}</p>
-                                        </div>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(inquiry.status)}`}>
-                                            {inquiry.status.replace('_', ' ')}
-                                        </span>
-                                    </div>
-                                    <p className="font-medium text-gray-800 mb-2">{inquiry.subject}</p>
-                                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">{inquiry.message}</p>
-                                    <p className="text-xs text-gray-500">{formatDate(inquiry.created_at)}</p>
-                                </div>
-                            ))}
+                    <>
+                        {/* Table View */}
+                        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Name
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Email
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Subject
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Status
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Date
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Actions
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {inquiries.map((inquiry) => (
+                                            <tr
+                                                key={inquiry.id}
+                                                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                                onClick={() => setSelectedInquiry(inquiry)}
+                                            >
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-900">{inquiry.name}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <a
+                                                        href={`mailto:${inquiry.email}`}
+                                                        className="text-sm text-[#E67E22] hover:underline"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {inquiry.email}
+                                                    </a>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="text-sm text-gray-900 max-w-xs truncate">{inquiry.subject}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(inquiry.status)}`}>
+                                                        {inquiry.status.replace('_', ' ')}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {formatDate(inquiry.created_at)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setSelectedInquiry(inquiry)
+                                                        }}
+                                                        className="text-[#E67E22] hover:text-[#C0392B] font-medium"
+                                                    >
+                                                        View Details
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
-                        {/* Inquiry Details */}
-                        <div className="lg:sticky lg:top-8 h-fit">
-                            {selectedInquiry ? (
-                                <div className="bg-white rounded-lg shadow-lg p-6">
-                                    <div className="mb-6">
-                                        <div className="flex items-start justify-between mb-4">
+                        {/* Details Modal */}
+                        {selectedInquiry && (
+                            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                    <div className="p-6">
+                                        {/* Header */}
+                                        <div className="flex items-start justify-between mb-6">
                                             <div>
                                                 <h2 className="text-2xl font-bold text-gray-900 mb-1">{selectedInquiry.name}</h2>
                                                 <a href={`mailto:${selectedInquiry.email}`} className="text-[#E67E22] hover:underline">
                                                     {selectedInquiry.email}
                                                 </a>
                                             </div>
-                                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedInquiry.status)}`}>
-                                                {selectedInquiry.status.replace('_', ' ')}
-                                            </span>
+                                            <button
+                                                onClick={() => setSelectedInquiry(null)}
+                                                className="text-gray-400 hover:text-gray-600"
+                                            >
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
                                         </div>
 
+                                        {/* Content */}
+                                        <div className="space-y-4 mb-6">
+                                            <div>
+                                                <p className="text-sm text-gray-600 mb-1">Subject</p>
+                                                <p className="font-semibold text-gray-900">{selectedInquiry.subject}</p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm text-gray-600 mb-1">Message</p>
+                                                <p className="text-gray-800 whitespace-pre-wrap">{selectedInquiry.message}</p>
+                                            </div>
+
+                                            <div className="text-sm text-gray-500">
+                                                <p>Submitted: {formatDate(selectedInquiry.created_at)}</p>
+                                                {selectedInquiry.resolved_at && (
+                                                    <p>Resolved: {formatDate(selectedInquiry.resolved_at)}</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Status Update */}
                                         <div className="mb-4">
-                                            <p className="text-sm text-gray-600 mb-1">Subject</p>
-                                            <p className="font-semibold text-gray-900">{selectedInquiry.subject}</p>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Update Status
+                                            </label>
+                                            <select
+                                                value={selectedInquiry.status}
+                                                onChange={(e) => updateStatus(selectedInquiry.id, e.target.value)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent"
+                                            >
+                                                <option value="new">New</option>
+                                                <option value="in_progress">In Progress</option>
+                                                <option value="resolved">Resolved</option>
+                                                <option value="closed">Closed</option>
+                                            </select>
                                         </div>
 
-                                        <div className="mb-4">
-                                            <p className="text-sm text-gray-600 mb-1">Message</p>
-                                            <p className="text-gray-800 whitespace-pre-wrap">{selectedInquiry.message}</p>
+                                        {/* Admin Notes */}
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Admin Notes
+                                            </label>
+                                            <textarea
+                                                value={selectedInquiry.admin_notes || ''}
+                                                onChange={(e) => {
+                                                    setSelectedInquiry({ ...selectedInquiry, admin_notes: e.target.value })
+                                                }}
+                                                onBlur={(e) => updateNotes(selectedInquiry.id, e.target.value)}
+                                                rows={4}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent resize-none"
+                                                placeholder="Add internal notes about this inquiry..."
+                                            />
                                         </div>
-
-                                        <div className="text-sm text-gray-500">
-                                            <p>Submitted: {formatDate(selectedInquiry.created_at)}</p>
-                                            {selectedInquiry.resolved_at && (
-                                                <p>Resolved: {formatDate(selectedInquiry.resolved_at)}</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Status Update */}
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Update Status
-                                        </label>
-                                        <select
-                                            value={selectedInquiry.status}
-                                            onChange={(e) => updateStatus(selectedInquiry.id, e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent"
-                                        >
-                                            <option value="new">New</option>
-                                            <option value="in_progress">In Progress</option>
-                                            <option value="resolved">Resolved</option>
-                                            <option value="closed">Closed</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Admin Notes */}
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Admin Notes
-                                        </label>
-                                        <textarea
-                                            value={selectedInquiry.admin_notes || ''}
-                                            onChange={(e) => {
-                                                setSelectedInquiry({ ...selectedInquiry, admin_notes: e.target.value })
-                                            }}
-                                            onBlur={(e) => updateNotes(selectedInquiry.id, e.target.value)}
-                                            rows={4}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E67E22] focus:border-transparent resize-none"
-                                            placeholder="Add internal notes about this inquiry..."
-                                        />
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-                                    <p className="text-gray-600">Select an inquiry to view details</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>
