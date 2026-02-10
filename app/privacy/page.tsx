@@ -6,8 +6,8 @@ export default function PrivacyPage() {
             {/* Hero Section */}
             <div className="bg-gradient-to-r from-[#C0392B] via-[#E67E22] to-[#F39C12] text-white py-16">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <h1 className="text-4xl md:text-5xl font-bold mb-4">Privacy Policy</h1>
-                    <p className="text-xl text-white/90 max-w-3xl">
+                    <h1 className="text-4xl md:text-5xl font-bold mb-4 drop-shadow-lg">Privacy Policy</h1>
+                    <p className="text-xl text-white drop-shadow-md max-w-3xl">
                         Your privacy is important to us. Learn how we collect, use, and protect your personal information.
                     </p>
                 </div>

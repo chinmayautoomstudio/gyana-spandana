@@ -8,9 +8,9 @@ export function Footer() {
 
   const quickLinks = [
     { href: '/', label: 'Home' },
-    { href: '#features', label: 'Features' },
-    { href: '#how-it-works', label: 'How It Works' },
-    { href: '#faq', label: 'FAQ' },
+    { href: '/#features', label: 'Features' },
+    { href: '/#how-it-works', label: 'How It Works' },
+    { href: '/#faq', label: 'FAQ' },
   ]
 
   const legalLinks = [
