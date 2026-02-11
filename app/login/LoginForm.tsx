@@ -315,7 +315,7 @@ export default function LoginForm() {
             {registered && (
               <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
                 <p className="text-green-800 text-sm">
-                  ✓ Registration successful! Please check your email for verification and then login.
+                  ✓ Registration successful! Please Login!
                 </p>
               </div>
             )}
