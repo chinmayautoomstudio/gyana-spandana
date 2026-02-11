@@ -75,7 +75,7 @@ export default function EditProfilePage() {
         
         // Pre-populate form
         setValue('name', participant.name)
-        setValue('gender', participant.gender || 'Prefer not to say')
+        setValue('gender', participant.gender === 'Prefer not to say' ? '' : (participant.gender || ''))
         setValue('email', participant.email)
         setValue('phone', participant.phone)
         setValue('address', participant.address || '')
@@ -328,7 +328,6 @@ export default function EditProfilePage() {
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
-                <option value="Prefer not to say">Prefer not to say</option>
               </select>
               {errors.gender && (
                 <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">

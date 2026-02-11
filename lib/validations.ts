@@ -14,12 +14,15 @@ const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
 export const participantSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
-  gender: z.enum(['Male', 'Female', 'Other', 'Prefer not to say'], {
+  gender: z.enum(['Male', 'Female', 'Other'], {
     message: 'Please select a valid gender option',
   }),
   email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
   phone: z.string().regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
-  schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),
+  class: z.enum(
+    ['Class X', 'Class XI/+2 First Year', 'Class XII/+2 Second Year'],
+    { message: 'Please select your class' }
+  ),
   aadhar: z.string()
     .refine((val) => {
       const digitsOnly = val.replace(/\s/g, '')
@@ -43,6 +46,7 @@ export const schoolAuthoritySchema = z.object({
 
 export const teamRegistrationSchema = z.object({
   teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
+  schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),
   participant1: participantSchema,
   participant2: participantSchema,
   schoolAuthority: schoolAuthoritySchema,
@@ -138,7 +142,7 @@ export const profileCompletionSchema = z.object({
 // Edit profile validation schema
 export const editProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
-  gender: z.enum(['Male', 'Female', 'Other', 'Prefer not to say'], {
+  gender: z.enum(['Male', 'Female', 'Other'], {
     message: 'Please select a valid gender option',
   }),
   email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format').optional().or(z.literal('')),

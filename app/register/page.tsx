@@ -273,6 +273,13 @@ export default function RegisterPage() {
                   placeholder="Enter your team name"
                   required
                 />
+                <Input
+                  label="School / College Name"
+                  {...register('schoolName')}
+                  error={errors.schoolName?.message}
+                  placeholder="Enter school / college name"
+                  required
+                />
               </div>
 
               {/* Participant 1 */}
@@ -304,7 +311,6 @@ export default function RegisterPage() {
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
                     </select>
                     {errors.participant1?.gender && (
                       <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
@@ -355,13 +361,30 @@ export default function RegisterPage() {
                       required
                     />
                   </div>
-                  <Input
-                    label="School / College Name"
-                    {...register('participant1.schoolName')}
-                    error={errors.participant1?.schoolName?.message}
-                    placeholder="Enter school / college name"
-                    required
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Class <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      {...register('participant1.class')}
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
+                        errors.participant1?.class
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                      }`}
+                    >
+                      <option value="">Select class</option>
+                      <option value="Class X">Class X</option>
+                      <option value="Class XI/+2 First Year">Class XI/+2 First Year</option>
+                      <option value="Class XII/+2 Second Year">Class XII/+2 Second Year</option>
+                    </select>
+                    {errors.participant1?.class && (
+                      <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                        <span>⚠</span>
+                        {errors.participant1.class.message}
+                      </p>
+                    )}
+                  </div>
                   <div>
                     <Input
                       label="Password"
@@ -407,7 +430,6 @@ export default function RegisterPage() {
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
                     </select>
                     {errors.participant2?.gender && (
                       <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
@@ -458,13 +480,30 @@ export default function RegisterPage() {
                       required
                     />
                   </div>
-                  <Input
-                    label="School / College Name"
-                    {...register('participant2.schoolName')}
-                    error={errors.participant2?.schoolName?.message}
-                    placeholder="Enter school / college name"
-                    required
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Class <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      {...register('participant2.class')}
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
+                        errors.participant2?.class
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                      }`}
+                    >
+                      <option value="">Select class</option>
+                      <option value="Class X">Class X</option>
+                      <option value="Class XI/+2 First Year">Class XI/+2 First Year</option>
+                      <option value="Class XII/+2 Second Year">Class XII/+2 Second Year</option>
+                    </select>
+                    {errors.participant2?.class && (
+                      <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                        <span>⚠</span>
+                        {errors.participant2.class.message}
+                      </p>
+                    )}
+                  </div>
                   <div>
                     <Input
                       label="Password"

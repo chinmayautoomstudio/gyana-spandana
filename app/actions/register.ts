@@ -143,8 +143,9 @@ export async function registerTeam(
                     gender: p.gender,
                     email: p.email,
                     phone: p.phone,
-                    school_name: p.schoolName,
+                    school_name: data.schoolName,
                     aadhar: p.aadhar,
+                    class: p.class,
                     is_participant1: p.isParticipant1,
                     email_verified: true, // They verified via OTP
                     phone_verified: false,
@@ -186,9 +187,9 @@ export async function registerTeam(
                     teamName: data.teamName,
                     teamCode: teamCode,
                     participant1Name: data.participant1.name,
-                    participant1School: data.participant1.schoolName,
+                    participant1School: data.schoolName,
                     participant2Name: data.participant2.name,
-                    participant2School: data.participant2.schoolName,
+                    participant2School: data.schoolName,
                 }),
             })
         } catch (emailError) {
@@ -211,9 +212,9 @@ export async function registerTeam(
                 body: JSON.stringify({
                     participantEmail: data.participant1.email,
                     participantName: data.participant1.name,
-                    participantSchool: data.participant1.schoolName,
+                    participantSchool: data.schoolName,
                     teammateName: data.participant2.name,
-                    teammateSchool: data.participant2.schoolName,
+                    teammateSchool: data.schoolName,
                     teamName: data.teamName,
                     teamCode: teamCode,
                     registrationDate: registrationDate,
@@ -229,9 +230,9 @@ export async function registerTeam(
                 body: JSON.stringify({
                     participantEmail: data.participant2.email,
                     participantName: data.participant2.name,
-                    participantSchool: data.participant2.schoolName,
+                    participantSchool: data.schoolName,
                     teammateName: data.participant1.name,
-                    teammateSchool: data.participant1.schoolName,
+                    teammateSchool: data.schoolName,
                     teamName: data.teamName,
                     teamCode: teamCode,
                     registrationDate: registrationDate,
