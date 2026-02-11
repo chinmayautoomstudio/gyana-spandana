@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
 
 export async function POST(
   request: NextRequest,
@@ -81,25 +82,11 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Check if Resend API key is configured
-    const resendApiKey = process.env.RESEND_API_KEY
-    if (!resendApiKey) {
+    if (!isSendGridConfigured()) {
       return NextResponse.json({
-        error: 'Email service not configured. Please set RESEND_API_KEY environment variable.',
+        error: 'Email service not configured. Please set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL environment variables.',
       }, { status: 500 })
     }
-
-    // Dynamic import of Resend
-    let Resend
-    try {
-      Resend = (await import('resend')).Resend
-    } catch (error) {
-      return NextResponse.json({
-        error: 'Email service not available. Please install resend package.',
-      }, { status: 500 })
-    }
-
-    const resend = new Resend(resendApiKey)
 
     // Get site URL
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
@@ -276,16 +263,15 @@ GYANA SPARDHA Team
 This is an automated email. Please do not reply to this message.
         `.trim()
 
-        const { error: emailError } = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'GYANA SPARDHA <noreply@example.com>',
-          to: [participant.email],
+        const result = await sendEmail({
+          to: participant.email,
           subject: emailSubject,
           html: emailHtml,
           text: emailText,
         })
 
-        if (emailError) {
-          throw new Error(`Failed to send to ${participant.email}: ${emailError.message}`)
+        if (!result.success) {
+          throw new Error(`Failed to send to ${participant.email}: ${result.error}`)
         }
 
         return { participantId: participant.id, email: participant.email, success: true }

@@ -76,9 +76,9 @@ NEXT_PUBLIC_SITE_URL=https://gyanaspardha.com
 #### Optional Variables
 
 ```env
-# Email Service (for registration notifications)
-RESEND_API_KEY=re_xxxxxxxxxxxxx
-RESEND_FROM_EMAIL=Gyana Spardha <noreply@gyanaspardha.com>
+# Email Service - SendGrid (for registration, authority, and exam invitation emails)
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxx
+SENDGRID_FROM_EMAIL=Gyana Spardha <noreply@gyanaspardha.com>
 
 # AI Assistant (for admin panel)
 OPENAI_API_KEY=sk-xxxxxxxxxxxxx
@@ -123,8 +123,8 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxx
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (keep secret) |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Your production URL (e.g., https://gyanaspardha.com) |
-| `RESEND_API_KEY` | No | Resend API key for email notifications |
-| `RESEND_FROM_EMAIL` | No | Sender email for notifications |
+| `SENDGRID_API_KEY` | No | SendGrid API key for email notifications |
+| `SENDGRID_FROM_EMAIL` | No | Sender email for notifications (verified in SendGrid) |
 | `OPENAI_API_KEY` | No | OpenAI API key for AI assistant feature |
 
 ---

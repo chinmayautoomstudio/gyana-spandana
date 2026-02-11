@@ -11,10 +11,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 # ⚠️ KEEP THIS SECRET - Never expose in client-side code
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# Email Service Configuration (Optional - for sending authority notifications)
-# Get your API key from https://resend.com/api-keys
-RESEND_API_KEY=re_your_resend_api_key
-RESEND_FROM_EMAIL=GYANA SPARDHA <noreply@yourdomain.com>
+# Email Service Configuration (Optional - SendGrid for registration/authority/exam emails)
+# Get your API key from https://app.sendgrid.com/settings/api_keys
+SENDGRID_API_KEY=SG.your_sendgrid_api_key
+SENDGRID_FROM_EMAIL=GYANA SPARDHA <noreply@yourdomain.com>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 # AI Assistant Configuration (Required for admin AI assistant)
@@ -32,17 +32,19 @@ OPENAI_API_KEY=sk-your_openai_api_key_here
    - **anon/public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY` (⚠️ Keep this secret!)
 
-### Email Service Setup (Optional)
+### Email Service Setup (Optional - SendGrid)
 
-To enable email notifications to school authorities:
+To enable transactional emails (registration confirmation, authority notification, exam invitations):
 
-1. Sign up for a free account at [Resend](https://resend.com)
-2. Go to API Keys section and create a new API key
-3. Copy the API key to `RESEND_API_KEY` in `.env.local`
-4. Set `RESEND_FROM_EMAIL` to your verified domain email (e.g., `GYANA SPARDHA <noreply@yourdomain.com>`)
-5. Set `NEXT_PUBLIC_SITE_URL` to your production URL (or `http://localhost:3000` for development)
+1. Sign up at [SendGrid](https://sendgrid.com) and verify a sender or domain (Sender Authentication).
+2. In SendGrid Dashboard go to **Settings → API Keys** and create an API key with "Mail Send" permission.
+3. Set `SENDGRID_API_KEY` in `.env.local` (key starts with `SG.`).
+4. Set `SENDGRID_FROM_EMAIL` to your verified sender (e.g., `GYANA SPARDHA <noreply@yourdomain.com>`).
+5. Set `NEXT_PUBLIC_SITE_URL` to your production URL (or `http://localhost:3000` for development).
 
-**Note:** Email notifications will gracefully skip if Resend is not configured - registration will still work.
+**OTP emails (login/register verification):** Sent by Supabase Auth. To use SendGrid for those in production, in **Supabase Dashboard → Authentication → SMTP Settings** enable Custom SMTP and set: Host `smtp.sendgrid.net`, Port `587`, Username `apikey`, Password = your SendGrid API key, Sender = same verified address.
+
+**Note:** If SendGrid is not configured, registration and exam flows still work; email notifications are skipped.
 
 ## Important Notes:
 
@@ -60,8 +62,8 @@ To enable email notifications to school authorities:
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-RESEND_API_KEY=re_xxxxxxxxxxxxx
-RESEND_FROM_EMAIL=GYANA SPARDHA <noreply@yourdomain.com>
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxx
+SENDGRID_FROM_EMAIL=GYANA SPARDHA <noreply@yourdomain.com>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 OPENAI_API_KEY=sk-xxxxxxxxxxxxx
 ```

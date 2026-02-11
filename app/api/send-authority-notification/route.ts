@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
 
 interface EmailNotificationPayload {
   authorityEmail: string
@@ -33,29 +34,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if Resend API key is configured
-    const resendApiKey = process.env.RESEND_API_KEY
-    if (!resendApiKey) {
-      console.warn('RESEND_API_KEY not configured. Email notification skipped.')
+    if (!isSendGridConfigured()) {
+      console.warn('SendGrid not configured. Email notification skipped.')
       return NextResponse.json(
         { message: 'Email service not configured', skipped: true },
         { status: 200 }
       )
     }
-
-    // Dynamic import of Resend to handle case where it's not installed
-    let Resend
-    try {
-      Resend = (await import('resend')).Resend
-    } catch (error) {
-      console.warn('Resend package not installed. Email notification skipped.')
-      return NextResponse.json(
-        { message: 'Email service not available', skipped: true },
-        { status: 200 }
-      )
-    }
-
-    const resend = new Resend(resendApiKey)
 
     // Format registration date
     const registrationDate = new Date().toLocaleDateString('en-IN', {
@@ -169,25 +154,23 @@ Best regards,
 GYANA SPARDHA Team
     `.trim()
 
-    // Send email using Resend
-    const { data, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'GYANA SPARDHA <noreply@example.com>',
-      to: [authorityEmail],
+    const result = await sendEmail({
+      to: authorityEmail,
       subject: emailSubject,
       html: emailHtml,
       text: emailText,
     })
 
-    if (error) {
-      console.error('Resend API error:', error)
+    if (!result.success) {
+      console.error('SendGrid error:', result.error)
       return NextResponse.json(
-        { error: 'Failed to send email', details: error },
+        { error: 'Failed to send email', details: result.error },
         { status: 500 }
       )
     }
 
     return NextResponse.json(
-      { message: 'Email sent successfully', emailId: data?.id },
+      { message: 'Email sent successfully' },
       { status: 200 }
     )
   } catch (error: any) {
