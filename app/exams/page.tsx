@@ -34,10 +34,10 @@ export default function AvailableExamsPage() {
   useEffect(() => {
     const fetchData = async () => {
       const supabase = createClient()
-      
+
       // Update exam statuses based on schedule
       await updateExamStatuses(supabase)
-      
+
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
@@ -55,54 +55,28 @@ export default function AvailableExamsPage() {
       if (participant) {
         setParticipantId(participant.id)
 
-        // Fetch available exams (scheduled or active)
-        const { data: examsData } = await supabase
-          .from('exams')
-          .select('*')
-          .in('status', ['scheduled', 'active'])
-          .order('scheduled_start', { ascending: true })
+        try {
+          const { getAvailableExams } = await import('@/app/actions/exam')
+          const filteredExams = await getAvailableExams()
+          setExams(filteredExams)
 
-        // Check which exams have participant assignments
-        const { data: assignmentsData } = await supabase
-          .from('exam_participants')
-          .select('exam_id')
-          .eq('participant_id', participant.id)
+          // Fetch user's attempts
+          const { data: attemptsData } = await supabase
+            .from('exam_attempts')
+            .select('exam_id, status, score')
+            .eq('participant_id', participant.id)
 
-        const assignedExamIds = new Set((assignmentsData || []).map(a => a.exam_id))
-
-        // Filter exams based on assignments:
-        // - If exam has assignments, only show if participant is assigned
-        // - If exam has no assignments, show to all (backward compatibility)
-        const { data: allAssignmentsData } = await supabase
-          .from('exam_participants')
-          .select('exam_id')
-          .in('exam_id', (examsData || []).map(e => e.id))
-
-        const examsWithAssignments = new Set((allAssignmentsData || []).map(a => a.exam_id))
-
-        const filteredExams = (examsData || []).filter(exam => {
-          // If exam has assignments, only show if participant is assigned
-          if (examsWithAssignments.has(exam.id)) {
-            return assignedExamIds.has(exam.id)
+          if (attemptsData) {
+            const attemptsMap: Record<string, ExamAttempt> = {}
+            attemptsData.forEach(attempt => {
+              attemptsMap[attempt.exam_id] = attempt
+            })
+            setAttempts(attemptsMap)
           }
-          // If exam has no assignments, show to all (backward compatibility)
-          return true
-        }).filter(exam => (exam.total_questions ?? 0) > 0)
-
-        setExams(filteredExams)
-
-        // Fetch user's attempts
-        const { data: attemptsData } = await supabase
-          .from('exam_attempts')
-          .select('exam_id, status, score')
-          .eq('participant_id', participant.id)
-
-        if (attemptsData) {
-          const attemptsMap: Record<string, ExamAttempt> = {}
-          attemptsData.forEach(attempt => {
-            attemptsMap[attempt.exam_id] = attempt
-          })
-          setAttempts(attemptsMap)
+        } catch (error) {
+          console.error('Error fetching exams:', error)
+          // Fallback or empty state
+          setExams([])
         }
       }
 
@@ -186,11 +160,10 @@ export default function AvailableExamsPage() {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xl font-bold text-gray-900">{exam.title}</h3>
-                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                      exam.status === 'active' ? 'bg-green-100 text-green-800' :
-                      exam.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${exam.status === 'active' ? 'bg-green-100 text-green-800' :
+                        exam.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                      }`}>
                       {exam.status.charAt(0).toUpperCase() + exam.status.slice(1)}
                     </span>
                   </div>

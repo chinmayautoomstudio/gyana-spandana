@@ -9,6 +9,7 @@ interface ExamTimerProps {
   onWarning?: (secondsRemaining: number) => void
   isActive?: boolean
   className?: string
+  showProgressBar?: boolean
 }
 
 export const ExamTimer: React.FC<ExamTimerProps> = ({
@@ -17,7 +18,8 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
   onTick,
   onWarning,
   isActive = true,
-  className = ''
+  className = '',
+  showProgressBar = true
 }) => {
   const [timeRemaining, setTimeRemaining] = useState(durationSeconds)
   const [isWarning, setIsWarning] = useState(false)
@@ -107,13 +109,15 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
       </div>
 
       {/* Progress bar */}
-      <div className="mt-2 w-full bg-gray-200 rounded-full h-1">
-        <div
-          className={`h-1 rounded-full transition-all ${isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-[#C0392B]'
-            }`}
-          style={{ width: `${progressPercentage}%` }}
-        />
-      </div>
+      {showProgressBar && (
+        <div className="mt-2 w-full bg-gray-200 rounded-full h-1">
+          <div
+            className={`h-1 rounded-full transition-all ${isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-[#C0392B]'
+              }`}
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+      )}
 
       {/* Warning indicators */}
       {isWarning && (

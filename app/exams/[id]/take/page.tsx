@@ -754,10 +754,14 @@ export default function TakeExamPage() {
                   <div className="w-full md:w-auto">
                     <ExamTimer
                       durationSeconds={timeRemaining}
-                      onTimeUp={handleTimeUp}
+                      onTimeUp={() => {
+                        setShowSubmitModal(true)
+                        handleTimeUp()
+                      }}
                       onTick={(seconds) => setTimeRemaining(seconds)}
                       onWarning={handleTimeWarning}
                       isActive={examStarted}
+                      showProgressBar={false}
                     />
                   </div>
                 </div>

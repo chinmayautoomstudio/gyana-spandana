@@ -23,7 +23,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchUser = async () => {
       const supabase = createClient()
-      
+
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser()
@@ -43,7 +43,7 @@ export default function DashboardPage() {
         .single()
 
       const role = profile?.role || currentUser.user_metadata?.role || 'participant'
-      
+
       if (role === 'admin') {
         router.push('/admin')
         return
@@ -68,7 +68,7 @@ export default function DashboardPage() {
           if (typeof window !== 'undefined') {
             const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
             const hasModalBeenShown = localStorage.getItem(modalDismissedKey) === 'true'
-            
+
             if (!hasModalBeenShown) {
               setShowProfileModal(true)
             }
@@ -90,38 +90,16 @@ export default function DashboardPage() {
           setTeammateData(teammate)
         }
 
-        // Fetch available exams count (scheduled/active, assignment-filtered, with questions)
+        // Fetch available exams count using server action
         await updateExamStatuses(supabase)
-        const { data: examsData } = await supabase
-          .from('exams')
-          .select('id')
-          .in('status', ['scheduled', 'active'])
-          .order('scheduled_start', { ascending: true })
 
-        if (examsData && examsData.length > 0) {
-          const { data: assignmentsData } = await supabase
-            .from('exam_participants')
-            .select('exam_id')
-            .eq('participant_id', participant.id)
-          const assignedExamIds = new Set((assignmentsData || []).map(a => a.exam_id))
-
-          const { data: allAssignmentsData } = await supabase
-            .from('exam_participants')
-            .select('exam_id')
-            .in('exam_id', examsData.map(e => e.id))
-          const examsWithAssignments = new Set((allAssignmentsData || []).map(a => a.exam_id))
-
-          const { data: examsWithCount } = await supabase
-            .from('exams')
-            .select('id, total_questions')
-            .in('id', examsData.map(e => e.id))
-            .in('status', ['scheduled', 'active'])
-
-          const filtered = (examsWithCount || []).filter(exam => {
-            if (examsWithAssignments.has(exam.id)) return assignedExamIds.has(exam.id)
-            return true
-          }).filter(exam => (exam.total_questions ?? 0) > 0)
-          setAvailableExamsCount(filtered.length)
+        try {
+          const { getAvailableExams } = await import('@/app/actions/exam')
+          const availableExams = await getAvailableExams()
+          setAvailableExamsCount(availableExams.length)
+        } catch (error) {
+          console.error('Error fetching available exams count:', error)
+          setAvailableExamsCount(0)
         }
       }
 
@@ -141,7 +119,7 @@ export default function DashboardPage() {
     // Refresh participant data
     const supabase = createClient()
     const { data: { user: currentUser } } = await supabase.auth.getUser()
-    
+
     if (currentUser) {
       const { data: participant } = await supabase
         .from('participants')
@@ -153,7 +131,7 @@ export default function DashboardPage() {
         setParticipantData(participant)
         setShowProfileModal(false)
         setHasSkippedProfile(false)
-        
+
         // Save to localStorage so modal doesn't show again (profile is now completed)
         if (typeof window !== 'undefined') {
           const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
@@ -166,7 +144,7 @@ export default function DashboardPage() {
   const handleProfileSkip = () => {
     setShowProfileModal(false)
     setHasSkippedProfile(true)
-    
+
     // Save to localStorage so modal doesn't show again on future logins
     if (user && typeof window !== 'undefined') {
       const modalDismissedKey = `profile_modal_dismissed_${user.id}`
@@ -318,7 +296,7 @@ export default function DashboardPage() {
                     <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">Dashboard</h2>
                   </div>
                 </div>
-                
+
                 {/* Right Section */}
                 <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                   {/* Search icon - hidden on very small screens */}
