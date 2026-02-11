@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { ProfileCompletionModal } from '@/components/ui/ProfileCompletionModal'
+import { updateExamStatuses } from '@/lib/utils/examScheduler'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -17,6 +18,7 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [hasSkippedProfile, setHasSkippedProfile] = useState(false)
+  const [availableExamsCount, setAvailableExamsCount] = useState<number>(0)
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -86,6 +88,40 @@ export default function DashboardPage() {
             .single()
 
           setTeammateData(teammate)
+        }
+
+        // Fetch available exams count (scheduled/active, assignment-filtered, with questions)
+        await updateExamStatuses(supabase)
+        const { data: examsData } = await supabase
+          .from('exams')
+          .select('id')
+          .in('status', ['scheduled', 'active'])
+          .order('scheduled_start', { ascending: true })
+
+        if (examsData && examsData.length > 0) {
+          const { data: assignmentsData } = await supabase
+            .from('exam_participants')
+            .select('exam_id')
+            .eq('participant_id', participant.id)
+          const assignedExamIds = new Set((assignmentsData || []).map(a => a.exam_id))
+
+          const { data: allAssignmentsData } = await supabase
+            .from('exam_participants')
+            .select('exam_id')
+            .in('exam_id', examsData.map(e => e.id))
+          const examsWithAssignments = new Set((allAssignmentsData || []).map(a => a.exam_id))
+
+          const { data: examsWithCount } = await supabase
+            .from('exams')
+            .select('id, total_questions')
+            .in('id', examsData.map(e => e.id))
+            .in('status', ['scheduled', 'active'])
+
+          const filtered = (examsWithCount || []).filter(exam => {
+            if (examsWithAssignments.has(exam.id)) return assignedExamIds.has(exam.id)
+            return true
+          }).filter(exam => (exam.total_questions ?? 0) > 0)
+          setAvailableExamsCount(filtered.length)
         }
       }
 
@@ -227,15 +263,16 @@ export default function DashboardPage() {
                 </svg>
                 Profile
               </Link>
-              <a
-                href="#"
+              <Link
+                href="/dashboard#team"
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 font-medium transition-all hover:bg-white/50"
+                onClick={() => setSidebarOpen(false)}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 Team
-              </a>
+              </Link>
               <Link
                 href="/exams"
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 font-medium transition-all hover:bg-white/50"
@@ -522,7 +559,7 @@ export default function DashboardPage() {
 
               {/* Team Information Card */}
               {participantData?.teams && (
-                <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
+                <div id="team" className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 bg-[#E67E22]/10 rounded-lg flex items-center justify-center">
                       <svg className="w-6 h-6 text-[#E67E22]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -596,17 +633,38 @@ export default function DashboardPage() {
                 <h2 className="text-2xl font-bold text-gray-900">Quiz Status</h2>
               </div>
               <div className="text-center py-8 sm:py-12">
-                <div className="w-16 h-16 bg-gray-100/50 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-gray-600 text-lg mb-2 font-medium">
-                  Quiz functionality will be available soon
-                </p>
-                <p className="text-gray-500 text-sm">
-                  Please wait for further instructions from the organizers.
-                </p>
+                {availableExamsCount > 0 ? (
+                  <>
+                    <p className="text-gray-600 text-lg mb-2 font-medium">
+                      You have {availableExamsCount} exam{availableExamsCount !== 1 ? 's' : ''} available
+                    </p>
+                    <p className="text-gray-500 text-sm mb-6">
+                      Take your assigned exams before the deadline.
+                    </p>
+                    <Link href="/exams">
+                      <Button variant="primary" className="bg-[#C0392B] hover:bg-[#A93226]">
+                        View & Take Exams
+                      </Button>
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 bg-gray-100/50 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-600 text-lg mb-2 font-medium">
+                      No exams available right now
+                    </p>
+                    <p className="text-gray-500 text-sm mb-6">
+                      Check back later for scheduled exams.
+                    </p>
+                    <Link href="/exams" className="text-[#C0392B] hover:text-[#A93226] font-medium text-sm">
+                      View exam schedule
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </main>

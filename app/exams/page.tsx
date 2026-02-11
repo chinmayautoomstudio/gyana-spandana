@@ -87,7 +87,7 @@ export default function AvailableExamsPage() {
           }
           // If exam has no assignments, show to all (backward compatibility)
           return true
-        })
+        }).filter(exam => (exam.total_questions ?? 0) > 0)
 
         setExams(filteredExams)
 

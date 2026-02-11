@@ -281,10 +281,6 @@ export default function Home() {
           text: 'Register Your Team Now',
           href: '/register',
         }}
-        secondaryCTA={{
-          text: 'View Schedule',
-          href: '#',
-        }}
       />
     </div>
   )

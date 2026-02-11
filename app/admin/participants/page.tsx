@@ -116,7 +116,7 @@ export default function ParticipantsPage() {
       key: 'actions',
       header: 'Actions',
       render: (p: Participant) => (
-        <Link href={`/admin/reports/participant/${p.id}`}>
+        <Link href={`/admin/participants/${p.id}`}>
           <Button variant="outline" size="sm">
             View
           </Button>
