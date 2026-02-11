@@ -9,7 +9,7 @@ The RLS (Row Level Security) policy for the questions table was checking `user_m
 ## Solution Implemented
 
 ### 1. Fixed RLS Policy
-Created a migration script (`docs/fix-questions-rls-policy.sql`) that updates the RLS policy to:
+Created a migration script (`docs/sql/fix-questions-rls-policy.sql`) that updates the RLS policy to:
 - Check `user_profiles.role` first (primary source)
 - Fallback to `user_metadata.role` for backward compatibility
 
@@ -20,13 +20,13 @@ Updated `app/admin/questions/page.tsx` to:
 - Log detailed errors to the console for debugging
 
 ### 3. Created Verification Script
-Added `docs/verify-questions-database.sql` to help diagnose database issues.
+Added `docs/sql/verify-questions-database.sql` to help diagnose database issues.
 
 ## Steps to Fix
 
 ### Step 1: Run the RLS Policy Fix
 1. Open your Supabase SQL Editor
-2. Run the migration script: `docs/fix-questions-rls-policy.sql`
+2. Run the migration script: `docs/sql/fix-questions-rls-policy.sql`
 3. This will update the RLS policies to check `user_profiles.role`
 
 ### Step 2: Verify Admin User Role
@@ -49,7 +49,7 @@ WHERE user_id = (SELECT id FROM auth.users WHERE email = 'your-admin-email@examp
 Run the verification script to check if questions exist:
 
 ```sql
--- Run: docs/verify-questions-database.sql
+-- Run: docs/sql/verify-questions-database.sql
 ```
 
 Or manually check:
@@ -62,7 +62,7 @@ SELECT COUNT(*) FROM questions;
 If no questions exist, run the sample questions file:
 
 1. Open Supabase SQL Editor
-2. Run: `docs/sample-odisha-culture-questions-comprehensive.sql`
+2. Run: `docs/sql/sample-odisha-culture-questions-comprehensive.sql`
 3. This will insert 60 sample questions about Odisha culture
 
 ### Step 5: Test the Fix
@@ -110,7 +110,7 @@ If no questions exist, run the sample questions file:
 
 ## Files Modified
 
-1. **docs/fix-questions-rls-policy.sql** (NEW)
+1. **docs/sql/fix-questions-rls-policy.sql** (NEW)
    - Migration script to fix RLS policies
 
 2. **app/admin/questions/page.tsx** (MODIFIED)
@@ -118,7 +118,7 @@ If no questions exist, run the sample questions file:
    - Enhanced error handling in fetchData function
    - Added helpful error messages with troubleshooting steps
 
-3. **docs/verify-questions-database.sql** (NEW)
+3. **docs/sql/verify-questions-database.sql** (NEW)
    - Verification queries to diagnose database issues
 
 ## Additional Notes

@@ -299,7 +299,7 @@ export default function QuestionBankPage() {
               `⚠️ Main query failed with 500 error, but fallback query succeeded. ` +
               `Loaded ${fallbackData.length} questions without exam information. ` +
               `The join query is failing - likely due to RLS policy issues. ` +
-              `Please run: docs/fix-questions-rls-policy-v2.sql or docs/fix-questions-rls-policy-simple.sql`
+              `Please run: docs/sql/fix-questions-rls-policy-v2.sql or docs/sql/fix-questions-rls-policy-simple.sql`
             )
             return // Exit early since fallback worked
           } else {
@@ -349,7 +349,7 @@ export default function QuestionBankPage() {
           console.warn('This suggests RLS policies might be blocking access.')
           console.warn('Make sure:')
           console.warn('1. You have admin role in user_profiles table')
-          console.warn('2. RLS policy fix has been applied (docs/fix-questions-rls-policy.sql)')
+          console.warn('2. RLS policy fix has been applied (docs/sql/fix-questions-rls-policy.sql)')
           console.warn('3. Questions exist in database (run sample questions SQL)')
         } else {
           console.log(`✅ Successfully loaded ${questionsWithExam.length} questions`)
@@ -707,7 +707,7 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
                       <div className="mb-3">
                         <strong className="text-yellow-900">4. Quick fix - Run this SQL:</strong>
                         <pre className="mt-1 text-yellow-800 whitespace-pre-wrap">
-{`-- Run: docs/fix-questions-rls-policy-simple.sql
+{`-- Run: docs/sql/fix-questions-rls-policy-simple.sql
 -- This uses a simpler approach without functions`}
                         </pre>
                       </div>
@@ -721,7 +721,7 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
                 <ul className="list-disc list-inside space-y-1">
                   <li>Verify you are logged in as an admin user (check debug info above)</li>
                   <li>Check that your user has role='admin' in the user_profiles table</li>
-                  <li>Run the migration script: docs/fix-questions-rls-policy.sql</li>
+                  <li>Run the migration script: docs/sql/fix-questions-rls-policy.sql</li>
                   <li>Ensure the questions table exists and has data</li>
                   <li>Check browser console (F12) for detailed error messages</li>
                   <li>If direct query count &gt; 0 but questions loaded = 0, RLS policy needs fixing</li>

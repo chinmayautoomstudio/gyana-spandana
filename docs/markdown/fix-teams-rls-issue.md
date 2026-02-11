@@ -45,12 +45,12 @@ CREATE POLICY "Allow authenticated users to create teams"
 ### Option 1: Quick Fix (Recommended)
 1. Go to your Supabase project dashboard
 2. Navigate to **SQL Editor**
-3. Run the SQL from `docs/fix-teams-rls-policy.sql`
+3. Run the SQL from `docs/sql/fix-teams-rls-policy.sql`
 4. Test registration again
 
 ### Option 2: Full Schema Update
 1. Drop all existing policies and tables (⚠️ **WARNING: This will delete all data**)
-2. Run the updated `docs/database-schema.sql` which now includes the INSERT policy
+2. Run the updated `docs/sql/database-schema.sql` which now includes the INSERT policy
 
 ## Verification
 After applying the fix, test the registration flow:
@@ -63,8 +63,8 @@ After applying the fix, test the registration flow:
 The `database-schema.sql` file has been updated to include this policy for future deployments.
 
 ## Related Files
-- `docs/fix-teams-rls-policy.sql` - Quick fix SQL script
-- `docs/database-schema.sql` - Updated full schema (line 89-92)
+- `docs/sql/fix-teams-rls-policy.sql` - Quick fix SQL script
+- `docs/sql/database-schema.sql` - Updated full schema (line 89-92)
 - `app/register/page.tsx` - Registration page that creates teams (line 107-111)
 
 ## Prevention

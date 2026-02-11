@@ -51,7 +51,7 @@ export default function ExamResultsPage() {
 
   useEffect(() => {
     if (!examId) return
-    
+
     const fetchResults = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -100,16 +100,16 @@ export default function ExamResultsPage() {
 
       // Get question IDs for this participant's attempt
       let participantQuestionIds = (attemptData.question_ids as string[] | null) || []
-      
+
       // If question_ids is not set (old attempts), fetch all exam questions as fallback
       if (participantQuestionIds.length === 0) {
         const { data: allQuestions } = await supabase
           .from('questions')
           .select('id')
           .eq('exam_id', examId)
-        
+
         participantQuestionIds = allQuestions?.map(q => q.id) || []
-        
+
         // Update attempt with question_ids for future consistency (if not already set)
         if (participantQuestionIds.length > 0) {
           await supabase
@@ -141,7 +141,7 @@ export default function ExamResultsPage() {
       if (answersData) {
         // Create a map for quick lookup
         const answersMap = new Map(answersData.map((a: any) => [a.question_id, a]))
-        
+
         // Format answers preserving the order from question_ids
         const formattedAnswers: Answer[] = questionIdsToFetch
           .map(questionId => {
@@ -164,7 +164,7 @@ export default function ExamResultsPage() {
             }
           })
           .filter((a): a is Answer => a !== null)
-        
+
         setAnswers(formattedAnswers)
       }
 
@@ -172,6 +172,15 @@ export default function ExamResultsPage() {
     }
 
     fetchResults()
+
+    // Exit fullscreen on mount
+    const exitFullscreen = async () => {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(err => console.error('Error exiting fullscreen:', err))
+      }
+    }
+    exitFullscreen()
+
   }, [examId, router])
 
   // Clear goto input when question index changes
@@ -208,13 +217,13 @@ export default function ExamResultsPage() {
 
   // Calculate total possible score from attempt's total_questions or answers length
   // Use attempt.total_questions if available, otherwise calculate from answers
-  const totalPossibleScore = attempt.total_questions > 0 
-    ? attempt.total_questions 
-    : answers.length > 0 
-      ? answers.length 
+  const totalPossibleScore = attempt.total_questions > 0
+    ? attempt.total_questions
+    : answers.length > 0
+      ? answers.length
       : exam.total_questions || 0
-  
-  const percentage = totalPossibleScore > 0 
+
+  const percentage = totalPossibleScore > 0
     ? Math.round((attempt.score / totalPossibleScore) * 100)
     : 0
   const isPassed = exam.passing_score ? attempt.score >= exam.passing_score : true
@@ -283,24 +292,21 @@ export default function ExamResultsPage() {
 
               {/* Score Card */}
               <div className={`${getScoreBgColor(percentage)} rounded-xl p-6 mb-6`}>
-                <div className={`text-5xl font-bold mb-2 ${
-                  percentage >= 80 ? 'text-green-800' :
-                  percentage >= 60 ? 'text-blue-800' :
-                  percentage >= 40 ? 'text-yellow-800' :
-                  'text-red-800'
-                }`}>{percentage}%</div>
+                <div className={`text-5xl font-bold mb-2 ${percentage >= 80 ? 'text-green-800' :
+                    percentage >= 60 ? 'text-blue-800' :
+                      percentage >= 40 ? 'text-yellow-800' :
+                        'text-red-800'
+                  }`}>{percentage}%</div>
                 <div className="text-sm text-gray-700 mb-4">Your Score</div>
-                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${
-                  isPassed ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-                }`}>
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${isPassed ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                  }`}>
                   {isPassed ? 'PASSED' : 'NEEDS IMPROVEMENT'}
                 </div>
-                <div className={`mt-4 text-lg font-semibold ${
-                  percentage >= 80 ? 'text-green-800' :
-                  percentage >= 60 ? 'text-blue-800' :
-                  percentage >= 40 ? 'text-yellow-800' :
-                  'text-red-800'
-                }`}>
+                <div className={`mt-4 text-lg font-semibold ${percentage >= 80 ? 'text-green-800' :
+                    percentage >= 60 ? 'text-blue-800' :
+                      percentage >= 40 ? 'text-yellow-800' :
+                        'text-red-800'
+                  }`}>
                   {attempt.score} / {totalPossibleScore} points
                 </div>
               </div>
@@ -375,9 +381,8 @@ export default function ExamResultsPage() {
 
             {/* Question Card */}
             {currentAnswer && (
-              <div className={`bg-white/70 backdrop-blur-xl rounded-xl border-2 shadow-lg p-6 mb-4 ${
-                currentAnswer.is_correct ? 'border-green-200' : 'border-red-200'
-              }`}>
+              <div className={`bg-white/70 backdrop-blur-xl rounded-xl border-2 shadow-lg p-6 mb-4 ${currentAnswer.is_correct ? 'border-green-200' : 'border-red-200'
+                }`}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     {currentAnswer.is_correct ? (
@@ -415,25 +420,22 @@ export default function ExamResultsPage() {
                     return (
                       <div
                         key={option}
-                        className={`p-3 rounded-lg border ${
-                          isCorrect
+                        className={`p-3 rounded-lg border ${isCorrect
                             ? 'bg-green-100 border-green-300'
                             : isSelected
-                            ? 'bg-red-100 border-red-300'
-                            : 'bg-gray-50 border-gray-200'
-                        }`}
+                              ? 'bg-red-100 border-red-300'
+                              : 'bg-gray-50 border-gray-200'
+                          }`}
                       >
                         <div className="flex items-center gap-2">
-                          <span className={`font-medium ${
-                            isCorrect ? 'text-green-900' :
-                            isSelected ? 'text-red-900' :
-                            'text-gray-900'
-                          }`}>{option}.</span>
-                          <span className={`flex-1 ${
-                            isCorrect ? 'text-green-900' :
-                            isSelected ? 'text-red-900' :
-                            'text-gray-900'
-                          }`}>{optionText}</span>
+                          <span className={`font-medium ${isCorrect ? 'text-green-900' :
+                              isSelected ? 'text-red-900' :
+                                'text-gray-900'
+                            }`}>{option}.</span>
+                          <span className={`flex-1 ${isCorrect ? 'text-green-900' :
+                              isSelected ? 'text-red-900' :
+                                'text-gray-900'
+                            }`}>{optionText}</span>
                           {isCorrect && (
                             <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full">Correct</span>
                           )}
@@ -534,13 +536,12 @@ export default function ExamResultsPage() {
                         <button
                           key={index}
                           onClick={() => setCurrentQuestionIndex(index)}
-                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${
-                            index === currentQuestionIndex
+                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${index === currentQuestionIndex
                               ? 'bg-[#C0392B] text-white'
                               : answers[index].is_correct
-                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                              : 'bg-red-100 text-red-600 hover:bg-red-200'
-                          }`}
+                                ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                : 'bg-red-100 text-red-600 hover:bg-red-200'
+                            }`}
                         >
                           {index + 1}
                         </button>
@@ -552,13 +553,12 @@ export default function ExamResultsPage() {
                       <button
                         key={0}
                         onClick={() => setCurrentQuestionIndex(0)}
-                        className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${
-                          0 === currentQuestionIndex
+                        className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${0 === currentQuestionIndex
                             ? 'bg-[#C0392B] text-white'
                             : answers[0].is_correct
-                            ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                            : 'bg-red-100 text-red-600 hover:bg-red-200'
-                        }`}
+                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                              : 'bg-red-100 text-red-600 hover:bg-red-200'
+                          }`}
                       >
                         1
                       </button>
@@ -577,13 +577,12 @@ export default function ExamResultsPage() {
                           <button
                             key={i}
                             onClick={() => setCurrentQuestionIndex(i)}
-                            className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${
-                              i === currentQuestionIndex
+                            className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${i === currentQuestionIndex
                                 ? 'bg-[#C0392B] text-white'
                                 : answers[i].is_correct
-                                ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                                : 'bg-red-100 text-red-600 hover:bg-red-200'
-                            }`}
+                                  ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                  : 'bg-red-100 text-red-600 hover:bg-red-200'
+                              }`}
                           >
                             {i + 1}
                           </button>
@@ -600,13 +599,12 @@ export default function ExamResultsPage() {
                         <button
                           key={totalQuestions - 1}
                           onClick={() => setCurrentQuestionIndex(totalQuestions - 1)}
-                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${
-                            totalQuestions - 1 === currentQuestionIndex
+                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${totalQuestions - 1 === currentQuestionIndex
                               ? 'bg-[#C0392B] text-white'
                               : answers[totalQuestions - 1].is_correct
-                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                              : 'bg-red-100 text-red-600 hover:bg-red-200'
-                          }`}
+                                ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                : 'bg-red-100 text-red-600 hover:bg-red-200'
+                            }`}
                         >
                           {totalQuestions}
                         </button>

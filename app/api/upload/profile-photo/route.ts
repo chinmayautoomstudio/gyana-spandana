@@ -75,11 +75,11 @@ export async function POST(request: NextRequest) {
       // Provide more helpful error messages
       let errorMessage = error.message
       if (error.message?.includes('row-level security') || error.message?.includes('RLS')) {
-        errorMessage = 'Storage bucket RLS policy error. Please ensure storage bucket policies are configured correctly. See docs/fix-storage-bucket-rls.sql'
+        errorMessage = 'Storage bucket RLS policy error. Please ensure storage bucket policies are configured correctly. See docs/sql/fix-storage-bucket-rls.sql'
       } else if (error.message?.includes('Bucket not found')) {
         errorMessage = 'Storage bucket "profile-photos" not found. Please create it in Supabase Storage.'
       } else if (error.message?.includes('new row violates')) {
-        errorMessage = 'Storage bucket RLS policy violation. Please run the SQL script in docs/fix-storage-bucket-rls.sql'
+        errorMessage = 'Storage bucket RLS policy violation. Please run the SQL script in docs/sql/fix-storage-bucket-rls.sql'
       }
       
       return NextResponse.json(

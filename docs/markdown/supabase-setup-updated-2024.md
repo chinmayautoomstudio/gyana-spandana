@@ -233,5 +233,5 @@ Based on your OTP-based registration flow:
 4. ✅ Test complete registration flow
 5. ✅ Test login flow
 
-For detailed email template customization and SMTP setup, see `docs/supabase-email-verification-setup.md`
+For detailed email template customization and SMTP setup, see `docs/markdown/supabase-email-verification-setup.md`
 

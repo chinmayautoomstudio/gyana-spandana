@@ -13,6 +13,7 @@ import { ExamTimer } from '@/components/exam/ExamTimer'
 import { ExamProgressBar } from '@/components/exam/ExamProgressBar'
 import { QuestionNavigator } from '@/components/exam/QuestionNavigator'
 import { ExamInstructions } from '@/components/exam/ExamInstructions'
+import { SubmitExamModal } from '@/components/exam/SubmitExamModal'
 import { selectAndShuffleQuestions } from '@/lib/utils/randomQuestions'
 
 interface Question {
@@ -57,10 +58,11 @@ export default function TakeExamPage() {
   const [showInstructions, setShowInstructions] = useState(true)
   const [examStarted, setExamStarted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [showSubmitModal, setShowSubmitModal] = useState(false)
 
   useEffect(() => {
     if (!examId) return
-    
+
     const initializeExam = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -273,7 +275,7 @@ export default function TakeExamPage() {
             id => !selectedQuestionsData.some(q => q.id === id)
           )
           console.warn(`[Exam Init] Missing ${missingIds.length} questions:`, missingIds)
-          
+
           // Update participantQuestionIds to only include found questions
           participantQuestionIds = selectedQuestionsData.map(q => q.id)
         }
@@ -302,13 +304,13 @@ export default function TakeExamPage() {
         if (error && error.code === '42703' && error.message?.includes('question_ids')) {
           console.warn('question_ids column not found, creating attempt without it')
           delete attemptData.question_ids
-          
+
           const retryResult = await supabase
             .from('exam_attempts')
             .insert(attemptData)
             .select()
             .single()
-          
+
           newAttempt = retryResult.data
           error = retryResult.error
         }
@@ -323,7 +325,7 @@ export default function TakeExamPage() {
             .eq('exam_id', examId)
             .eq('participant_id', participant.id)
             .single()
-          
+
           if (fetchError || !raceAttempt) {
             console.error('Error fetching existing attempt after race condition:', fetchError)
             alert('Failed to start exam. Please refresh the page and try again.')
@@ -356,7 +358,7 @@ export default function TakeExamPage() {
             code: error.code,
             fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
           })
-          
+
           // User-friendly error message
           let errorMessage = 'Failed to start exam. '
           if (error.code === '42703') { // Undefined column
@@ -364,7 +366,7 @@ export default function TakeExamPage() {
           } else {
             errorMessage += error.message || 'Please try again or contact support.'
           }
-          
+
           alert(errorMessage)
           router.push('/exams')
           return
@@ -487,7 +489,7 @@ export default function TakeExamPage() {
 
     const autoSave = async () => {
       const supabase = createClient()
-      
+
       // Save all answers
       for (const [questionId, answer] of Object.entries(answers)) {
         if (!answer.selectedAnswer) continue
@@ -616,7 +618,7 @@ export default function TakeExamPage() {
           code: updateError.code,
           fullError: JSON.stringify(updateError, Object.getOwnPropertyNames(updateError))
         })
-        
+
         // User-friendly error message
         let errorMessage = 'Failed to submit exam. '
         if (updateError.code === '42501' || updateError.message?.includes('row-level security')) {
@@ -624,7 +626,7 @@ export default function TakeExamPage() {
         } else {
           errorMessage += updateError.message || 'Please try again or contact support.'
         }
-        
+
         setSubmitError(errorMessage)
         setIsSubmitting(false)
         return
@@ -645,7 +647,7 @@ export default function TakeExamPage() {
         code: error?.code,
         fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
       })
-      
+
       const errorMessage = error?.message || 'An unexpected error occurred. Please try again.'
       setSubmitError(`Error submitting exam: ${errorMessage}`)
     } finally {
@@ -739,8 +741,27 @@ export default function TakeExamPage() {
           {/* Main Content Grid - Two Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             {/* Left: Question Focus Area (Main Content) */}
-            <div className="lg:col-span-7 order-1 lg:order-1">
+            <div className="lg:col-span-9 order-1 lg:order-1">
               <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-6 lg:p-8">
+                {/* Timer (Moved here) */}
+                <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                  <div>
+                    <h1 className="text-xl font-bold text-gray-900">{exam.title}</h1>
+                    <p className="text-sm text-gray-600">
+                      Question {currentQuestionIndex + 1} of {questions.length}
+                    </p>
+                  </div>
+                  <div className="w-full md:w-auto">
+                    <ExamTimer
+                      durationSeconds={timeRemaining}
+                      onTimeUp={handleTimeUp}
+                      onTick={(seconds) => setTimeRemaining(seconds)}
+                      onWarning={handleTimeWarning}
+                      isActive={examStarted}
+                    />
+                  </div>
+                </div>
+
                 <MCQQuestion
                   question={currentQuestion}
                   selectedAnswer={currentAnswer}
@@ -761,79 +782,39 @@ export default function TakeExamPage() {
                     </svg>
                     Previous
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                    disabled={currentQuestionIndex === questions.length - 1}
-                  >
-                    Next
-                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Button>
+                  {currentQuestionIndex === questions.length - 1 ? (
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        setSubmitError(null)
+                        setShowSubmitModal(true)
+                      }}
+                      disabled={isSubmitting}
+                      className="bg-[#C0392B] hover:bg-[#A93226]"
+                    >
+                      {isSubmitting ? 'Submitting...' : 'Submit Exam'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
+                    >
+                      Next
+                      <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Right: Exam Info Sidebar */}
-            <div className="lg:col-span-5 order-2 lg:order-2">
+            <div className="lg:col-span-3 order-2 lg:order-2">
               <div className="lg:sticky lg:top-4 space-y-4">
-                {/* Exam Title and Question Count */}
-                <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
-                  <h1 className="text-xl font-bold text-gray-900 mb-2">{exam.title}</h1>
-                  <p className="text-sm text-gray-600">
-                    Question {currentQuestionIndex + 1} of {questions.length}
-                  </p>
-                </div>
 
-                {/* Timer */}
-                <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
-                  <ExamTimer
-                    durationSeconds={timeRemaining}
-                    onTimeUp={handleTimeUp}
-                    onWarning={handleTimeWarning}
-                    isActive={examStarted}
-                  />
-                </div>
 
-                {/* Submit Button */}
-                <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
-                  {submitError && (
-                    <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-3">
-                      <div className="flex items-start gap-2">
-                        <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div className="flex-1">
-                          <p className="text-red-800 text-sm font-medium">Submission Error</p>
-                          <p className="text-red-700 text-xs mt-1">{submitError}</p>
-                        </div>
-                        <button
-                          onClick={() => setSubmitError(null)}
-                          className="text-red-600 hover:text-red-800 transition-colors"
-                          aria-label="Dismiss error"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setSubmitError(null)
-                      if (confirm('Are you sure you want to submit the exam?')) {
-                        submitExam()
-                      }
-                    }}
-                    disabled={isSubmitting}
-                    className="w-full"
-                  >
-                    {isSubmitting ? 'Submitting...' : 'Submit Exam'}
-                  </Button>
-                </div>
+
 
                 {/* Progress Bar */}
                 <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
@@ -853,11 +834,25 @@ export default function TakeExamPage() {
                   answeredQuestionIds={answeredQuestionIds}
                   onQuestionSelect={handleQuestionSelect}
                 />
+
+
+
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <SubmitExamModal
+        isOpen={showSubmitModal}
+        onClose={() => setShowSubmitModal(false)}
+        onConfirm={submitExam}
+        isSubmitting={isSubmitting}
+        brief={{
+          answered: answeredCount,
+          total: questions.length
+        }}
+      />
     </FullScreenExam>
   )
 }

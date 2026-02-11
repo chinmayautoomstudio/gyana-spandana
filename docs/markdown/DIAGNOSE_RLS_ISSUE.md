@@ -9,19 +9,19 @@ When the RLS policy on `questions` tries to check `user_profiles.role`, the RLS 
 ## Solutions (Try in Order)
 
 ### Solution 1: Use Security Definer Function (Recommended)
-Run `docs/fix-questions-rls-policy-v2.sql` which creates a function that can bypass RLS to check roles.
+Run `docs/sql/fix-questions-rls-policy-v2.sql` which creates a function that can bypass RLS to check roles.
 
 **Steps:**
 1. Open Supabase SQL Editor
-2. Run `docs/fix-questions-rls-policy-v2.sql`
+2. Run `docs/sql/fix-questions-rls-policy-v2.sql`
 3. Test if questions appear
 4. If it works, you're done!
 
 ### Solution 2: Use Simple COALESCE Approach
-If Solution 1 doesn't work, try `docs/fix-questions-rls-policy-simple.sql`.
+If Solution 1 doesn't work, try `docs/sql/fix-questions-rls-policy-simple.sql`.
 
 **Steps:**
-1. Run `docs/fix-questions-rls-policy-simple.sql`
+1. Run `docs/sql/fix-questions-rls-policy-simple.sql`
 2. Test if questions appear
 
 ### Solution 3: Allow Role Checks in user_profiles RLS

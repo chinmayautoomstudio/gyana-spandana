@@ -1023,11 +1023,8 @@ Stores aggregated team scores for leaderboards.
 │   ├── validations.ts              # Zod schemas
 │   └── utils.ts                    # Utility functions
 ├── docs/
-│   ├── PRD.md                      # This document
-│   ├── database-schema.sql         # Base database schema
-│   ├── database-exam-schema.sql    # Exam system schema
-│   ├── exam-system-setup.md        # Exam system setup guide
-│   └── ...                         # Other documentation
+│   ├── markdown/                    # Documentation guides (PRD, setup, etc.)
+│   └── sql/                         # Database schema and migration scripts
 ├── public/
 │   └── images/
 │       └── carousel/                # Carousel images
@@ -2007,11 +2004,11 @@ All API calls include:
 
 1. **Run Base Database Schema:**
    - Go to Supabase SQL Editor
-   - Run `docs/database-schema.sql`
+   - Run `docs/sql/database-schema.sql`
    - Verify base tables are created (teams, participants)
 
 2. **Run Exam System Schema:**
-   - Run `docs/database-exam-schema.sql`
+   - Run `docs/sql/database-exam-schema.sql`
    - This creates exam-related tables (exams, questions, exam_attempts, exam_answers, team_scores)
    - Creates database functions and triggers for team score calculation
 
@@ -2021,7 +2018,7 @@ All API calls include:
    - Test admin and participant access restrictions
 
 4. **Set Up Admin User:**
-   - Follow instructions in `docs/admin-setup.md`
+   - Follow instructions in `docs/markdown/admin-setup.md`
    - Create at least one admin user for exam management
 
 ### Supabase Configuration

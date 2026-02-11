@@ -41,7 +41,7 @@ The RLS policies are likely:
 ### Step 1: Run the Comprehensive Fix SQL
 
 1. Open your **Supabase SQL Editor**
-2. Run this file: **`docs/fix-rls-500-errors-comprehensive.sql`**
+2. Run this file: **`docs/sql/fix-rls-500-errors-comprehensive.sql`**
 
 This will:
 - Remove problematic function dependencies
@@ -110,8 +110,8 @@ If you still see 500 errors after running the fix:
 ## Files Created/Modified
 
 ### New Files:
-- `docs/fix-rls-500-errors-comprehensive.sql` - Comprehensive RLS fix
-- `docs/CRITICAL_FIX_500_ERRORS.md` - This guide
+- `docs/sql/fix-rls-500-errors-comprehensive.sql` - Comprehensive RLS fix
+- `docs/markdown/CRITICAL_FIX_500_ERRORS.md` - This guide
 
 ### Modified Files:
 - `app/admin/layout.tsx` - Fixed hydration with suppressHydrationWarning

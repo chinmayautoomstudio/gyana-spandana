@@ -18,7 +18,7 @@ This migration implements a proper role-based user system using a `user_profiles
 Run the SQL migration script in Supabase SQL Editor:
 
 ```sql
--- Run: docs/migrate-add-user-profiles.sql
+-- Run: docs/sql/migrate-add-user-profiles.sql
 ```
 
 This creates:
@@ -32,7 +32,7 @@ This creates:
 Run the migration script to backfill existing users:
 
 ```sql
--- Run: docs/migrate-existing-users-to-profiles.sql
+-- Run: docs/sql/migrate-existing-users-to-profiles.sql
 ```
 
 This script:
@@ -45,7 +45,7 @@ This script:
 If you have existing admin users, update the admin creation script:
 
 ```sql
--- Run: docs/create-admin-user.sql
+-- Run: docs/sql/create-admin-user.sql
 ```
 
 This now creates/updates both `user_metadata` and `user_profiles` records.

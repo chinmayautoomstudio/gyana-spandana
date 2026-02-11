@@ -51,7 +51,7 @@ A beautiful, modern quiz competition website for Odisha's culture, traditions, h
 4. Set up the database:
    - Go to your Supabase project dashboard
    - Navigate to SQL Editor
-   - Run the SQL script from `docs/database-schema.sql` to create all necessary tables
+   - Run the SQL script from `docs/sql/database-schema.sql` to create all necessary tables
 
 5. Configure Supabase Authentication:
    - In Supabase Dashboard, go to Authentication > Settings
@@ -95,7 +95,8 @@ npm run dev
 │   ├── validations.ts          # Zod schemas
 │   └── utils.ts                # Utility functions
 ├── docs/
-│   └── database-schema.sql     # Database schema
+│   ├── markdown/               # Documentation guides
+│   └── sql/                    # Database schema and scripts
 ├── proxy.ts                    # Next.js 16 proxy (auth, route protection)
 └── .env.example                # Environment variables template (copy to .env)
 ```
@@ -129,7 +130,7 @@ The application uses the following main tables:
 - **quiz_sessions**: For future quiz functionality
 - **quiz_answers**: For future quiz answers storage
 
-See `docs/database-schema.sql` for the complete schema with RLS policies.
+See `docs/sql/database-schema.sql` for the complete schema with RLS policies.
 
 ## Validation Rules
 

@@ -7,15 +7,15 @@ Complete guide for setting up the exam system in Gyana Spandana.
 
 1. **Run the base schema** (if not already done):
    - Go to Supabase SQL Editor
-   - Run `docs/database-schema.sql`
+   - Run `docs/sql/database-schema.sql`
 
 2. **Run the exam schema**:
-   - Run `docs/database-exam-schema.sql`
+   - Run `docs/sql/database-exam-schema.sql`
    - This creates all exam-related tables and functions
 
 ## Step 2: Set Up Admin User
 
-1. Follow the instructions in `docs/admin-setup.md`
+1. Follow the instructions in `docs/markdown/admin-setup.md`
 2. Set at least one user as admin
 
 ## Step 3: Create Your First Exam

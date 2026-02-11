@@ -79,9 +79,9 @@ You're currently viewing this page. Here's what to do:
 
 ## 📚 Need More Details?
 
-- **Detailed guide**: See `docs/supabase-setup-updated-2024.md`
-- **Checklist**: See `docs/supabase-setup-checklist.md`
-- **Email templates**: See `docs/supabase-email-verification-setup.md`
+- **Detailed guide**: See `docs/markdown/supabase-setup-updated-2024.md`
+- **Checklist**: See `docs/markdown/supabase-setup-checklist.md`
+- **Email templates**: See `docs/markdown/supabase-email-verification-setup.md`
 
 ---
 

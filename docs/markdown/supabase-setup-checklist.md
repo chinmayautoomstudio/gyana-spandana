@@ -81,7 +81,7 @@ Choose one:
 - [ ] ⚠️ Never commit `.env.local` to git (already in `.gitignore`)
 
 ### 8. Database Schema
-- [ ] Run database schema from `docs/database-schema.sql`
+- [ ] Run database schema from `docs/sql/database-schema.sql`
 - [ ] Verify RLS policies are active
 - [ ] Test that registration can create teams and participants
 
@@ -112,7 +112,7 @@ Before deploying to production:
 
 ## 📚 Documentation
 
-- See `docs/supabase-email-verification-setup.md` for detailed instructions
+- See `docs/markdown/supabase-email-verification-setup.md` for detailed instructions
 - See `ENV_SETUP.md` for environment variable setup
 
 ## 🆘 Troubleshooting

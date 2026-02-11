@@ -6,12 +6,12 @@
 
 **Problem:** The `user_profiles` RLS policy was checking `user_profiles` itself, creating infinite recursion when questions RLS policy tried to check roles.
 
-**Solution:** Created `docs/fix-infinite-recursion-rls.sql` which:
+**Solution:** Created `docs/sql/fix-infinite-recursion-rls.sql` which:
 - Removes the problematic "Allow role checks for RLS" policy
 - Creates a `check_is_admin()` SECURITY DEFINER function that bypasses RLS
 - Updates all RLS policies to use this function instead of direct queries
 
-**File Created:** `docs/fix-infinite-recursion-rls.sql`
+**File Created:** `docs/sql/fix-infinite-recursion-rls.sql`
 
 ### 2. Fixed Hydration Errors
 
@@ -32,7 +32,7 @@
 
 1. Open your Supabase Dashboard
 2. Go to SQL Editor
-3. Copy and paste the contents of `docs/fix-infinite-recursion-rls.sql`
+3. Copy and paste the contents of `docs/sql/fix-infinite-recursion-rls.sql`
 4. Click "Run" to execute the script
 
 This will:
@@ -58,7 +58,7 @@ After running the SQL:
 
 ## 📋 What Was Fixed
 
-### SQL Changes (`docs/fix-infinite-recursion-rls.sql`)
+### SQL Changes (`docs/sql/fix-infinite-recursion-rls.sql`)
 
 1. **Removed Recursive Policy:**
    ```sql

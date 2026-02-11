@@ -8,8 +8,8 @@ This guide helps you fix the "new row violates row-level security policy" errors
 
 You need to run **two SQL scripts** in your Supabase SQL Editor:
 
-1. **Storage Bucket RLS**: `docs/fix-storage-bucket-rls.sql`
-2. **Database Table RLS**: `docs/fix-participants-update-rls.sql`
+1. **Storage Bucket RLS**: `docs/sql/fix-storage-bucket-rls.sql`
+2. **Database Table RLS**: `docs/sql/fix-participants-update-rls.sql`
 
 ## Step-by-Step Instructions
 
@@ -19,7 +19,7 @@ The storage bucket needs RLS policies to allow authenticated users to upload fil
 
 1. Open your **Supabase Dashboard**
 2. Go to **SQL Editor**
-3. Open the file `docs/fix-storage-bucket-rls.sql`
+3. Open the file `docs/sql/fix-storage-bucket-rls.sql`
 4. Copy and paste the entire SQL script into the SQL Editor
 5. Click **Run** (or press Ctrl+Enter)
 6. Verify you see 4 policies created in the results
@@ -34,7 +34,7 @@ The storage bucket needs RLS policies to allow authenticated users to upload fil
 The participants table UPDATE policy is missing the `WITH CHECK` clause.
 
 1. In the same **SQL Editor** (or open a new query)
-2. Open the file `docs/fix-participants-update-rls.sql`
+2. Open the file `docs/sql/fix-participants-update-rls.sql`
 3. Copy and paste the entire SQL script into the SQL Editor
 4. Click **Run** (or press Ctrl+Enter)
 5. Verify you see the policy with both `USING` and `WITH CHECK` clauses
@@ -113,9 +113,9 @@ When you UPDATE a row in the participants table, Supabase checks:
 
 ## Files Reference
 
-- `docs/fix-storage-bucket-rls.sql` - Storage bucket RLS policies
-- `docs/fix-participants-update-rls.sql` - Database table RLS policy fix
-- `docs/storage-setup.md` - Complete storage setup guide
+- `docs/sql/fix-storage-bucket-rls.sql` - Storage bucket RLS policies
+- `docs/sql/fix-participants-update-rls.sql` - Database table RLS policy fix
+- `docs/markdown/storage-setup.md` - Complete storage setup guide
 
 ## Need More Help?
 

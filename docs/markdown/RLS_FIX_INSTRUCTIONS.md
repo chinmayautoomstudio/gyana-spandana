@@ -11,7 +11,7 @@ This happens because RLS policies are checking `user_profiles` table, but the `u
 
 ## Solution
 
-Run the SQL script `docs/fix-rls-infinite-recursion-final.sql` in your Supabase SQL Editor. This script:
+Run the SQL script `docs/sql/fix-rls-infinite-recursion-final.sql` in your Supabase SQL Editor. This script:
 1. Creates a `check_is_admin()` SECURITY DEFINER function that bypasses RLS
 2. Updates all RLS policies to use this function instead of direct queries
 3. Removes problematic policies that cause recursion
@@ -26,7 +26,7 @@ Run the SQL script `docs/fix-rls-infinite-recursion-final.sql` in your Supabase 
 
 ### Step 2: Copy and Run the SQL Script
 
-1. Open the file `docs/fix-rls-infinite-recursion-final.sql` in your code editor
+1. Open the file `docs/sql/fix-rls-infinite-recursion-final.sql` in your code editor
 2. Copy the **ENTIRE** contents of the file
 3. Paste it into the Supabase SQL Editor
 4. Click **Run** (or press `Ctrl+Enter` / `Cmd+Enter`)

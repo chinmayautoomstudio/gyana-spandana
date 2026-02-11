@@ -117,14 +117,14 @@ LIMIT 5;
 -- Review the results above to diagnose issues:
 --
 -- 1. If total_questions is 0:
---    - Run the sample questions SQL file: docs/sample-odisha-culture-questions-comprehensive.sql
+--    - Run the sample questions SQL file: docs/sql/sample-odisha-culture-questions-comprehensive.sql
 --
 -- 2. If admin_users is 0:
 --    - Create an admin user using: scripts/create-admin-user.ts
 --    - Or manually insert into user_profiles table
 --
 -- 3. If RLS policies are missing or incorrect:
---    - Run the fix migration: docs/fix-questions-rls-policy.sql
+--    - Run the fix migration: docs/sql/fix-questions-rls-policy.sql
 --
 -- 4. If RLS is not enabled:
 --    - Run: ALTER TABLE questions ENABLE ROW LEVEL SECURITY;

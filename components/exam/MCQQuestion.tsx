@@ -52,10 +52,10 @@ export const MCQQuestion: React.FC<MCQQuestionProps> = ({
       {/* Question Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <div className="text-sm text-gray-500 mb-2">
+          <div className="text-sm text-gray-500 mb-2 font-medium bg-gray-100 inline-block px-3 py-1 rounded-full">
             {question.points} point{question.points !== 1 ? 's' : ''}
           </div>
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
             <FormattedQuestionText text={question.question_text} />
           </h2>
         </div>
@@ -67,42 +67,40 @@ export const MCQQuestion: React.FC<MCQQuestionProps> = ({
           const isSelected = selectedAnswer === option.option
           const isCorrect = question.correct_answer === option.option
           const shouldShowCorrect = showCorrectAnswer && isCorrect
-          
+
           return (
             <button
               key={option.option}
               onClick={() => handleOptionSelect(option.option)}
               disabled={disabled}
-              className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                shouldShowCorrect
+              className={`w-full text-left p-4 rounded-xl border-2 transition-all ${shouldShowCorrect
                   ? 'bg-green-50 border-green-500 text-green-900'
                   : isSelected
-                  ? 'bg-[#C0392B]/10 border-[#C0392B] text-[#C0392B]'
-                  : 'bg-white border-gray-200 hover:border-[#E67E22] text-gray-900'
-              } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                    ? 'bg-[#C0392B]/10 border-[#C0392B] text-[#C0392B]'
+                    : 'bg-white border-gray-200 hover:border-[#E67E22] text-gray-900'
+                } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
             >
               <div className="flex items-center gap-3">
                 {/* Option indicator */}
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
-                  shouldShowCorrect
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${shouldShowCorrect
                     ? 'bg-green-500 text-white'
                     : isSelected
-                    ? 'bg-[#C0392B] text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
+                      ? 'bg-[#C0392B] text-white'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
                   {option.option}
                 </div>
-                
+
                 {/* Option content */}
                 <span className="flex-1">{option.text}</span>
-                
+
                 {/* Selection indicator */}
                 {isSelected && !shouldShowCorrect && (
                   <svg className="w-5 h-5 text-[#C0392B]" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}
-                
+
                 {/* Correct answer indicator */}
                 {shouldShowCorrect && (
                   <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">

@@ -20,27 +20,27 @@
 
 ## Files Modified
 
-1. `docs/database-schema.sql` - Updated with correct schema
+1. `docs/sql/database-schema.sql` - Updated with correct schema
 2. `app/register/page.tsx` - Fixed to store user_id
 3. `app/dashboard/page.tsx` - Fixed to query by user_id
 
 ## Files Created
 
-1. `docs/database-migration-guide.md` - Guide to update existing database
-2. `docs/supabase-connection-test.md` - Testing guide
+1. `docs/markdown/database-migration-guide.md` - Guide to update existing database
+2. `docs/markdown/supabase-connection-test.md` - Testing guide
 
 ## Next Steps
 
 ### If Database is Already Created:
-1. Run migration script from `docs/database-migration-guide.md`
+1. Run migration script from `docs/markdown/database-migration-guide.md`
 2. Update existing participant records with user_id (if any)
 
 ### If Database is New:
-1. Run the updated `docs/database-schema.sql` in Supabase SQL Editor
+1. Run the updated `docs/sql/database-schema.sql` in Supabase SQL Editor
 2. Verify tables are created correctly
 
 ### Test the Connection:
-1. Follow the guide in `docs/supabase-connection-test.md`
+1. Follow the guide in `docs/markdown/supabase-connection-test.md`
 2. Test registration and login flows
 3. Verify data in Supabase dashboard
 
@@ -86,7 +86,7 @@ After applying fixes, verify:
 ## Support
 
 If you encounter issues:
-1. Check `docs/supabase-connection-test.md` for troubleshooting
+1. Check `docs/markdown/supabase-connection-test.md` for troubleshooting
 2. Verify environment variables are set
 3. Check Supabase dashboard for errors
 4. Review browser console for client-side errors

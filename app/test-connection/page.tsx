@@ -290,12 +290,12 @@ export default function TestConnectionPage() {
               ) : null}
               {results.tables?.participants?.hasUserIdColumn === false ? (
                 <li className="text-yellow-600">
-                  ⚠️ Run the migration script: docs/fix-user-id-column.sql in Supabase SQL Editor
+                  ⚠️ Run the migration script: docs/sql/fix-user-id-column.sql in Supabase SQL Editor
                 </li>
               ) : null}
               {!results.tables?.teams?.success ? (
                 <li className="text-yellow-600">
-                  ⚠️ Run the database schema: docs/database-schema.sql in Supabase SQL Editor
+                  ⚠️ Run the database schema: docs/sql/database-schema.sql in Supabase SQL Editor
                 </li>
               ) : null}
               {allGood && (

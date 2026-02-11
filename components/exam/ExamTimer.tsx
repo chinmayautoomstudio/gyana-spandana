@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 interface ExamTimerProps {
   durationSeconds: number
   onTimeUp?: () => void
+  onTick?: (seconds: number) => void
   onWarning?: (secondsRemaining: number) => void
   isActive?: boolean
   className?: string
@@ -13,6 +14,7 @@ interface ExamTimerProps {
 export const ExamTimer: React.FC<ExamTimerProps> = ({
   durationSeconds,
   onTimeUp,
+  onTick,
   onWarning,
   isActive = true,
   className = ''
@@ -48,7 +50,9 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
 
     setTimeRemaining(prev => {
       const newTime = prev - 1
-      
+
+      onTick?.(newTime)
+
       // Check for warnings
       if (newTime === 300 && prev > 300) { // 5 minutes remaining
         setIsWarning(true)
@@ -66,7 +70,7 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
 
       return newTime
     })
-  }, [isActive, timeRemaining, onTimeUp, onWarning])
+  }, [isActive, timeRemaining, onTimeUp, onWarning, onTick])
 
   // Timer effect
   useEffect(() => {
@@ -84,8 +88,8 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
   }, [durationSeconds])
 
   // Calculate progress percentage
-  const progressPercentage = durationSeconds > 0 
-    ? ((durationSeconds - timeRemaining) / durationSeconds) * 100 
+  const progressPercentage = durationSeconds > 0
+    ? ((durationSeconds - timeRemaining) / durationSeconds) * 100
     : 0
 
   return (
@@ -105,9 +109,8 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
       {/* Progress bar */}
       <div className="mt-2 w-full bg-gray-200 rounded-full h-1">
         <div
-          className={`h-1 rounded-full transition-all ${
-            isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-[#C0392B]'
-          }`}
+          className={`h-1 rounded-full transition-all ${isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-[#C0392B]'
+            }`}
           style={{ width: `${progressPercentage}%` }}
         />
       </div>

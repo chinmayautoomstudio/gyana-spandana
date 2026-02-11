@@ -48,7 +48,7 @@ If you prefer SQL or need to update an existing user:
 
 1. **If user doesn't exist:** Create the user first in Supabase Dashboard (Authentication > Users > Add User)
 2. Run the SQL script in Supabase SQL Editor:
-   - See `docs/create-admin-user.sql` for the complete script
+   - See `docs/sql/create-admin-user.sql` for the complete script
    - Or use the SQL from Method 3 below
 
 ### Method 3: Using Supabase Dashboard
