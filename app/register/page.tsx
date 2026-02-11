@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
 import { EmailVerification } from '@/components/ui/EmailVerification'
+import { RegistrationInstructionsModal } from '@/components/ui/RegistrationInstructionsModal'
 import { Carousel } from '@/components/ui/Carousel'
 
 // Carousel slides data
@@ -58,12 +59,30 @@ export default function RegisterPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [teamCode, setTeamCode] = useState<string | null>(null)
+  const [showInstructions, setShowInstructions] = useState(false)
 
   // Email verification state
   const [p1EmailVerified, setP1EmailVerified] = useState(false)
   const [p2EmailVerified, setP2EmailVerified] = useState(false)
   const [p1UserId, setP1UserId] = useState<string | null>(null)
   const [p2UserId, setP2UserId] = useState<string | null>(null)
+
+  // Show instructions on first visit
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const hasSeenInstructions = localStorage.getItem('registration_instructions_seen')
+      if (!hasSeenInstructions) {
+        setShowInstructions(true)
+      }
+    }
+  })
+
+  const handleCloseInstructions = () => {
+    setShowInstructions(false)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('registration_instructions_seen', 'true')
+    }
+  }
 
   const {
     register,
@@ -210,6 +229,11 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
+      <RegistrationInstructionsModal
+        isOpen={showInstructions}
+        onClose={handleCloseInstructions}
+      />
+
       {/* Left Side - Carousel (60%) */}
       <div className="hidden lg:flex lg:w-[60%] h-screen relative">
         <Carousel slides={carouselSlides} />
@@ -218,7 +242,18 @@ export default function RegisterPage() {
       {/* Right Side - Registration Form (40%) */}
       <div className="w-full lg:w-[40%] h-screen bg-white flex flex-col">
         {/* Sign in button - Top Right */}
-        <div className="flex justify-end p-6 flex-shrink-0">
+        <div className="flex justify-end p-6 flex-shrink-0 gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowInstructions(true)}
+            className="flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Instructions
+          </Button>
           <Link href="/login">
             <Button variant="secondary" size="sm" className="bg-gray-900 text-white hover:bg-gray-800">
               Sign in
@@ -302,8 +337,8 @@ export default function RegisterPage() {
                     <select
                       {...register('participant1.gender')}
                       className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant1?.gender
-                          ? 'border-red-500 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
                         }`}
                     >
                       <option value="">Select gender</option>
@@ -367,8 +402,8 @@ export default function RegisterPage() {
                     <select
                       {...register('participant1.class')}
                       className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant1?.class
-                          ? 'border-red-500 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
                         }`}
                     >
                       <option value="">Select class</option>
@@ -419,8 +454,8 @@ export default function RegisterPage() {
                     <select
                       {...register('participant2.gender')}
                       className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant2?.gender
-                          ? 'border-red-500 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
                         }`}
                     >
                       <option value="">Select gender</option>
@@ -484,8 +519,8 @@ export default function RegisterPage() {
                     <select
                       {...register('participant2.class')}
                       className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant2?.class
-                          ? 'border-red-500 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
                         }`}
                     >
                       <option value="">Select class</option>
