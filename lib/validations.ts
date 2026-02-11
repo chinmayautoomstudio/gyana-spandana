@@ -81,8 +81,8 @@ export const profileCompletionSchema = z.object({
       if (val === null || val === undefined) return true
       if (typeof val === 'string') return val.length > 0
       if (val instanceof File) {
-        return val.size <= 5 * 1024 * 1024 && 
-               ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(val.type)
+        return val.size <= 5 * 1024 * 1024 &&
+          ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(val.type)
       }
       return false
     }, {
@@ -110,16 +110,7 @@ export const profileCompletionSchema = z.object({
     }, {
       message: 'School / College address must be between 10 and 500 characters if provided',
     }),
-  class: z
-    .string()
-    .optional()
-    .nullable()
-    .refine((val) => {
-      if (!val || val.trim() === '') return true
-      return val.length >= 1 && val.length <= 50
-    }, {
-      message: 'Class / Grade must be between 1 and 50 characters if provided',
-    }),
+
   dateOfBirth: z
     .string()
     .refine((date) => {
@@ -128,8 +119,8 @@ export const profileCompletionSchema = z.object({
       const today = new Date()
       const age = today.getFullYear() - birthDate.getFullYear()
       const monthDiff = today.getMonth() - birthDate.getMonth()
-      const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) 
-        ? age - 1 
+      const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
+        ? age - 1
         : age
       return actualAge >= 10 && actualAge <= 100
     }, {
@@ -153,8 +144,8 @@ export const editProfileSchema = z.object({
       (val) => {
         if (typeof val === 'string') return true // Existing photo URL
         if (val instanceof File) {
-          return val.size <= 5 * 1024 * 1024 && 
-                 ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(val.type)
+          return val.size <= 5 * 1024 * 1024 &&
+            ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(val.type)
         }
         return false
       },
@@ -190,8 +181,8 @@ export const editProfileSchema = z.object({
       const today = new Date()
       const age = today.getFullYear() - birthDate.getFullYear()
       const monthDiff = today.getMonth() - birthDate.getMonth()
-      const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) 
-        ? age - 1 
+      const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
+        ? age - 1
         : age
       return actualAge >= 10 && actualAge <= 100
     }, {

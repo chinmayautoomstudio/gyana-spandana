@@ -301,11 +301,10 @@ export default function RegisterPage() {
                     </label>
                     <select
                       {...register('participant1.gender')}
-                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
-                        errors.participant1?.gender
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant1?.gender
                           ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
-                      }`}
+                        }`}
                     >
                       <option value="">Select gender</option>
                       <option value="Male">Male</option>
@@ -367,11 +366,10 @@ export default function RegisterPage() {
                     </label>
                     <select
                       {...register('participant1.class')}
-                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
-                        errors.participant1?.class
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant1?.class
                           ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
-                      }`}
+                        }`}
                     >
                       <option value="">Select class</option>
                       <option value="Class X">Class X</option>
@@ -420,11 +418,10 @@ export default function RegisterPage() {
                     </label>
                     <select
                       {...register('participant2.gender')}
-                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
-                        errors.participant2?.gender
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant2?.gender
                           ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
-                      }`}
+                        }`}
                     >
                       <option value="">Select gender</option>
                       <option value="Male">Male</option>
@@ -486,11 +483,10 @@ export default function RegisterPage() {
                     </label>
                     <select
                       {...register('participant2.class')}
-                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${
-                        errors.participant2?.class
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 ${errors.participant2?.class
                           ? 'border-red-500 focus:ring-red-500'
                           : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
-                      }`}
+                        }`}
                     >
                       <option value="">Select class</option>
                       <option value="Class X">Class X</option>
@@ -590,6 +586,7 @@ export default function RegisterPage() {
                 variant="primary"
                 size="lg"
                 isLoading={isSubmitting}
+                loadingText="Registering..."
                 className="w-full bg-gray-900 hover:bg-gray-800"
               >
                 Register Team

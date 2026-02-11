@@ -10,7 +10,7 @@ import { revalidatePath } from 'next/cache'
 export async function uploadProfilePhoto(file: File, userId: string): Promise<{ success: boolean; url?: string; error?: string }> {
   try {
     const supabase = await createClient()
-    
+
     // Get file extension
     const fileExt = file.name.split('.').pop()
     const fileName = `${userId}-${Date.now()}.${fileExt}`
@@ -58,10 +58,10 @@ export async function completeProfile(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient()
-    
+
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
+
     if (userError || !user) {
       console.error('Authentication error:', userError)
       return { success: false, error: 'User not authenticated' }
@@ -76,28 +76,28 @@ export async function completeProfile(
 
     if (fetchError) {
       console.error('Error fetching participant:', fetchError)
-      return { 
-        success: false, 
-        error: 'Participant record not found. Please contact support.' 
+      return {
+        success: false,
+        error: 'Participant record not found. Please contact support.'
       }
     }
 
     if (!existingParticipant) {
-      return { 
-        success: false, 
-        error: 'Participant record not found. Please contact support.' 
+      return {
+        success: false,
+        error: 'Participant record not found. Please contact support.'
       }
     }
 
     // Verify user_id matches (extra security check)
     if (existingParticipant.user_id !== user.id) {
-      console.error('User ID mismatch:', { 
-        participantUserId: existingParticipant.user_id, 
-        authUserId: user.id 
+      console.error('User ID mismatch:', {
+        participantUserId: existingParticipant.user_id,
+        authUserId: user.id
       })
-      return { 
-        success: false, 
-        error: 'Authorization error. Please try logging in again.' 
+      return {
+        success: false,
+        error: 'Authorization error. Please try logging in again.'
       }
     }
 
@@ -113,9 +113,7 @@ export async function completeProfile(
     if (data.schoolAddress !== undefined && data.schoolAddress !== null && data.schoolAddress.trim() !== '') {
       updateData.school_address = data.schoolAddress
     }
-    if (data.class !== undefined && data.class !== null && data.class.trim() !== '') {
-      updateData.class = data.class
-    }
+
     if (data.dateOfBirth !== undefined && data.dateOfBirth !== null && data.dateOfBirth.trim() !== '') {
       updateData.date_of_birth = data.dateOfBirth
     }
@@ -147,17 +145,17 @@ export async function completeProfile(
         userId: user.id,
         participantId: existingParticipant.id
       })
-      return { 
-        success: false, 
-        error: updateError.message || 'Failed to update profile. Please try again.' 
+      return {
+        success: false,
+        error: updateError.message || 'Failed to update profile. Please try again.'
       }
     }
 
     if (!updatedData || updatedData.length === 0) {
       console.error('No rows updated:', { userId: user.id, participantId: existingParticipant.id })
-      return { 
-        success: false, 
-        error: 'Failed to update profile. No changes were made.' 
+      return {
+        success: false,
+        error: 'Failed to update profile. No changes were made.'
       }
     }
 
@@ -189,10 +187,10 @@ export async function updateProfile(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient()
-    
+
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
+
     if (userError || !user) {
       console.error('Authentication error:', userError)
       return { success: false, error: 'User not authenticated' }
@@ -207,21 +205,21 @@ export async function updateProfile(
 
     if (fetchError || !existingParticipant) {
       console.error('Error fetching participant:', fetchError)
-      return { 
-        success: false, 
-        error: 'Participant record not found. Please contact support.' 
+      return {
+        success: false,
+        error: 'Participant record not found. Please contact support.'
       }
     }
 
     // Verify user_id matches (extra security check)
     if (existingParticipant.user_id !== user.id) {
-      console.error('User ID mismatch:', { 
-        participantUserId: existingParticipant.user_id, 
-        authUserId: user.id 
+      console.error('User ID mismatch:', {
+        participantUserId: existingParticipant.user_id,
+        authUserId: user.id
       })
-      return { 
-        success: false, 
-        error: 'Authorization error. Please try logging in again.' 
+      return {
+        success: false,
+        error: 'Authorization error. Please try logging in again.'
       }
     }
 
@@ -259,17 +257,17 @@ export async function updateProfile(
         userId: user.id,
         participantId: existingParticipant.id
       })
-      return { 
-        success: false, 
-        error: updateError.message || 'Failed to update profile. Please try again.' 
+      return {
+        success: false,
+        error: updateError.message || 'Failed to update profile. Please try again.'
       }
     }
 
     if (!updatedData || updatedData.length === 0) {
       console.error('No rows updated:', { userId: user.id, participantId: existingParticipant.id })
-      return { 
-        success: false, 
-        error: 'Failed to update profile. No changes were made.' 
+      return {
+        success: false,
+        error: 'Failed to update profile. No changes were made.'
       }
     }
 
@@ -290,9 +288,9 @@ export async function updateProfile(
 export async function checkProfileCompletion(): Promise<{ completed: boolean; error?: string }> {
   try {
     const supabase = await createClient()
-    
+
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
+
     if (userError || !user) {
       return { completed: false, error: 'User not authenticated' }
     }

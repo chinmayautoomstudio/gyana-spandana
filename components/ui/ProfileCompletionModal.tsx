@@ -38,7 +38,7 @@ export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletion
     const file = e.target.files?.[0]
     if (file) {
       setValue('profilePhoto', file, { shouldValidate: true })
-      
+
       // Create preview
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -59,36 +59,36 @@ export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletion
       // Upload profile photo if provided
       if (data.profilePhoto && data.profilePhoto instanceof File) {
         setUploadProgress(25)
-        
+
         // Use API route for file upload to bypass Server Actions body size limit
         const formData = new FormData()
         formData.append('file', data.profilePhoto)
-        
+
         setUploadProgress(50)
         const uploadResponse = await fetch('/api/upload/profile-photo', {
           method: 'POST',
           body: formData,
         })
-        
+
         const uploadResult = await uploadResponse.json()
-        
+
         if (!uploadResult.success || !uploadResult.url) {
           throw new Error(uploadResult.error || 'Failed to upload profile photo')
         }
-        
+
         profilePhotoUrl = uploadResult.url
         setUploadProgress(75)
       }
 
       // Complete profile (handles optional/empty fields)
       const result = await completeProfile(data, profilePhotoUrl)
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Failed to save profile')
       }
 
       setUploadProgress(100)
-      
+
       // Call onComplete callback to refresh dashboard
       setTimeout(() => {
         onComplete()
@@ -193,11 +193,10 @@ export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletion
               id="address"
               {...register('address')}
               rows={3}
-              className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 placeholder:text-gray-400 ${
-                errors.address
+              className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 placeholder:text-gray-400 ${errors.address
                   ? 'border-red-500 focus:ring-red-500'
                   : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
-              }`}
+                }`}
               placeholder="Enter your full residential address"
             />
             {errors.address && (
@@ -217,11 +216,10 @@ export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletion
               id="schoolAddress"
               {...register('schoolAddress')}
               rows={3}
-              className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 placeholder:text-gray-400 ${
-                errors.schoolAddress
+              className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200 placeholder:text-gray-400 ${errors.schoolAddress
                   ? 'border-red-500 focus:ring-red-500'
                   : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'
-              }`}
+                }`}
               placeholder="Enter your school/college address"
             />
             {errors.schoolAddress && (
@@ -232,13 +230,7 @@ export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletion
             )}
           </div>
 
-          {/* Class */}
-          <Input
-            label="Class / Grade"
-            {...register('class')}
-            error={errors.class?.message}
-            placeholder="e.g., 10th, 12th, B.Tech 2nd Year"
-          />
+
 
           {/* Date of Birth */}
           <Input
