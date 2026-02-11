@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { AdminHeader } from '@/components/admin/AdminHeader'
 
 export default function AdminLayout({
@@ -107,8 +108,14 @@ export default function AdminLayout({
             {/* Logo */}
             <div className="p-6 border-b border-white/20 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#C0392B] to-[#E67E22] rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                  GS
+                <div className="relative w-10 h-10 flex-shrink-0">
+                  <Image
+                    src="/images/logo.png"
+                    alt="GYANA SPARDHA"
+                    width={40}
+                    height={40}
+                    className="object-contain rounded-lg"
+                  />
                 </div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent">
                   Admin Panel
@@ -125,8 +132,8 @@ export default function AdminLayout({
                     key={item.href}
                     href={item.href}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${isActive
-                        ? 'bg-[#C0392B]/10 text-[#C0392B]'
-                        : 'text-gray-600 hover:bg-white/50'
+                      ? 'bg-[#C0392B]/10 text-[#C0392B]'
+                      : 'text-gray-600 hover:bg-white/50'
                       }`}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
