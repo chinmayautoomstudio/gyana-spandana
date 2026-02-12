@@ -31,6 +31,7 @@ interface ParticipantProfile {
   is_participant1: boolean
   email_verified: boolean | null
   phone_verified: boolean | null
+  registration_email_sent_at: string | null
   created_at: string
   updated_at: string
   teams: {
@@ -55,7 +56,7 @@ export default function AdminParticipantProfilePage() {
 
       const { data: participantData } = await supabase
         .from('participants')
-        .select('id, name, email, phone, school_name, aadhar, gender, class, address, school_address, date_of_birth, profile_photo_url, profile_completed, is_participant1, email_verified, phone_verified, created_at, updated_at, team_id, user_id')
+        .select('id, name, email, phone, school_name, aadhar, gender, class, address, school_address, date_of_birth, profile_photo_url, profile_completed, is_participant1, email_verified, phone_verified, registration_email_sent_at, created_at, updated_at, team_id, user_id')
         .eq('id', participantId)
         .single()
 
@@ -212,6 +213,18 @@ export default function AdminParticipantProfilePage() {
                 ) : (
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                     Pending
+                  </span>
+                )}
+              </div>
+              <div className="flex justify-between items-center p-2 rounded-lg bg-gray-50/50">
+                <span className="text-sm text-gray-600">Registration confirmation email</span>
+                {participant.registration_email_sent_at ? (
+                  <span className="text-xs text-gray-700">
+                    Sent on {formatDateTime(participant.registration_email_sent_at)}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                    Not sent
                   </span>
                 )}
               </div>

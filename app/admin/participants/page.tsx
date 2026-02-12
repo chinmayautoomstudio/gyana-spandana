@@ -7,6 +7,7 @@ import { DataTable } from '@/components/admin/DataTable'
 import { FilterBar } from '@/components/admin/FilterBar'
 import { ExportButton } from '@/components/admin/ExportButton'
 import { Button } from '@/components/ui/Button'
+import { format } from 'date-fns'
 
 interface Participant {
   id: string
@@ -15,6 +16,7 @@ interface Participant {
   phone: string
   school_name: string
   is_participant1: boolean
+  registration_email_sent_at: string | null
   teams: {
     team_name: string
   }
@@ -110,6 +112,15 @@ export default function ParticipantsPage() {
           {p.is_participant1 ? 'Participant 1' : 'Participant 2'}
         </span>
       ),
+      sortable: true,
+    },
+    {
+      key: 'registration_email_sent_at',
+      header: 'Reg. email',
+      render: (p: Participant) =>
+        p.registration_email_sent_at
+          ? `Yes, ${format(new Date(p.registration_email_sent_at), 'MMM d, yyyy')}`
+          : 'No',
       sortable: true,
     },
     {

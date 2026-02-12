@@ -133,8 +133,9 @@ export async function registerTeam(
             },
         ]
 
+        const participantIds: string[] = []
         for (const p of participants) {
-            const { error: participantError } = await supabase
+            const { data: inserted, error: participantError } = await supabase
                 .from('participants')
                 .insert({
                     user_id: p.userId,
@@ -150,10 +151,13 @@ export async function registerTeam(
                     email_verified: true, // They verified via OTP
                     phone_verified: false,
                 })
+                .select('id')
+                .single()
 
-            if (participantError) {
-                throw new Error(`Failed to create participant record: ${participantError.message}`)
+            if (participantError || !inserted?.id) {
+                throw new Error(`Failed to create participant record: ${participantError?.message || 'No id returned'}`)
             }
+            participantIds.push(inserted.id)
 
             // Create user profile with 'participant' role
             const { error: profileError } = await supabase
@@ -198,50 +202,55 @@ export async function registerTeam(
         }
 
         // Send confirmation emails to both participants (non-blocking)
-        try {
-            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-                (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-            const registrationDate = new Date().toISOString()
-            
-            // Send email to Participant 1
-            await fetch(`${siteUrl}/api/send-registration-confirmation`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    participantEmail: data.participant1.email,
-                    participantName: data.participant1.name,
-                    participantSchool: data.schoolName,
-                    teammateName: data.participant2.name,
-                    teammateSchool: data.schoolName,
-                    teamName: data.teamName,
-                    teamCode: teamCode,
-                    registrationDate: registrationDate,
-                }),
-            })
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ||
+            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+        const registrationDate = new Date().toISOString()
+        const apiUrl = `${siteUrl}/api/send-registration-confirmation`
 
-            // Send email to Participant 2
-            await fetch(`${siteUrl}/api/send-registration-confirmation`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    participantEmail: data.participant2.email,
-                    participantName: data.participant2.name,
-                    participantSchool: data.schoolName,
-                    teammateName: data.participant1.name,
-                    teammateSchool: data.schoolName,
-                    teamName: data.teamName,
-                    teamCode: teamCode,
-                    registrationDate: registrationDate,
-                }),
-            })
-        } catch (emailError) {
-            // Log error but don't fail registration
-            console.error('Failed to send participant confirmation emails:', emailError)
+        const sendOne = async (
+            payload: { participantEmail: string; participantName: string; participantSchool: string; teammateName: string; teammateSchool: string; teamName: string; teamCode: string; registrationDate: string; participantId?: string }
+        ) => {
+            try {
+                const res = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                })
+                const body = await res.json().catch(() => ({}))
+                if (!res.ok) {
+                    console.error('Registration email failed for', payload.participantEmail, res.status, body)
+                    return
+                }
+                if (body.skipped) {
+                    console.warn('Registration email skipped (SendGrid not configured) for', payload.participantEmail)
+                }
+            } catch (err) {
+                console.error('Failed to send participant confirmation email:', err)
+            }
         }
+
+        await sendOne({
+            participantEmail: data.participant1.email,
+            participantName: data.participant1.name,
+            participantSchool: data.schoolName,
+            teammateName: data.participant2.name,
+            teammateSchool: data.schoolName,
+            teamName: data.teamName,
+            teamCode: teamCode,
+            registrationDate,
+            participantId: participantIds[0],
+        })
+        await sendOne({
+            participantEmail: data.participant2.email,
+            participantName: data.participant2.name,
+            participantSchool: data.schoolName,
+            teammateName: data.participant1.name,
+            teammateSchool: data.schoolName,
+            teamName: data.teamName,
+            teamCode: teamCode,
+            registrationDate,
+            participantId: participantIds[1],
+        })
 
         return { success: true, teamCode: teamCode }
     } catch (error: any) {
