@@ -24,89 +24,95 @@ export default function DashboardPage() {
     const fetchUser = async () => {
       const supabase = createClient()
 
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser()
+      try {
+        const {
+          data: { user: currentUser },
+        } = await supabase.auth.getUser()
 
-      if (!currentUser) {
-        router.push('/login')
-        return
-      }
+        if (!currentUser) {
+          router.push('/login')
+          return
+        }
 
-      setUser(currentUser)
+        setUser(currentUser)
 
-      // Check user role - admins should not access participant dashboard
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('role')
-        .eq('user_id', currentUser.id)
-        .single()
+        // Check user role - admins should not access participant dashboard
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('user_id', currentUser.id)
+          .single()
 
-      const role = profile?.role || currentUser.user_metadata?.role || 'participant'
+        const role = profile?.role || currentUser.user_metadata?.role || 'participant'
 
-      if (role === 'admin') {
-        router.push('/admin')
-        return
-      }
+        if (role === 'admin') {
+          router.push('/admin')
+          return
+        }
 
-      // Fetch participant data using user_id
-      const { data: participant } = await supabase
-        .from('participants')
-        .select('*, teams(team_name, team_code, created_at)')
-        .eq('user_id', currentUser.id)
-        .single()
+        // Fetch participant data using user_id
+        const { data: participant } = await supabase
+          .from('participants')
+          .select('*, teams(team_name, team_code, created_at)')
+          .eq('user_id', currentUser.id)
+          .single()
 
-      if (participant) {
-        setParticipantData(participant)
+        if (participant) {
+          setParticipantData(participant)
 
-        // Check if profile needs to be completed
-        // Only show modal if:
-        // 1. Profile is not completed
-        // 2. Modal hasn't been shown before (checked via localStorage)
-        if (!participant.profile_completed) {
-          // Check localStorage only in browser environment
-          if (typeof window !== 'undefined') {
-            const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
-            const hasModalBeenShown = localStorage.getItem(modalDismissedKey) === 'true'
+          // Check if profile needs to be completed
+          // Only show modal if:
+          // 1. Profile is not completed
+          // 2. Modal hasn't been shown before (checked via localStorage)
+          if (!participant.profile_completed) {
+            // Check localStorage only in browser environment
+            if (typeof window !== 'undefined') {
+              const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
+              const hasModalBeenShown = localStorage.getItem(modalDismissedKey) === 'true'
 
-            if (!hasModalBeenShown) {
+              if (!hasModalBeenShown) {
+                setShowProfileModal(true)
+              }
+            } else {
+              // If localStorage not available, show modal (first time)
               setShowProfileModal(true)
             }
-          } else {
-            // If localStorage not available, show modal (first time)
-            setShowProfileModal(true)
+          }
+
+          // Fetch teammate data (the other participant in the same team)
+          if (participant.team_id) {
+            const { data: teammate } = await supabase
+              .from('participants')
+              .select('name, email, school_name, is_participant1')
+              .eq('team_id', participant.team_id)
+              .neq('user_id', currentUser.id)
+              .single()
+
+            setTeammateData(teammate)
+          }
+
+          // Fetch available exams count using server action
+          await updateExamStatuses(supabase)
+
+          try {
+            const { getAvailableExams } = await import('@/app/actions/exam')
+            const availableExams = await getAvailableExams()
+            setAvailableExamsCount(availableExams.length)
+          } catch (error) {
+            console.error('Error fetching available exams count:', error)
+            setAvailableExamsCount(0)
           }
         }
-
-        // Fetch teammate data (the other participant in the same team)
-        if (participant.team_id) {
-          const { data: teammate } = await supabase
-            .from('participants')
-            .select('name, email, school_name, is_participant1')
-            .eq('team_id', participant.team_id)
-            .neq('user_id', currentUser.id)
-            .single()
-
-          setTeammateData(teammate)
-        }
-
-        // Fetch available exams count using server action
-        await updateExamStatuses(supabase)
-
-        try {
-          const { getAvailableExams } = await import('@/app/actions/exam')
-          const availableExams = await getAvailableExams()
-          setAvailableExamsCount(availableExams.length)
-        } catch (error) {
-          console.error('Error fetching available exams count:', error)
-          setAvailableExamsCount(0)
-        }
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
+    const timeoutId = setTimeout(() => setLoading(false), 12000)
+
     fetchUser()
+
+    return () => clearTimeout(timeoutId)
   }, [router])
 
   const handleLogout = async () => {

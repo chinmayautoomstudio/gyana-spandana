@@ -20,6 +20,9 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Use solid background + dark text on non-home pages so nav is readable (e.g. /auth/reset-password)
+  const useSolidNav = pathname !== '/' || scrolled || mobileMenuOpen
+
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/#features', label: 'Features' },
@@ -62,7 +65,7 @@ export function Navbar() {
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${mobileMenuOpen
         ? 'bg-white shadow-lg border-b border-gray-200'
-        : scrolled
+        : useSolidNav
           ? 'bg-white/95 backdrop-blur-xl shadow-lg border-b border-white/20'
           : 'bg-transparent'
         }`}
@@ -81,7 +84,7 @@ export function Navbar() {
               />
             </div>
             <span
-              className={`text-xl font-bold transition-all ${scrolled || mobileMenuOpen
+              className={`text-xl font-bold transition-all ${useSolidNav
                 ? 'bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent'
                 : 'text-white drop-shadow-lg'
                 }`}
@@ -97,7 +100,7 @@ export function Navbar() {
                 key={link.href}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
-                className={`text-sm font-medium transition-colors ${scrolled || mobileMenuOpen
+                className={`text-sm font-medium transition-colors ${useSolidNav
                   ? 'text-gray-700 hover:text-[#C0392B]'
                   : 'text-white hover:text-[#E67E22]'
                   }`}
@@ -113,7 +116,7 @@ export function Navbar() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={scrolled || mobileMenuOpen ? 'text-gray-700' : 'text-white'}
+                className={useSolidNav ? 'text-gray-700' : 'text-white'}
               >
                 Login
               </Button>
@@ -128,7 +131,7 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className={`md:hidden p-2 rounded-lg transition-colors ${scrolled || mobileMenuOpen ? 'text-gray-700' : 'text-white'
+            className={`md:hidden p-2 rounded-lg transition-colors ${useSolidNav ? 'text-gray-700' : 'text-white'
               }`}
             aria-label="Toggle menu"
           >

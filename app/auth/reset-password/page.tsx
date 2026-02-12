@@ -66,7 +66,7 @@ function ResetPasswordContent() {
       }
 
       await supabase.auth.signOut()
-      router.replace('/login?message=Password reset successfully. Please sign in with your new password.')
+      window.location.href = '/login?message=' + encodeURIComponent('Password reset successfully. Please sign in with your new password.')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update password.')
       setIsSubmitting(false)
