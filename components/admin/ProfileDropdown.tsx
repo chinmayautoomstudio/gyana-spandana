@@ -26,7 +26,7 @@ export function ProfileDropdown({ userName, userEmail, userRole }: ProfileDropdo
       const isClickInside =
         (containerRef.current && containerRef.current.contains(target)) ||
         (dropdownMenuRef.current && dropdownMenuRef.current.contains(target))
-      
+
       if (!isClickInside) {
         setShowDropdown(false)
       }
@@ -44,7 +44,7 @@ export function ProfileDropdown({ userName, userEmail, userRole }: ProfileDropdo
     const dropdownHeight = 187 // Approximate height (will be adjusted if needed)
     const spacing = 8 // mt-2 = 0.5rem = 8px
     const viewportPadding = 16 // Padding from viewport edges
-    
+
     // Calculate initial position: below button, aligned to right
     let top = buttonRect.bottom + spacing
     let right = window.innerWidth - buttonRect.right
@@ -159,13 +159,7 @@ export function ProfileDropdown({ userName, userEmail, userRole }: ProfileDropdo
             >
               View Profile
             </Link>
-            <Link
-              href="/admin/settings"
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              onClick={() => setShowDropdown(false)}
-            >
-              Settings
-            </Link>
+
             <button
               onClick={handleLogout}
               className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
