@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from './NotificationBell'
-import { SettingsDropdown } from './SettingsDropdown'
 import { ProfileDropdown } from './ProfileDropdown'
 
 interface AdminHeaderProps {
@@ -85,7 +84,6 @@ export function AdminHeader({ onMenuClick }: AdminHeaderProps) {
           {/* Right Section - Notifications, Settings, Profile */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <NotificationBell />
-            <SettingsDropdown />
             <ProfileDropdown userName={userName} userEmail={userEmail} userRole={userRole} />
           </div>
         </div>

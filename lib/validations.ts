@@ -73,6 +73,19 @@ export const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
 })
 
+export const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
+    confirmPassword: z.string().min(1, 'Please confirm your password'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+
 // Profile completion validation schema (all fields optional)
 export const profileCompletionSchema = z.object({
   profilePhoto: z
@@ -206,6 +219,7 @@ export const inviteAdminSchema = z.object({
 export type TeamRegistrationFormData = z.infer<typeof teamRegistrationSchema>
 export type LoginFormData = z.infer<typeof loginSchema>
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
+export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>
 export type ProfileCompletionFormData = z.infer<typeof profileCompletionSchema>
 export type EditProfileFormData = z.infer<typeof editProfileSchema>
 export type CreateAdminFormData = z.infer<typeof createAdminSchema>

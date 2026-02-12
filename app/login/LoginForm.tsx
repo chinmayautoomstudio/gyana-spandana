@@ -61,6 +61,7 @@ export default function LoginForm() {
   const [isResettingPassword, setIsResettingPassword] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [registered, setRegistered] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loginSuccess, setLoginSuccess] = useState(false)
 
   const {
@@ -71,15 +72,17 @@ export default function LoginForm() {
     resolver: zodResolver(loginSchema),
   })
 
-  // Check for registration success message from URL
+  // Check for registration success message or other message (e.g. password reset) from URL
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search)
       const registeredParam = searchParams.get('registered') === 'true'
+      const messageParam = searchParams.get('message')
       setRegistered(registeredParam)
+      setSuccessMessage(messageParam)
 
       // Clear success message after 5 seconds
-      if (registeredParam) {
+      if (registeredParam || messageParam) {
         const timer = setTimeout(() => {
           setLoginError(null)
         }, 5000)
@@ -317,6 +320,12 @@ export default function LoginForm() {
                 <p className="text-green-800 text-sm">
                   ✓ Registration successful! Please Login!
                 </p>
+              </div>
+            )}
+
+            {successMessage && !registered && (
+              <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-green-800 text-sm">✓ {successMessage}</p>
               </div>
             )}
 

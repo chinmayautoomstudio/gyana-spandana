@@ -1,9 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
+const ALLOWED_NEXT_PATHS = ['/auth/reset-password', '/dashboard', '/register'] as const
+
+function isAllowedNext(next: string | null): next is (typeof ALLOWED_NEXT_PATHS)[number] {
+  return next !== null && ALLOWED_NEXT_PATHS.includes(next as (typeof ALLOWED_NEXT_PATHS)[number])
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  const nextPath = requestUrl.searchParams.get('next')
   const origin = requestUrl.origin
 
   if (code) {
@@ -27,6 +34,11 @@ export async function GET(request: Request) {
       return NextResponse.redirect(url)
     }
 
+    // If next is /auth/reset-password, redirect there so user can set new password
+    if (nextPath === '/auth/reset-password' && isAllowedNext(nextPath)) {
+      return NextResponse.redirect(`${origin}/auth/reset-password`)
+    }
+
     // Check if user has a participant record (completed registration)
     const { data: participant, error: participantError } = await supabase
       .from('participants')
@@ -40,6 +52,11 @@ export async function GET(request: Request) {
       const url = new URL(`${origin}/register`)
       url.searchParams.set('message', 'Please complete your registration')
       return NextResponse.redirect(url)
+    }
+
+    // Redirect to allowed next path or default to dashboard
+    if (isAllowedNext(nextPath)) {
+      return NextResponse.redirect(`${origin}${nextPath}`)
     }
 
     // User is authenticated and has participant record, redirect to dashboard
