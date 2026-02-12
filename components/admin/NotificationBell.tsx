@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { markNotificationAsRead, deleteAllNotifications } from '@/app/actions/notification'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -18,6 +19,7 @@ interface Notification {
 export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showDropdown, setShowDropdown] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -75,6 +77,7 @@ export function NotificationBell() {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setShowDropdown(false)
+        setShowClearConfirm(false)
       }
     }
 
@@ -115,11 +118,39 @@ export function NotificationBell() {
 
       if (error) throw error
 
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
       setUnreadCount(0)
     } catch (error) {
       console.error('Error marking all as read:', error)
     }
+  }
+
+  // Use custom confirm UI so the button always does something visible (avoids browser blocking native confirm()).
+  const handleClearAllClick = () => {
+    console.log('handleClearAll called')
+    setShowClearConfirm(true)
+  }
+
+  const confirmClearAll = async () => {
+    console.log('User confirmed, calling deleteAllNotifications')
+    try {
+      const result = await deleteAllNotifications()
+      console.log('Result:', result)
+      if (result.success) {
+        setNotifications([])
+        setUnreadCount(0)
+        setShowClearConfirm(false)
+      } else {
+        throw result.error
+      }
+    } catch (error) {
+      console.error('Error in handleClearAll:', error)
+      setShowClearConfirm(false)
+    }
+  }
+
+  const cancelClearAll = () => {
+    console.log('User cancelled')
+    setShowClearConfirm(false)
   }
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -147,7 +178,11 @@ export function NotificationBell() {
   return (
     <div className="relative z-10" ref={containerRef}>
       <button
-        onClick={() => setShowDropdown(!showDropdown)}
+        type="button"
+        onClick={() => {
+          if (showDropdown) setShowClearConfirm(false)
+          setShowDropdown(!showDropdown)
+        }}
         className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -164,14 +199,48 @@ export function NotificationBell() {
         <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden">
           <div className="p-3 border-b border-gray-200 flex justify-between items-center bg-gray-50">
             <h3 className="font-semibold text-gray-900">Notifications</h3>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="text-xs text-[#C0392B] hover:text-[#A93226] font-medium"
-              >
-                Mark all read
-              </button>
-            )}
+            <div className="flex gap-2">
+              {showClearConfirm ? (
+                <>
+                  <span className="text-xs text-gray-600 self-center">Clear all?</span>
+                  <button
+                    type="button"
+                    onClick={confirmClearAll}
+                    className="text-xs text-red-600 hover:text-red-800 font-medium"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelClearAll}
+                    className="text-xs text-gray-600 hover:text-gray-800 font-medium"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllAsRead}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllClick}
+                      className="text-xs text-red-600 hover:text-red-800 font-medium"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           <div className="max-h-96 overflow-y-auto">

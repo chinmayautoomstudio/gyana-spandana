@@ -88,3 +88,23 @@ export async function notifyAllAdmins(
         return { success: false, error }
     }
 }
+
+export async function deleteAllNotifications() {
+    const supabase = await createClient()
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Not authenticated')
+
+        const { error, count } = await supabase
+            .from('notifications')
+            .delete({ count: 'exact' })
+            .eq('user_id', user.id)
+
+        if (error) throw error
+        return { success: true, count }
+    } catch (error) {
+        console.error('Error deleting all notifications:', error)
+        return { success: false, error }
+    }
+}
