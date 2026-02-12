@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
@@ -10,42 +11,53 @@ import { loginSchema, type LoginFormData } from '@/lib/validations'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { Carousel } from '@/components/ui/Carousel'
 
-// Carousel slides data
+const Carousel = dynamic(
+  () => import('@/components/ui/Carousel').then((m) => ({ default: m.Carousel })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full w-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+        <span className="text-white/60">Loading...</span>
+      </div>
+    ),
+  }
+)
+
+// Carousel slides data (WebP from carousel-optimized)
 const carouselSlides = [
   {
-    image: '/images/carousel/carousel-img-1.png',
+    image: '/images/carousel-optimized/carousel-img-1.webp',
     title: 'Test Your Knowledge of Odisha',
     description: 'Participate in exciting quizzes about Odisha\'s rich culture, traditions, history, and geography.',
   },
   {
-    image: '/images/carousel/carousel-img2.png',
+    image: '/images/carousel-optimized/carousel-img2.webp',
     title: 'Compete with Your Team',
     description: 'Join forces with your teammate and showcase your combined knowledge of Odisha\'s heritage.',
   },
   {
-    image: '/images/carousel/carousel-img3.png',
+    image: '/images/carousel-optimized/carousel-img3.webp',
     title: 'Celebrate Odia Culture',
     description: 'Deepen your understanding of Odisha while competing for recognition and exciting prizes.',
   },
   {
-    image: '/images/carousel/carousel-img4.png',
+    image: '/images/carousel-optimized/carousel-img4.webp',
     title: 'Explore Odisha\'s Heritage',
     description: 'Learn about Konark Temple, Jagannath Puri, and the rich cultural legacy of Odisha.',
   },
   {
-    image: '/images/carousel/carousel-img5.png',
+    image: '/images/carousel-optimized/carousel-img5.webp',
     title: 'Master Odia Language & Literature',
     description: 'Test your knowledge of Odia language, literature, and traditional arts of Odisha.',
   },
   {
-    image: '/images/carousel/carousel-img6.png',
+    image: '/images/carousel-optimized/carousel-img6.webp',
     title: 'Discover Odisha\'s Geography',
     description: 'Challenge yourself with questions about Odisha\'s districts, rivers, and natural beauty.',
   },
   {
-    image: '/images/carousel/carousel-img7.png',
+    image: '/images/carousel-optimized/carousel-img7.webp',
     title: 'Win Exciting Rewards',
     description: 'Top performers get recognized and rewarded for their exceptional knowledge of Odisha.',
   },
@@ -302,7 +314,7 @@ export default function LoginForm() {
             <div className="mb-8">
               <div className="flex justify-center mb-4">
                 <Image
-                  src="/images/logo.png"
+                  src="/images/logo.webp"
                   alt="GYANA SPARDHA"
                   width={56}
                   height={56}

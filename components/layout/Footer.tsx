@@ -28,7 +28,7 @@ export function Footer() {
             <div className="flex items-center gap-3 mb-4">
               <div className="relative w-10 h-10 flex-shrink-0">
                 <Image
-                  src="/images/logo.png"
+                  src="/images/logo.webp"
                   alt="GYANA SPARDHA"
                   width={40}
                   height={40}

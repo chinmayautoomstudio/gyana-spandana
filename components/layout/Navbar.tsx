@@ -20,6 +20,12 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Eager prefetch so Login/Register are ready when user clicks
+  useEffect(() => {
+    router.prefetch('/login')
+    router.prefetch('/register')
+  }, [router])
+
   // Use solid background + dark text on non-home pages so nav is readable (e.g. /auth/reset-password)
   const useSolidNav = pathname !== '/' || scrolled || mobileMenuOpen
 
@@ -76,7 +82,7 @@ export function Navbar() {
           <Link href="/" className="flex items-center gap-3">
             <div className="relative w-10 h-10 flex-shrink-0">
               <Image
-                src="/images/logo.png"
+                src="/images/logo.webp"
                 alt="GYANA SPARDHA"
                 width={40}
                 height={40}

@@ -59,7 +59,7 @@ export function HeroCarousel({ slides, autoSlideInterval = 6000 }: HeroCarouselP
               index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
             }`}
           >
-            {/* Background Image */}
+            {/* Background Image - priority for first slide, responsive sizes */}
             <div className="relative h-full w-full">
               <Image
                 src={slide.image}
@@ -67,6 +67,10 @@ export function HeroCarousel({ slides, autoSlideInterval = 6000 }: HeroCarouselP
                 fill
                 className="object-cover"
                 priority={index === 0}
+                quality={85}
+                sizes="100vw"
+                placeholder="blur"
+                blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWEREiMxUf/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH4bcH/9k="
               />
               {/* Gradient Overlay */}
               <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />

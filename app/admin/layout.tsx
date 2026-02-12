@@ -110,7 +110,7 @@ export default function AdminLayout({
               <div className="flex items-center gap-3">
                 <div className="relative w-10 h-10 flex-shrink-0">
                   <Image
-                    src="/images/logo.png"
+                    src="/images/logo.webp"
                     alt="GYANA SPARDHA"
                     width={40}
                     height={40}

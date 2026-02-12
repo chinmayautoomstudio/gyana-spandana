@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
@@ -12,42 +13,53 @@ import { Button } from '@/components/ui/Button'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
 import { EmailVerification } from '@/components/ui/EmailVerification'
 import { RegistrationInstructionsModal } from '@/components/ui/RegistrationInstructionsModal'
-import { Carousel } from '@/components/ui/Carousel'
 
-// Carousel slides data
+const Carousel = dynamic(
+  () => import('@/components/ui/Carousel').then((m) => ({ default: m.Carousel })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full w-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+        <span className="text-white/60">Loading...</span>
+      </div>
+    ),
+  }
+)
+
+// Carousel slides data (WebP from carousel-optimized)
 const carouselSlides = [
   {
-    image: '/images/carousel/carousel-img-1.png',
+    image: '/images/carousel-optimized/carousel-img-1.webp',
     title: 'Join the Competition',
     description: 'Register your team and participate in exciting quizzes about Odisha\'s rich culture and heritage.',
   },
   {
-    image: '/images/carousel/carousel-img2.png',
+    image: '/images/carousel-optimized/carousel-img2.webp',
     title: 'Team Up & Compete',
     description: 'Form a team of two and showcase your combined knowledge of Odisha\'s traditions and history.',
   },
   {
-    image: '/images/carousel/carousel-img3.png',
+    image: '/images/carousel-optimized/carousel-img3.webp',
     title: 'Start Your Journey',
     description: 'Begin your quest to become a GYANA SPARDHA champion. Register now and test your knowledge!',
   },
   {
-    image: '/images/carousel/carousel-img4.png',
+    image: '/images/carousel-optimized/carousel-img4.webp',
     title: 'Learn About Odisha\'s Heritage',
     description: 'Discover the magnificent temples, festivals, and cultural traditions of Odisha through our quizzes.',
   },
   {
-    image: '/images/carousel/carousel-img5.png',
+    image: '/images/carousel-optimized/carousel-img5.webp',
     title: 'Celebrate Odia Language',
     description: 'Test your knowledge of Odia language, literature, poetry, and traditional arts of Odisha.',
   },
   {
-    image: '/images/carousel/carousel-img6.png',
+    image: '/images/carousel-optimized/carousel-img6.webp',
     title: 'Explore Odisha\'s Geography',
     description: 'Challenge yourself with questions about Odisha\'s districts, rivers, mountains, and natural wonders.',
   },
   {
-    image: '/images/carousel/carousel-img7.png',
+    image: '/images/carousel-optimized/carousel-img7.webp',
     title: 'Achieve Excellence',
     description: 'Compete for top positions and earn recognition for your deep knowledge of Odisha\'s culture and heritage.',
   },

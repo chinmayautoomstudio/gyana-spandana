@@ -1,0 +1,14 @@
+# Modern browsers only - avoids unnecessary polyfills (saves ~13 KiB)
+# Support browsers with >0.5% market share
+> 0.5%
+last 2 versions
+not dead
+
+# Exclude old browsers that need polyfills
+not IE 11
+not IE_Mob 11
+not op_mini all
+
+# Prefer browsers with modern features
+supports es6-module
+supports css-grid
