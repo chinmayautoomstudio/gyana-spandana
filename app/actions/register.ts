@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { TeamRegistrationFormData } from '@/lib/validations'
+import { notifyAllAdmins } from '@/app/actions/notification'
 
 /**
  * Generate initials from a name (max 2-3 letters)
@@ -10,10 +11,10 @@ import { TeamRegistrationFormData } from '@/lib/validations'
 function generateInitials(name: string): string {
     const words = name.trim().split(/\s+/)
     if (words.length === 0) return 'XX'
-    
+
     // Take first letter of first word
     let initials = words[0].charAt(0).toUpperCase()
-    
+
     // Take first letter of second word if exists
     if (words.length > 1) {
         initials += words[1].charAt(0).toUpperCase()
@@ -21,7 +22,7 @@ function generateInitials(name: string): string {
         // If only one word, take second character if available
         initials += words[0].length > 1 ? words[0].charAt(1).toUpperCase() : 'X'
     }
-    
+
     return initials
 }
 
@@ -35,10 +36,10 @@ async function generateTeamCode(
 ): Promise<string> {
     const p1Initials = generateInitials(p1Name)
     const p2Initials = generateInitials(p2Name)
-    
+
     let sequential = 1
     let teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
-    
+
     // Check if code exists and increment until we find a unique one
     while (true) {
         const { data: existing } = await supabase
@@ -46,14 +47,14 @@ async function generateTeamCode(
             .select('id')
             .eq('team_code', teamCode)
             .single()
-        
+
         if (!existing) {
             break // Code is unique
         }
-        
+
         sequential++
         teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
-        
+
         // Safety check to prevent infinite loop
         if (sequential > 9999) {
             // Fallback to timestamp-based code
@@ -62,7 +63,7 @@ async function generateTeamCode(
             break
         }
     }
-    
+
     return teamCode
 }
 
@@ -105,7 +106,7 @@ export async function registerTeam(
 
         const { data: team, error: teamError } = await supabase
             .from('teams')
-            .insert({ 
+            .insert({
                 team_name: data.teamName,
                 team_code: teamCode,
                 authority_name: data.schoolAuthority.name,
@@ -177,9 +178,9 @@ export async function registerTeam(
 
         // Send email notification to school authority (non-blocking)
         try {
-            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ||
                 (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-            
+
             await fetch(`${siteUrl}/api/send-authority-notification`, {
                 method: 'POST',
                 headers: {
@@ -251,6 +252,18 @@ export async function registerTeam(
             registrationDate,
             participantId: participantIds[1],
         })
+
+        // Notify admins about new team registration (non-blocking)
+        try {
+            await notifyAllAdmins(
+                'New Team Registered',
+                `Team "${data.teamName}" has registered with code ${teamCode}.`,
+                'success',
+                '/admin/teams'
+            )
+        } catch (error) {
+            console.error('Failed to notify admins of new team:', error)
+        }
 
         return { success: true, teamCode: teamCode }
     } catch (error: any) {

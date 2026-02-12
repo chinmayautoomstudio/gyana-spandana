@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { notifyAllAdmins } from '@/app/actions/notification'
 
 export async function POST(request: NextRequest) {
     try {
@@ -87,6 +88,18 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('✅ Successfully inserted inquiry:', data)
+
+        // Notify admins about new contact inquiry (non-blocking)
+        try {
+            await notifyAllAdmins(
+                'New Contact Inquiry',
+                `New message from ${trimmedName}: ${trimmedSubject}`,
+                'info',
+                '/admin/inquiries'
+            )
+        } catch (error) {
+            console.error('Failed to notify admins of new inquiry:', error)
+        }
 
         return NextResponse.json(
             {

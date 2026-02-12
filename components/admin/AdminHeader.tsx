@@ -63,7 +63,7 @@ export function AdminHeader({ onMenuClick }: AdminHeaderProps) {
 
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm max-w-full overflow-x-hidden">
+    <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm max-w-full">
       <div className="px-4 sm:px-6 lg:px-8 max-w-full">
         <div className="flex items-center justify-between h-16 min-w-0">
           {/* Left Section - Mobile Menu Button (for sidebar toggle) */}
