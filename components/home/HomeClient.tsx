@@ -40,7 +40,7 @@ const heroSlides = [
     description:
       "Join the ultimate quiz competition celebrating Odisha's rich cultural heritage, traditions, and knowledge. Test your expertise and compete for glory!",
     ctaText: "Register Your Team",
-    ctaLink: "/register",
+    ctaLink: "/signup",
   },
   {
     image: "/images/carousel-optimized/carousel-img-homepage-2.webp",
@@ -48,7 +48,7 @@ const heroSlides = [
     description:
       "Explore the magnificent temples, festivals, traditions, and geography of Odisha through exciting quiz questions in Odia language.",
     ctaText: "Get Started",
-    ctaLink: "/register",
+    ctaLink: "/signup",
   },
   {
     image: "/images/carousel-optimized/carousel-img-homepage-3.webp",
@@ -56,7 +56,7 @@ const heroSlides = [
     description:
       "Form a team of two and showcase your combined knowledge. Work together to achieve the highest scores and top the leaderboard!",
     ctaText: "Create Team",
-    ctaLink: "/register",
+    ctaLink: "/signup",
   },
   {
     image: "/images/carousel-optimized/carousel-img-homepage-4.webp",
@@ -64,7 +64,7 @@ const heroSlides = [
     description:
       "Top performers get recognized and rewarded. Compete for certificates, recognition, and exciting prizes that celebrate your achievement!",
     ctaText: "Join Now",
-    ctaLink: "/register",
+    ctaLink: "/signup",
   },
 ];
 
@@ -312,7 +312,7 @@ export function HomeClient() {
         description="Join hundreds of participants in celebrating Odisha's rich cultural heritage. Register your team now and be part of this exciting journey!"
         primaryCTA={{
           text: "Register Your Team Now",
-          href: "/register",
+          href: "/signup",
         }}
       />
     </div>

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
+import { resendInvitation } from '@/app/actions/team'
 import { ProfileCompletionModal } from '@/components/ui/ProfileCompletionModal'
 import { updateExamStatuses } from '@/lib/utils/examScheduler'
 import { NotificationBell } from '@/components/admin/NotificationBell'
@@ -20,6 +21,8 @@ export default function DashboardPage() {
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [hasSkippedProfile, setHasSkippedProfile] = useState(false)
   const [availableExamsCount, setAvailableExamsCount] = useState<number>(0)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendMessage, setResendMessage] = useState<'success' | 'error' | null>(null)
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -51,10 +54,10 @@ export default function DashboardPage() {
           return
         }
 
-        // Fetch participant data using user_id
+        // Fetch participant data using user_id (include team status for pending P2)
         const { data: participant } = await supabase
           .from('participants')
-          .select('*, teams(team_name, team_code, created_at)')
+          .select('*, teams(team_name, team_code, created_at, status, p2_invited_email)')
           .eq('user_id', currentUser.id)
           .single()
 
@@ -146,6 +149,19 @@ export default function DashboardPage() {
         }
       }
     }
+  }
+
+  const handleResendInvitation = async () => {
+    if (!participantData?.team_id) return
+    setResendLoading(true)
+    setResendMessage(null)
+    const result = await resendInvitation(participantData.team_id)
+    if (result.success) {
+      setResendMessage('success')
+    } else {
+      setResendMessage('error')
+    }
+    setResendLoading(false)
   }
 
   const handleProfileSkip = () => {
@@ -341,6 +357,29 @@ export default function DashboardPage() {
 
           {/* Main Content Area */}
           <main className="p-4 sm:p-6 lg:p-8">
+            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('invitation_sent') === '1' && (
+              <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-green-800 text-sm">Invitation sent to your teammate. They will receive an email to complete registration.</p>
+              </div>
+            )}
+            {participantData?.teams?.status === 'pending_p2' && (
+              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <p className="text-amber-800 text-sm">
+                  Waiting for <strong>{participantData.teams.p2_invited_email || 'your teammate'}</strong> to complete registration.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResendInvitation}
+                  isLoading={resendLoading}
+                  loadingText="Sending..."
+                >
+                  Resend invitation
+                </Button>
+                {resendMessage === 'success' && <span className="text-green-600 text-sm">Invitation resent.</span>}
+                {resendMessage === 'error' && <span className="text-red-600 text-sm">Failed to resend.</span>}
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Participant Profile Card */}
               <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">

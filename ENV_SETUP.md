@@ -46,6 +46,17 @@ To enable transactional emails (registration confirmation, authority notificatio
 
 **Note:** If SendGrid is not configured, registration and exam flows still work; email notifications are skipped.
 
+### Google OAuth (Sign up / Sign in with Google)
+
+To enable "Sign up with Google" and "Sign in with Google":
+
+1. In [Google Cloud Console](https://console.cloud.google.com) create a project (or use an existing one), then go to **APIs & Services → Credentials** and create **OAuth 2.0 Client ID** (Application type: Web application).
+2. Add **Authorized redirect URIs**: `https://<your-project-ref>.supabase.co/auth/v1/callback` (find your project ref in Supabase Dashboard → Settings → API).
+3. Copy the **Client ID** and **Client Secret**.
+4. In **Supabase Dashboard → Authentication → Providers**, enable **Google** and paste the Client ID and Client Secret. Save.
+
+No extra environment variables are needed in the app; Supabase stores the Google credentials.
+
 ## Important Notes:
 
 - **File location**: Put `.env` or `.env.local` in the **project root** (same folder as `package.json` and `proxy.ts`). Next.js loads env from there.

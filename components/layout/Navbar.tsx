@@ -23,7 +23,7 @@ export function Navbar() {
   // Eager prefetch so Login/Register are ready when user clicks
   useEffect(() => {
     router.prefetch('/login')
-    router.prefetch('/register')
+    router.prefetch('/signup')
   }, [router])
 
   // Use solid background + dark text on non-home pages so nav is readable (e.g. /auth/reset-password)
@@ -127,9 +127,9 @@ export function Navbar() {
                 Login
               </Button>
             </Link>
-            <Link href="/register">
+            <Link href="/signup">
               <Button variant="primary" size="sm">
-                Register
+                Sign up
               </Button>
             </Link>
           </div>
@@ -186,9 +186,9 @@ export function Navbar() {
                     Login
                   </Button>
                 </Link>
-                <Link href="/register">
+                <Link href="/signup">
                   <Button variant="primary" size="sm" className="w-full">
-                    Register
+                    Sign up
                   </Button>
                 </Link>
               </div>

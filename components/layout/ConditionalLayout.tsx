@@ -9,7 +9,7 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   
   // Pages that should NOT have Navbar and Footer
   const hideNavFooter = 
-    ['/login', '/register'].includes(pathname) ||
+    ['/login', '/signup', '/register'].includes(pathname) ||
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/profile/edit') ||

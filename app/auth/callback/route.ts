@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-const ALLOWED_NEXT_PATHS = ['/auth/reset-password', '/dashboard', '/register'] as const
+const ALLOWED_NEXT_PATHS = ['/auth/reset-password', '/dashboard', '/team/create'] as const
 
 function isAllowedNext(next: string | null): next is (typeof ALLOWED_NEXT_PATHS)[number] {
   return next !== null && ALLOWED_NEXT_PATHS.includes(next as (typeof ALLOWED_NEXT_PATHS)[number])
@@ -66,9 +66,8 @@ export async function GET(request: Request) {
 
     if (participantError || !participant) {
       // User is authenticated but doesn't have a participant record
-      // This means registration is incomplete, redirect to register page
-      const url = new URL(`${baseUrl}/register`)
-      url.searchParams.set('message', 'Please complete your registration')
+      // Redirect to team creation (two-step registration)
+      const url = new URL(`${baseUrl}/team/create`)
       return NextResponse.redirect(url)
     }
 

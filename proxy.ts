@@ -82,10 +82,9 @@ export default async function proxy(request: NextRequest) {
     
     if (!participant) {
       // User is authenticated but doesn't have participant record
-      // Redirect to register to complete registration
+      // Redirect to team creation to complete registration
       const url = request.nextUrl.clone()
-      url.pathname = '/register'
-      url.searchParams.set('message', 'Please complete your registration')
+      url.pathname = '/team/create'
       return NextResponse.redirect(url)
     }
   }
@@ -116,9 +115,9 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirect authenticated users away from login/register
+  // Redirect authenticated users away from login/signup
   if (
-    (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') &&
+    (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') &&
     user
   ) {
     const role = await getUserRole(user.id)
@@ -143,8 +142,10 @@ export default async function proxy(request: NextRequest) {
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
-    // If no participant record, allow them to stay on register page to complete registration
-    // Don't redirect - let them complete the registration process
+    // No participant record: redirect to team creation to complete registration
+    const url = request.nextUrl.clone()
+    url.pathname = '/team/create'
+    return NextResponse.redirect(url)
   }
 
   return supabaseResponse

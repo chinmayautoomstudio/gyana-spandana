@@ -44,12 +44,73 @@ export const schoolAuthoritySchema = z.object({
     .regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
 })
 
+// Optional authority: all fields optional; when present and non-empty, validate format
+export const schoolAuthorityOptionalSchema = z.object({
+  name: z
+    .string()
+    .optional()
+    .refine((val) => !val || val.trim() === '' || (val.length >= 2 && val.length <= 100), {
+      message: 'Authority name must be at least 2 characters and at most 100',
+    }),
+  email: z
+    .string()
+    .optional()
+    .refine((val) => !val || val.trim() === '' || emailRegex.test(val), {
+      message: 'Invalid email address',
+    }),
+  phone: z
+    .string()
+    .optional()
+    .refine((val) => !val || val.trim() === '' || phoneRegex.test(val.replace(/\s/g, '')), {
+      message: 'Phone must be a valid 10-digit Indian mobile number',
+    }),
+})
+
+// P1 creates team and invites P2 (two-step registration)
+export const teamCreationSchema = z.object({
+  p1Name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
+  schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),
+  p2Email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
+  schoolAuthority: schoolAuthorityOptionalSchema,
+  consent: z.boolean().refine((val) => val === true, {
+    message: 'You must agree to the terms and conditions',
+  }),
+})
+
+// P2 completes registration via invitation link
+export const p2RegistrationSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  gender: z.enum(['Male', 'Female', 'Other'], {
+    message: 'Please select a valid gender option',
+  }),
+  email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
+  phone: z.string().regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
+  aadhar: z
+    .string()
+    .refine((val) => aadharRegex.test((val || '').replace(/\s/g, '')), {
+      message: 'Aadhar must be exactly 12 digits',
+    })
+    .transform((val) => val.replace(/\s/g, '')),
+  class: z.enum(
+    ['Class X', 'Class XI/+2 First Year', 'Class XII/+2 Second Year'],
+    { message: 'Please select your class' }
+  ),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
+  consent: z.boolean().refine((val) => val === true, {
+    message: 'You must agree to the terms and conditions',
+  }),
+})
+
 export const teamRegistrationSchema = z.object({
   teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
   schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),
   participant1: participantSchema,
   participant2: participantSchema,
-  schoolAuthority: schoolAuthoritySchema,
+  schoolAuthority: schoolAuthorityOptionalSchema,
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),
@@ -67,6 +128,14 @@ export const teamRegistrationSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+})
+
+export const signUpSchema = z.object({
+  email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
 })
 
 export const forgotPasswordSchema = z.object({
@@ -216,7 +285,10 @@ export const inviteAdminSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
 })
 
+export type TeamCreationFormData = z.infer<typeof teamCreationSchema>
+export type P2RegistrationFormData = z.infer<typeof p2RegistrationSchema>
 export type TeamRegistrationFormData = z.infer<typeof teamRegistrationSchema>
+export type SignUpFormData = z.infer<typeof signUpSchema>
 export type LoginFormData = z.infer<typeof loginSchema>
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
 export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>
