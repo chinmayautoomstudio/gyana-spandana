@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import type { User } from '@supabase/supabase-js'
 import { Button } from '@/components/ui/Button'
 
 export function Navbar() {
@@ -11,6 +13,7 @@ export function Navbar() {
   const pathname = usePathname()
   const [scrolled, setScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,10 +23,29 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    setMobileMenuOpen(false)
+    router.push('/')
+  }
+
   // Eager prefetch so Login/Register are ready when user clicks
   useEffect(() => {
     router.prefetch('/login')
     router.prefetch('/signup')
+    router.prefetch('/dashboard')
   }, [router])
 
   // Use solid background + dark text on non-home pages so nav is readable (e.g. /auth/reset-password)
@@ -118,20 +140,44 @@ export function Navbar() {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-4">
-            <Link href="/login">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={useSolidNav ? 'text-gray-700' : 'text-white'}
-              >
-                Login
-              </Button>
-            </Link>
-            <Link href="/signup">
-              <Button variant="primary" size="sm">
-                Sign up
-              </Button>
-            </Link>
+            {user ? (
+              <>
+                <Link href="/dashboard">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={useSolidNav ? 'text-gray-700' : 'text-white'}
+                  >
+                    Dashboard
+                  </Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className={useSolidNav ? 'text-gray-700 border-gray-300' : 'text-white border-white/60'}
+                >
+                  Log out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={useSolidNav ? 'text-gray-700' : 'text-white'}
+                  >
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/signup">
+                  <Button variant="primary" size="sm">
+                    Sign up
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -181,16 +227,31 @@ export function Navbar() {
                 </a>
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t border-gray-200">
-                <Link href="/login">
-                  <Button variant="outline" size="sm" className="w-full">
-                    Login
-                  </Button>
-                </Link>
-                <Link href="/signup">
-                  <Button variant="primary" size="sm" className="w-full">
-                    Sign up
-                  </Button>
-                </Link>
+                {user ? (
+                  <>
+                    <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                      <Button variant="outline" size="sm" className="w-full">
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <Button variant="primary" size="sm" className="w-full" onClick={handleLogout}>
+                      Log out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login">
+                      <Button variant="outline" size="sm" className="w-full">
+                        Login
+                      </Button>
+                    </Link>
+                    <Link href="/signup">
+                      <Button variant="primary" size="sm" className="w-full">
+                        Sign up
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>
