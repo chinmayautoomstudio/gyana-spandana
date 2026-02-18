@@ -4,67 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { TeamRegistrationFormData } from '@/lib/validations'
 import { notifyAllAdmins } from '@/app/actions/notification'
 
-/**
- * Generate initials from a name (max 2-3 letters)
- * Example: "John Doe" -> "JD", "Mary Jane Watson" -> "MJ"
- */
-function generateInitials(name: string): string {
-    const words = name.trim().split(/\s+/)
-    if (words.length === 0) return 'XX'
-
-    // Take first letter of first word
-    let initials = words[0].charAt(0).toUpperCase()
-
-    // Take first letter of second word if exists
-    if (words.length > 1) {
-        initials += words[1].charAt(0).toUpperCase()
-    } else {
-        // If only one word, take second character if available
-        initials += words[0].length > 1 ? words[0].charAt(1).toUpperCase() : 'X'
-    }
-
-    return initials
-}
-
-/**
- * Generate unique team code in format: GS-P1INIT-P2INIT-XXXX
- */
-async function generateTeamCode(
-    supabase: ReturnType<typeof createAdminClient>,
-    p1Name: string,
-    p2Name: string
-): Promise<string> {
-    const p1Initials = generateInitials(p1Name)
-    const p2Initials = generateInitials(p2Name)
-
-    let sequential = 1
-    let teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
-
-    // Check if code exists and increment until we find a unique one
-    while (true) {
-        const { data: existing } = await supabase
-            .from('teams')
-            .select('id')
-            .eq('team_code', teamCode)
-            .single()
-
-        if (!existing) {
-            break // Code is unique
-        }
-
-        sequential++
-        teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
-
-        // Safety check to prevent infinite loop
-        if (sequential > 9999) {
-            // Fallback to timestamp-based code
-            const timestamp = Date.now().toString().slice(-4)
-            teamCode = `GS-${p1Initials}-${p2Initials}-${timestamp}`
-            break
-        }
-    }
-
-    return teamCode
+/** Team code: GS- + first 8 chars of UUID (e.g. GS-A7F2K9M4). Same format as team.ts. */
+function generateShortTeamCode(): string {
+    return 'GS-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
 }
 
 export async function registerTeam(
@@ -89,8 +31,8 @@ export async function registerTeam(
         })
         if (p2Error) throw new Error(`Participant 2 Error: ${p2Error.message}`)
 
-        // 2. Generate Team Code
-        const teamCode = await generateTeamCode(supabase, data.participant1.name, data.participant2.name)
+        // 2. Generate Team Code (GS- + short UUID)
+        const teamCode = generateShortTeamCode()
 
         // 3. Create Team
         // Check if team name exists

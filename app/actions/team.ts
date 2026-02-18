@@ -7,40 +7,9 @@ import { notifyAllAdmins } from '@/app/actions/notification'
 
 const INVITATION_EXPIRY_DAYS = 7
 
-function generateInitials(name: string): string {
-  const words = name.trim().split(/\s+/)
-  if (words.length === 0) return 'XX'
-  let initials = words[0].charAt(0).toUpperCase()
-  if (words.length > 1) {
-    initials += words[1].charAt(0).toUpperCase()
-  } else {
-    initials += words[0].length > 1 ? words[0].charAt(1).toUpperCase() : 'X'
-  }
-  return initials
-}
-
-async function generateTeamCode(
-  supabase: ReturnType<typeof createAdminClient>,
-  p1Initials: string,
-  p2Initials: string
-): Promise<string> {
-  let sequential = 1
-  let teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
-  while (true) {
-    const { data: existing } = await supabase
-      .from('teams')
-      .select('id')
-      .eq('team_code', teamCode)
-      .single()
-    if (!existing) break
-    sequential++
-    teamCode = `GS-${p1Initials}-${p2Initials}-${sequential.toString().padStart(4, '0')}`
-    if (sequential > 9999) {
-      teamCode = `GS-${p1Initials}-${p2Initials}-${Date.now().toString().slice(-4)}`
-      break
-    }
-  }
-  return teamCode
+/** Team code: GS- + first 8 chars of UUID (e.g. GS-A7F2K9M4). Unique, no name info, never updated. */
+function generateShortTeamCode(): string {
+  return 'GS-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
 }
 
 function generateInvitationToken(): string {
@@ -126,8 +95,6 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     return { success: false, error: 'Team name already exists.' }
   }
 
-  const p1Initials = generateInitials(data.p1Name)
-  const tempTeamCode = await generateTeamCode(admin, p1Initials, 'P2')
   const invitationToken = generateInvitationToken()
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + INVITATION_EXPIRY_DAYS)
@@ -136,21 +103,30 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
   const authorityEmail = data.schoolAuthority?.email?.trim() || null
   const authorityPhone = data.schoolAuthority?.phone?.trim() || null
 
-  const { data: team, error: teamError } = await admin
-    .from('teams')
-    .insert({
-      team_name: data.teamName,
-      team_code: tempTeamCode,
-      authority_name: authorityName,
-      authority_email: authorityEmail,
-      authority_phone: authorityPhone,
-      invitation_token: invitationToken,
-      p2_invited_email: data.p2Email.trim().toLowerCase(),
-      invitation_expires_at: expiresAt.toISOString(),
-      status: 'pending_p2',
-    })
-    .select('id')
-    .single()
+  let teamCode = generateShortTeamCode()
+  let team: { id: string } | null = null
+  let teamError: { message?: string; code?: string } | null = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await admin
+      .from('teams')
+      .insert({
+        team_name: data.teamName,
+        team_code: teamCode,
+        authority_name: authorityName,
+        authority_email: authorityEmail,
+        authority_phone: authorityPhone,
+        invitation_token: invitationToken,
+        p2_invited_email: data.p2Email.trim().toLowerCase(),
+        invitation_expires_at: expiresAt.toISOString(),
+        status: 'pending_p2',
+      })
+      .select('id')
+      .single()
+    team = result.data
+    teamError = result.error
+    if (!teamError || teamError.code !== '23505') break
+    teamCode = generateShortTeamCode()
+  }
 
   if (teamError || !team) {
     return { success: false, error: teamError?.message ?? 'Failed to create team.' }
@@ -192,37 +168,33 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     day: 'numeric',
   })
 
-  try {
-    const res = await fetch(`${getSiteUrl()}/api/send-team-invitation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        p2Email: data.p2Email.trim(),
-        p1Name: data.p1Name,
-        teamName: data.teamName,
-        schoolName: data.schoolName,
-        invitationLink,
-        expiresAt: expiresAtFormatted,
-      }),
-    })
+  // Fire-and-forget: do not block response on email or admin notifications
+  void fetch(`${getSiteUrl()}/api/send-team-invitation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      p2Email: data.p2Email.trim(),
+      p1Name: data.p1Name,
+      teamName: data.teamName,
+      schoolName: data.schoolName,
+      invitationLink,
+      expiresAt: expiresAtFormatted,
+    }),
+  }).then(async (res) => {
     const body = await res.json().catch(() => ({}))
-    if (!res.ok && !body.skipped) {
+    if (!res.ok && !(body as { skipped?: boolean }).skipped) {
       console.error('Send invitation failed', res.status, body)
     }
-  } catch (e) {
+  }).catch((e) => {
     console.error('Send invitation error', e)
-  }
+  })
 
-  try {
-    await notifyAllAdmins(
-      'New Team Created (Pending P2)',
-      `Team "${data.teamName}" created. Invitation sent to ${data.p2Email}.`,
-      'info',
-      '/admin/teams'
-    )
-  } catch {
-    // ignore
-  }
+  void notifyAllAdmins(
+    'New Team Created (Pending P2)',
+    `Team "${data.teamName}" created. Invitation sent to ${data.p2Email}.`,
+    'info',
+    '/admin/teams'
+  ).catch(() => {})
 
   return { success: true }
 }
@@ -273,14 +245,9 @@ export async function completeP2Registration(
     return { success: false, error: createUserError?.message ?? 'Failed to create account.' }
   }
 
-  const p1Initials = generateInitials(p1Name)
-  const p2Initials = generateInitials(data.name)
-  const teamCode = await generateTeamCode(admin, p1Initials, p2Initials)
-
   const { error: updateTeamError } = await admin
     .from('teams')
     .update({
-      team_code: teamCode,
       invitation_used_at: new Date().toISOString(),
       status: 'complete',
     })
@@ -290,7 +257,7 @@ export async function completeP2Registration(
     return { success: false, error: 'Failed to update team.' }
   }
 
-  const { data: teamRow } = await admin.from('teams').select('team_name').eq('id', team.id).single()
+  const { data: teamRow } = await admin.from('teams').select('team_name, team_code').eq('id', team.id).single()
   const { data: p1Row } = await admin.from('participants').select('school_name').eq('team_id', team.id).eq('is_participant1', true).single()
   const schoolName = p1Row?.school_name ?? ''
 
@@ -346,6 +313,7 @@ export async function completeP2Registration(
       console.error('Registration confirmation email failed', err)
     }
   }
+  const teamCode = teamRow?.team_code ?? ''
   await sendOne({
     participantEmail: data.email,
     participantName: data.name,
