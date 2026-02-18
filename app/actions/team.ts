@@ -235,6 +235,21 @@ export async function completeP2Registration(
   const p1Name = p1Participant?.name ?? 'Participant 1'
   const p1Email = p1Participant?.email ?? ''
 
+  // Prevent P2 from using the same email as P1
+  if (p1Participant?.email && emailLower === p1Participant.email.toLowerCase()) {
+    return { success: false, error: 'Participant 2 cannot use the same email address as Participant 1.' }
+  }
+
+  // Check if the email is already registered as a participant (e.g. previous attempt)
+  const { data: existingParticipant } = await admin
+    .from('participants')
+    .select('id')
+    .eq('email', emailLower)
+    .single()
+  if (existingParticipant) {
+    return { success: false, error: 'This email is already registered for a team. Please log in or use a different email.' }
+  }
+
   const { data: newUser, error: createUserError } = await admin.auth.admin.createUser({
     email: data.email,
     password: data.password,
@@ -242,6 +257,18 @@ export async function completeP2Registration(
     user_metadata: { name: data.name },
   })
   if (createUserError || !newUser.user) {
+    const isDuplicate =
+      createUserError?.message?.toLowerCase().includes('already') ||
+      createUserError?.message?.toLowerCase().includes('registered') ||
+      createUserError?.message?.toLowerCase().includes('exists')
+    if (isDuplicate) {
+      return {
+        success: false,
+        error:
+          'An account with this email already exists (possibly from a Google sign-in). ' +
+          'Please use a different email address or contact support.',
+      }
+    }
     return { success: false, error: createUserError?.message ?? 'Failed to create account.' }
   }
 
@@ -293,7 +320,10 @@ export async function completeP2Registration(
   const siteUrl = getSiteUrl()
   const registrationDate = new Date().toISOString()
   const apiUrl = `${siteUrl}/api/send-registration-confirmation`
-  const sendOne = async (payload: {
+  const teamCode = teamRow?.team_code ?? ''
+  const teamName = teamRow?.team_name ?? ''
+
+  const sendConfirmation = (payload: {
     participantEmail: string
     participantName: string
     participantSchool: string
@@ -303,50 +333,43 @@ export async function completeP2Registration(
     teamCode: string
     registrationDate: string
   }) => {
-    try {
-      await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    } catch (err) {
-      console.error('Registration confirmation email failed', err)
-    }
+    void fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch((err) => { console.error('Registration confirmation email failed', err) })
   }
-  const teamCode = teamRow?.team_code ?? ''
-  await sendOne({
+
+  // Fire-and-forget: do not block on confirmation emails or admin notifications
+  sendConfirmation({
     participantEmail: data.email,
     participantName: data.name,
     participantSchool: schoolName,
     teammateName: p1Name,
     teammateSchool: schoolName,
-    teamName: teamRow?.team_name ?? '',
+    teamName,
     teamCode,
     registrationDate,
   })
   if (p1Email) {
-    await sendOne({
+    sendConfirmation({
       participantEmail: p1Email,
       participantName: p1Name,
       participantSchool: schoolName,
       teammateName: data.name,
       teammateSchool: schoolName,
-      teamName: teamRow?.team_name ?? '',
+      teamName,
       teamCode,
       registrationDate,
     })
   }
 
-  try {
-    await notifyAllAdmins(
-      'New Team Registered',
-      `Team "${teamRow?.team_name}" is now complete with both participants.`,
-      'success',
-      '/admin/teams'
-    )
-  } catch {
-    // ignore
-  }
+  void notifyAllAdmins(
+    'New Team Registered',
+    `Team "${teamName}" is now complete with both participants.`,
+    'success',
+    '/admin/teams'
+  ).catch(() => {})
 
   return { success: true }
 }

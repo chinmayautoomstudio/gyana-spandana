@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import type { User } from '@supabase/supabase-js'
 
-const STEPS = 3
+const STEPS = 2
 
 function getP1NameFromUser(user: User): string {
   const m = user.user_metadata
@@ -82,10 +82,6 @@ export default function TeamCreatePage() {
       const ok = await trigger(['p1Name', 'teamName', 'schoolName', 'p2Email'])
       if (!ok) return
     }
-    if (step === 2) {
-      const ok = await trigger(['schoolAuthority.name', 'schoolAuthority.email', 'schoolAuthority.phone'])
-      if (!ok) return
-    }
     setStep((s) => Math.min(s + 1, STEPS))
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -146,7 +142,7 @@ export default function TeamCreatePage() {
           <div className="flex items-center gap-2 mb-6">
             <span className="text-sm font-medium text-gray-600">Step {step} of {STEPS}</span>
             <div className="flex-1 flex gap-1">
-              {[1, 2, 3].map((i) => (
+              {[1, 2].map((i) => (
                 <div
                   key={i}
                   className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
@@ -192,11 +188,11 @@ export default function TeamCreatePage() {
               </div>
             )}
 
-            {/* Step 2: Authority (optional) */}
+            {/* Step 2: Authority (optional) + Terms & submit */}
             {step === 2 && (
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900">School/College Authority (optional)</h3>
-                <p className="text-sm text-gray-500">You can skip this step if you don&apos;t have authority details.</p>
+                <p className="text-sm text-gray-500">You can skip this section if you don&apos;t have authority details.</p>
                 <Input
                   label="Authority name"
                   {...register('schoolAuthority.name')}
@@ -218,28 +214,24 @@ export default function TeamCreatePage() {
                   placeholder="9876543210"
                   maxLength={10}
                 />
-              </div>
-            )}
-
-            {/* Step 3: Consent & submit */}
-            {step === 3 && (
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    id="consent"
-                    {...register('consent')}
-                    className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
-                  />
-                  <label htmlFor="consent" className="text-sm text-gray-700">
-                    I agree to the{' '}
-                    <Link href="/terms" className="text-[#C0392B] hover:underline">Terms and Conditions</Link>
-                    {' '}and{' '}
-                    <Link href="/privacy" className="text-[#C0392B] hover:underline">Privacy Policy</Link>.
-                    {errors.consent && (
-                      <span className="block text-red-600 mt-1">{errors.consent.message}</span>
-                    )}
-                  </label>
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="consent"
+                      {...register('consent')}
+                      className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                    />
+                    <label htmlFor="consent" className="text-sm text-gray-700">
+                      I agree to the{' '}
+                      <Link href="/terms" className="text-[#C0392B] hover:underline">Terms and Conditions</Link>
+                      {' '}and{' '}
+                      <Link href="/privacy" className="text-[#C0392B] hover:underline">Privacy Policy</Link>.
+                      {errors.consent && (
+                        <span className="block text-red-600 mt-1">{errors.consent.message}</span>
+                      )}
+                    </label>
+                  </div>
                 </div>
                 {submitError && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
