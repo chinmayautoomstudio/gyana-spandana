@@ -147,6 +147,7 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     return { success: false, error: teamError?.message ?? 'Failed to create team.' }
   }
 
+  const profilePhotoUrl = (user.user_metadata?.avatar_url ?? user.user_metadata?.picture) ?? null
   const { error: participantError } = await admin.from('participants').insert({
     user_id: user.id,
     team_id: team.id,
@@ -160,6 +161,7 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     is_participant1: true,
     email_verified: true,
     phone_verified: false,
+    profile_photo_url: typeof profilePhotoUrl === 'string' ? profilePhotoUrl : null,
   })
 
   if (participantError) {
@@ -458,6 +460,7 @@ export async function completeP2RegistrationWithGoogle(
 
   const { data: teamRow } = await admin.from('teams').select('team_name, team_code').eq('id', team.id).single()
 
+  const profilePhotoUrl = (user.user_metadata?.avatar_url ?? user.user_metadata?.picture) ?? null
   const { error: participantError } = await admin.from('participants').insert({
     user_id: user.id,
     team_id: team.id,
@@ -471,6 +474,7 @@ export async function completeP2RegistrationWithGoogle(
     is_participant1: false,
     email_verified: true,
     phone_verified: false,
+    profile_photo_url: typeof profilePhotoUrl === 'string' ? profilePhotoUrl : null,
   })
   if (participantError) {
     await admin.from('teams').update({ invitation_used_at: null, status: 'pending_p2' }).eq('id', team.id)

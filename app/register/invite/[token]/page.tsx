@@ -244,7 +244,15 @@ export default function RegisterInvitePage() {
 
             {completeWithGoogle ? (
             <form onSubmit={handleSubmitGoogle(onSubmitGoogle)} className="space-y-4">
-              <p className="text-sm text-gray-600 mb-2">Signed in as <strong>{sessionUser?.email}</strong></p>
+              <p className="text-sm text-gray-600 mb-2">Signed in with Google. Your email cannot be changed.</p>
+              <Input
+                label="Email address"
+                type="email"
+                value={sessionUser?.email ?? ''}
+                readOnly
+                disabled
+                className="bg-gray-100 cursor-not-allowed"
+              />
               <Input
                 label="Your full name"
                 {...registerGoogle('name')}
