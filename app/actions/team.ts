@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { TeamCreationFormData, P2RegistrationFormData } from '@/lib/validations'
+import type { TeamCreationFormData, P2RegistrationFormData, P2RegistrationWithGoogleFormData } from '@/lib/validations'
 import { notifyAllAdmins } from '@/app/actions/notification'
 
 const INVITATION_EXPIRY_DAYS = 7
@@ -364,6 +364,157 @@ export async function completeP2Registration(
     })
   }
 
+  void notifyAllAdmins(
+    'New Team Registered',
+    `Team "${teamName}" is now complete with both participants.`,
+    'success',
+    '/admin/teams'
+  ).catch(() => {})
+
+  return { success: true }
+}
+
+export async function completeP2RegistrationWithGoogle(
+  token: string,
+  data: P2RegistrationWithGoogleFormData
+): Promise<CompleteP2Result> {
+  const supabaseServer = await createClient()
+  const { data: { user } } = await supabaseServer.auth.getUser()
+  if (!user?.email) {
+    return { success: false, error: 'Not authenticated.' }
+  }
+
+  const invitation = await getInvitationByToken(token)
+  if (!invitation.valid) {
+    return { success: false, error: invitation.error }
+  }
+  const userEmail = user.email.trim().toLowerCase()
+  const invitedEmail = invitation.p2Email.toLowerCase()
+  if (userEmail !== invitedEmail) {
+    return { success: false, error: 'Email does not match invitation.' }
+  }
+
+  const admin = createAdminClient()
+  const { data: team, error: teamError } = await admin
+    .from('teams')
+    .select('id, invitation_used_at, invitation_expires_at')
+    .eq('invitation_token', token)
+    .single()
+  if (teamError || !team || team.invitation_used_at) {
+    return { success: false, error: 'Invitation is invalid or already used.' }
+  }
+  if (team.invitation_expires_at && new Date(team.invitation_expires_at) < new Date()) {
+    return { success: false, error: 'This invitation has expired.' }
+  }
+
+  const { data: p1Participant } = await admin
+    .from('participants')
+    .select('name, email, school_name')
+    .eq('team_id', team.id)
+    .eq('is_participant1', true)
+    .single()
+  const p1Name = p1Participant?.name ?? 'Participant 1'
+  const p1Email = p1Participant?.email ?? ''
+  const schoolName = p1Participant?.school_name ?? ''
+
+  if (p1Participant?.email && userEmail === p1Participant.email.toLowerCase()) {
+    return { success: false, error: 'Participant 2 cannot use the same email address as Participant 1.' }
+  }
+
+  const { data: existingParticipant } = await admin
+    .from('participants')
+    .select('id')
+    .eq('email', userEmail)
+    .single()
+  if (existingParticipant) {
+    return { success: false, error: 'This email is already registered for a team. Please log in.' }
+  }
+
+  const { error: updateTeamError } = await admin
+    .from('teams')
+    .update({
+      invitation_used_at: new Date().toISOString(),
+      status: 'complete',
+    })
+    .eq('id', team.id)
+  if (updateTeamError) {
+    return { success: false, error: 'Failed to update team.' }
+  }
+
+  const { data: teamRow } = await admin.from('teams').select('team_name, team_code').eq('id', team.id).single()
+
+  const { error: participantError } = await admin.from('participants').insert({
+    user_id: user.id,
+    team_id: team.id,
+    name: data.name,
+    email: user.email,
+    phone: data.phone,
+    school_name: schoolName,
+    aadhar: data.aadhar,
+    class: data.class,
+    gender: data.gender,
+    is_participant1: false,
+    email_verified: true,
+    phone_verified: false,
+  })
+  if (participantError) {
+    await admin.from('teams').update({ invitation_used_at: null, status: 'pending_p2' }).eq('id', team.id)
+    return { success: false, error: 'Failed to create participant record.' }
+  }
+
+  const { error: profileError } = await admin.from('user_profiles').insert({
+    user_id: user.id,
+    role: 'participant',
+    name: data.name,
+  })
+  if (profileError && profileError.code !== '23505') {
+    console.warn('User profile insert failed:', profileError.message)
+  }
+
+  const siteUrl = getSiteUrl()
+  const registrationDate = new Date().toISOString()
+  const apiUrl = `${siteUrl}/api/send-registration-confirmation`
+  const teamCode = teamRow?.team_code ?? ''
+  const teamName = teamRow?.team_name ?? ''
+
+  const sendConfirmation = (payload: {
+    participantEmail: string
+    participantName: string
+    participantSchool: string
+    teammateName: string
+    teammateSchool: string
+    teamName: string
+    teamCode: string
+    registrationDate: string
+  }) => {
+    void fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch((err) => { console.error('Registration confirmation email failed', err) })
+  }
+  sendConfirmation({
+    participantEmail: user.email,
+    participantName: data.name,
+    participantSchool: schoolName,
+    teammateName: p1Name,
+    teammateSchool: schoolName,
+    teamName,
+    teamCode,
+    registrationDate,
+  })
+  if (p1Email) {
+    sendConfirmation({
+      participantEmail: p1Email,
+      participantName: p1Name,
+      participantSchool: schoolName,
+      teammateName: data.name,
+      teammateSchool: schoolName,
+      teamName,
+      teamCode,
+      registrationDate,
+    })
+  }
   void notifyAllAdmins(
     'New Team Registered',
     `Team "${teamName}" is now complete with both participants.`,

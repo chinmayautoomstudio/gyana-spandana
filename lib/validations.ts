@@ -119,6 +119,30 @@ export const p2RegistrationSchema = z.object({
   }),
 })
 
+// P2 completes registration via invitation using existing Google account (no password)
+export const p2RegistrationWithGoogleSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  gender: z.enum(['Male', 'Female', 'Other'], {
+    message: 'Please select a valid gender option',
+  }),
+  phone: z.string().regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
+  aadhar: z
+    .string()
+    .refine((val) => aadharRegex.test((val || '').replace(/\s/g, '')), {
+      message: 'Aadhar must be exactly 12 digits',
+    })
+    .transform((val) => val.replace(/\s/g, '')),
+  class: z.enum(
+    ['Class X', 'Class XI/+2 First Year', 'Class XII/+2 Second Year'],
+    { message: 'Please select your class' }
+  ),
+  consent: z.boolean().refine((val) => val === true, {
+    message: 'You must agree to the terms and conditions',
+  }),
+})
+
+export type P2RegistrationWithGoogleFormData = z.infer<typeof p2RegistrationWithGoogleSchema>
+
 export const teamRegistrationSchema = z.object({
   teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
   schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),

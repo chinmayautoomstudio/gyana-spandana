@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { getInvitationByToken } from '@/app/actions/team'
 
 const ALLOWED_NEXT_PATHS = ['/auth/reset-password', '/dashboard', '/team/create'] as const
 
@@ -25,7 +26,7 @@ function getRedirectBaseUrl(request: Request): string {
   return new URL(request.url).origin
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const nextPath = requestUrl.searchParams.get('next')
@@ -55,6 +56,29 @@ export async function GET(request: Request) {
     // If next is /auth/reset-password, redirect there so user can set new password
     if (nextPath === '/auth/reset-password' && isAllowedNext(nextPath)) {
       return NextResponse.redirect(`${baseUrl}/auth/reset-password`)
+    }
+
+    // P2 invite flow: user clicked "Continue with Google" from invite page
+    const inviteToken = request.cookies.get('invite_token')?.value
+    const clearInviteCookie = (response: NextResponse) => {
+      response.cookies.set('invite_token', '', { path: '/', maxAge: 0 })
+      return response
+    }
+    if (inviteToken) {
+      const invitation = await getInvitationByToken(inviteToken)
+      const invitePageUrl = `${baseUrl}/register/invite/${inviteToken}`
+      if (!invitation.valid) {
+        const res = NextResponse.redirect(`${invitePageUrl}?error=invalid_invite`)
+        return clearInviteCookie(res)
+      }
+      const userEmail = (user.email ?? '').toLowerCase()
+      const invitedEmail = invitation.p2Email.toLowerCase()
+      if (userEmail !== invitedEmail) {
+        const res = NextResponse.redirect(`${invitePageUrl}?error=email_mismatch`)
+        return clearInviteCookie(res)
+      }
+      const res = NextResponse.redirect(`${invitePageUrl}?google=1`)
+      return clearInviteCookie(res)
     }
 
     // Check if user has a participant record (completed registration)
