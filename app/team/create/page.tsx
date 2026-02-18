@@ -27,7 +27,12 @@ const Carousel = dynamic(
   }
 )
 
-const STEPS = 2
+const STEPS = 3
+
+function formatAadhar(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 12)
+  return digits.replace(/(\d{4})(?=\d)/g, '$1 ')
+}
 
 function getP1NameFromUser(user: User): string {
   const m = user.user_metadata
@@ -56,6 +61,10 @@ export default function TeamCreatePage() {
   const { register, handleSubmit, formState: { errors }, reset, trigger } = useForm<TeamCreationFormData>({
     resolver: zodResolver(teamCreationSchema),
     defaultValues: {
+      p1Gender: '' as TeamCreationFormData['p1Gender'],
+      p1Phone: '',
+      p1Aadhar: '',
+      p1Class: '' as TeamCreationFormData['p1Class'],
       schoolAuthority: { name: '', email: '', phone: '' },
     },
   })
@@ -84,6 +93,10 @@ export default function TeamCreatePage() {
         teamName: '',
         schoolName: '',
         p2Email: '',
+        p1Gender: '' as TeamCreationFormData['p1Gender'],
+        p1Phone: '',
+        p1Aadhar: '',
+        p1Class: '' as TeamCreationFormData['p1Class'],
         schoolAuthority: { name: '', email: '', phone: '' },
         consent: false,
       })
@@ -95,6 +108,10 @@ export default function TeamCreatePage() {
   const onStepNext = async () => {
     if (step === 1) {
       const ok = await trigger(['p1Name', 'teamName', 'schoolName', 'p2Email'])
+      if (!ok) return
+    }
+    if (step === 2) {
+      const ok = await trigger(['p1Gender', 'p1Phone', 'p1Aadhar', 'p1Class'])
       if (!ok) return
     }
     setStep((s) => Math.min(s + 1, STEPS))
@@ -176,7 +193,7 @@ export default function TeamCreatePage() {
             <div className="flex items-center gap-2 mb-6">
               <span className="text-sm font-medium text-gray-600">Step {step} of {STEPS}</span>
               <div className="flex-1 flex gap-1">
-                {[1, 2].map((i) => (
+                {[1, 2, 3].map((i) => (
                   <div
                     key={i}
                     className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
@@ -222,8 +239,62 @@ export default function TeamCreatePage() {
                 </div>
               )}
 
-              {/* Step 2: Authority (optional) + Terms & submit */}
+              {/* Step 2: Participant 1 details */}
               {step === 2 && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-900">Participant 1 details</h3>
+                  <p className="text-sm text-gray-500">Your gender, phone, Aadhar and class (same as required for Participant 2).</p>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Gender <span className="text-red-500">*</span></label>
+                    <select
+                      {...register('p1Gender')}
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 ${errors.p1Gender ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'}`}
+                    >
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    {errors.p1Gender && <p className="mt-1.5 text-sm text-red-600">{errors.p1Gender.message}</p>}
+                  </div>
+                  <Input
+                    label="Phone number"
+                    type="tel"
+                    {...register('p1Phone')}
+                    error={errors.p1Phone?.message}
+                    placeholder="10-digit mobile number"
+                    maxLength={10}
+                    required
+                  />
+                  <Input
+                    label="Aadhar number"
+                    type="text"
+                    {...register('p1Aadhar', {
+                      onChange: (e) => { e.target.value = formatAadhar(e.target.value) },
+                    })}
+                    error={errors.p1Aadhar?.message}
+                    placeholder="1234 5678 9012"
+                    maxLength={14}
+                    required
+                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Class <span className="text-red-500">*</span></label>
+                    <select
+                      {...register('p1Class')}
+                      className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 ${errors.p1Class ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'}`}
+                    >
+                      <option value="">Select class</option>
+                      <option value="Class X">Class X</option>
+                      <option value="Class XI/+2 First Year">Class XI/+2 First Year</option>
+                      <option value="Class XII/+2 Second Year">Class XII/+2 Second Year</option>
+                    </select>
+                    {errors.p1Class && <p className="mt-1.5 text-sm text-red-600">{errors.p1Class.message}</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Authority (optional) + Terms & submit */}
+              {step === 3 && (
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-gray-900">School/College Authority (optional)</h3>
                   <p className="text-sm text-gray-500">You can skip this section if you don&apos;t have authority details.</p>

@@ -72,6 +72,20 @@ export const teamCreationSchema = z.object({
   teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
   schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),
   p2Email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
+  p1Gender: z.enum(['Male', 'Female', 'Other'], {
+    message: 'Please select a valid gender option',
+  }),
+  p1Phone: z.string().regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
+  p1Aadhar: z
+    .string()
+    .refine((val) => aadharRegex.test((val || '').replace(/\s/g, '')), {
+      message: 'Aadhar must be exactly 12 digits',
+    })
+    .transform((val) => val.replace(/\s/g, '')),
+  p1Class: z.enum(
+    ['Class X', 'Class XI/+2 First Year', 'Class XII/+2 Second Year'],
+    { message: 'Please select your class' }
+  ),
   schoolAuthority: schoolAuthorityOptionalSchema,
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
