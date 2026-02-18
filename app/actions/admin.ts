@@ -406,3 +406,45 @@ export async function removeAdmin(userId: string): Promise<{ success: boolean; e
   }
 }
 
+export type DeleteTeamResult = { success: true } | { success: false; error: string }
+export type DeleteParticipantResult = { success: true } | { success: false; error: string }
+
+/**
+ * Delete a team and all its participants (admin only).
+ * Cascades: participants -> exam_attempts, exam_participants, etc.
+ */
+export async function deleteTeam(teamId: string): Promise<DeleteTeamResult> {
+  const isAdmin = await verifyAdmin()
+  if (!isAdmin) return { success: false, error: 'Unauthorized' }
+
+  const admin = createAdminClient()
+  const { error: participantsError } = await admin
+    .from('participants')
+    .delete()
+    .eq('team_id', teamId)
+  if (participantsError) {
+    return { success: false, error: participantsError.message || 'Failed to delete team participants' }
+  }
+  const { error: teamError } = await admin.from('teams').delete().eq('id', teamId)
+  if (teamError) {
+    return { success: false, error: teamError.message || 'Failed to delete team' }
+  }
+  return { success: true }
+}
+
+/**
+ * Delete a single participant (admin only).
+ * DB cascades handle exam_attempts, exam_participants, etc.
+ */
+export async function deleteParticipant(participantId: string): Promise<DeleteParticipantResult> {
+  const isAdmin = await verifyAdmin()
+  if (!isAdmin) return { success: false, error: 'Unauthorized' }
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('participants').delete().eq('id', participantId)
+  if (error) {
+    return { success: false, error: error.message || 'Failed to delete participant' }
+  }
+  return { success: true }
+}
+

@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { format } from 'date-fns'
+import { deleteParticipant } from '@/app/actions/admin'
 
 interface Teammate {
   name: string
@@ -42,11 +43,14 @@ interface ParticipantProfile {
 
 export default function AdminParticipantProfilePage() {
   const params = useParams()
+  const router = useRouter()
   const resolvedParams = params instanceof Promise ? use(params) : params
   const participantId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [participant, setParticipant] = useState<ParticipantProfile | null>(null)
   const [teammate, setTeammate] = useState<Teammate | null>(null)
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!participantId) return
@@ -130,6 +134,20 @@ export default function AdminParticipantProfilePage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!participantId || !participant) return
+    if (!window.confirm(`Delete participant "${participant.name}" (${participant.email})? This will remove their exam attempts and assignments. This cannot be undone.`)) return
+    setDeleting(true)
+    setError(null)
+    const result = await deleteParticipant(participantId)
+    setDeleting(false)
+    if (result.success) {
+      router.push('/admin/participants')
+    } else {
+      setError(result.error)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -146,12 +164,30 @@ export default function AdminParticipantProfilePage() {
           <h1 className="text-3xl font-bold text-gray-900">Participant Profile</h1>
           <p className="text-gray-600 mt-1">View and manage participant details</p>
         </div>
-        <Link href={`/admin/reports/participant/${participantId}`}>
-          <Button variant="outline" size="md">
-            View performance report
+        <div className="flex items-center gap-2">
+          <Link href={`/admin/reports/participant/${participantId}`}>
+            <Button variant="outline" size="md">
+              View performance report
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="md"
+            className="text-red-600 border-red-200 hover:bg-red-50"
+            onClick={handleDelete}
+            disabled={deleting}
+            isLoading={deleting}
+          >
+            Delete participant
           </Button>
-        </Link>
+        </div>
       </div>
+
+      {error && (
+        <div className="rounded-lg p-4 bg-red-50 text-red-800 border border-red-200">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Identity, Status, Team Context */}

@@ -25,11 +25,31 @@ export function Navbar() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+
+    const applyInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setUser(null)
+        return
+      }
+      const res = await fetch('/api/auth/validate', { credentials: 'include' })
+      if (res.status === 401) {
+        await supabase.auth.signOut()
+        setUser(null)
+        return
+      }
+      setUser(session.user)
+    }
+
+    applyInitialSession()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        setUser(null)
+        return
+      }
+      if (event === 'INITIAL_SESSION') return
+      setUser(session.user)
     })
     return () => subscription.unsubscribe()
   }, [])

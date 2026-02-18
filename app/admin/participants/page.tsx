@@ -8,6 +8,7 @@ import { FilterBar } from '@/components/admin/FilterBar'
 import { ExportButton } from '@/components/admin/ExportButton'
 import { Button } from '@/components/ui/Button'
 import { format } from 'date-fns'
+import { deleteParticipant } from '@/app/actions/admin'
 
 interface Participant {
   id: string
@@ -28,6 +29,8 @@ export default function ParticipantsPage() {
   const [teamFilter, setTeamFilter] = useState('')
   const [schoolFilter, setSchoolFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     const fetchParticipants = async () => {
@@ -127,15 +130,41 @@ export default function ParticipantsPage() {
       key: 'actions',
       header: 'Actions',
       render: (p: Participant) => (
-        <Link href={`/admin/participants/${p.id}`}>
-          <Button variant="outline" size="sm">
-            View
+        <div className="flex items-center gap-2">
+          <Link href={`/admin/participants/${p.id}`}>
+            <Button variant="outline" size="sm">
+              View
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-red-600 border-red-200 hover:bg-red-50"
+            onClick={() => handleDeleteParticipant(p)}
+            disabled={deletingId === p.id}
+            isLoading={deletingId === p.id}
+          >
+            Delete
           </Button>
-        </Link>
+        </div>
       ),
       sortable: false,
     },
   ]
+
+  const handleDeleteParticipant = async (p: Participant) => {
+    if (!window.confirm(`Delete participant "${p.name}" (${p.email})? This will remove their exam attempts and assignments. This cannot be undone.`)) return
+    setDeletingId(p.id)
+    setMessage(null)
+    const result = await deleteParticipant(p.id)
+    setDeletingId(null)
+    if (result.success) {
+      setMessage({ type: 'success', text: 'Participant deleted.' })
+      setParticipants((prev) => prev.filter((x) => x.id !== p.id))
+    } else {
+      setMessage({ type: 'error', text: result.error })
+    }
+  }
 
   const exportData = filteredParticipants.map(p => ({
     'Name': p.name,
@@ -165,6 +194,18 @@ export default function ParticipantsPage() {
           ]}
         />
       </div>
+
+      {message && (
+        <div
+          className={`rounded-lg p-4 ${
+            message.type === 'success'
+              ? 'bg-green-50 text-green-800 border border-green-200'
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
 
       <FilterBar
         filters={{
