@@ -24,8 +24,10 @@ function getSiteUrl(): string {
 }
 
 export type CreateTeamResult = { success: true } | { success: false; error: string }
+export type TeamNameAvailabilityResult = { available: true } | { available: false; error: string }
 export type CompleteP2Result = { success: true } | { success: false; error: string }
 export type ResendInvitationResult = { success: true } | { success: false; error: string }
+export type UpdateTeamAuthorityResult = { success: true } | { success: false; error: string }
 export type InvitationDetails = {
   valid: true
   teamName: string
@@ -66,6 +68,19 @@ export async function getInvitationByToken(token: string): Promise<InvitationDet
     schoolName: p1?.school_name ?? '',
     p2Email: team.p2_invited_email ?? '',
   }
+}
+
+export async function checkTeamNameAvailability(teamName: string): Promise<TeamNameAvailabilityResult> {
+  const trimmed = teamName?.trim()
+  if (!trimmed) return { available: false, error: 'Team name is required.' }
+  const admin = createAdminClient()
+  const { data: existing } = await admin
+    .from('teams')
+    .select('id')
+    .eq('team_name', trimmed)
+    .maybeSingle()
+  if (existing) return { available: false, error: 'Team name already exists.' }
+  return { available: true }
 }
 
 export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise<CreateTeamResult> {
@@ -522,6 +537,41 @@ export async function completeP2RegistrationWithGoogle(
     '/admin/teams'
   ).catch(() => {})
 
+  return { success: true }
+}
+
+export async function updateTeamAuthority(
+  teamId: string,
+  authority: { name: string | null; email: string | null; phone: string | null }
+): Promise<UpdateTeamAuthorityResult> {
+  const supabaseServer = await createClient()
+  const { data: { user } } = await supabaseServer.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+
+  const admin = createAdminClient()
+  const { data: participant } = await admin
+    .from('participants')
+    .select('id')
+    .eq('team_id', teamId)
+    .eq('user_id', user.id)
+    .single()
+  if (!participant) {
+    return { success: false, error: 'You are not a member of this team.' }
+  }
+
+  const { error } = await admin
+    .from('teams')
+    .update({
+      authority_name: authority.name?.trim() || null,
+      authority_email: authority.email?.trim() || null,
+      authority_phone: authority.phone?.trim() || null,
+    })
+    .eq('id', teamId)
+  if (error) {
+    return { success: false, error: 'Failed to update authority details.' }
+  }
   return { success: true }
 }
 

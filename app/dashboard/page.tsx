@@ -6,7 +6,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
-import { resendInvitation } from '@/app/actions/team'
+import { Input } from '@/components/ui/Input'
+import { resendInvitation, updateTeamAuthority } from '@/app/actions/team'
 import { ProfileCompletionModal } from '@/components/ui/ProfileCompletionModal'
 import { updateExamStatuses } from '@/lib/utils/examScheduler'
 import { NotificationBell } from '@/components/admin/NotificationBell'
@@ -23,6 +24,10 @@ export default function DashboardPage() {
   const [availableExamsCount, setAvailableExamsCount] = useState<number>(0)
   const [resendLoading, setResendLoading] = useState(false)
   const [resendMessage, setResendMessage] = useState<'success' | 'error' | null>(null)
+  const [showAuthorityForm, setShowAuthorityForm] = useState(false)
+  const [authorityForm, setAuthorityForm] = useState({ name: '', email: '', phone: '' })
+  const [authoritySaving, setAuthoritySaving] = useState(false)
+  const [authorityError, setAuthorityError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -57,7 +62,7 @@ export default function DashboardPage() {
         // Fetch participant data using user_id (include team status for pending P2)
         const { data: participant } = await supabase
           .from('participants')
-          .select('*, teams(team_name, team_code, created_at, status, p2_invited_email)')
+          .select('*, teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)')
           .eq('user_id', currentUser.id)
           .single()
 
@@ -154,6 +159,44 @@ export default function DashboardPage() {
           localStorage.setItem(modalDismissedKey, 'true')
         }
       }
+    }
+  }
+
+  const openAuthorityForm = () => {
+    const t = participantData?.teams
+    setAuthorityForm({
+      name: t?.authority_name ?? '',
+      email: t?.authority_email ?? '',
+      phone: t?.authority_phone ?? '',
+    })
+    setAuthorityError(null)
+    setShowAuthorityForm(true)
+  }
+
+  const handleSaveAuthority = async () => {
+    if (!participantData?.team_id) return
+    setAuthoritySaving(true)
+    setAuthorityError(null)
+    const result = await updateTeamAuthority(participantData.team_id, {
+      name: authorityForm.name || null,
+      email: authorityForm.email || null,
+      phone: authorityForm.phone || null,
+    })
+    setAuthoritySaving(false)
+    if (!result.success) {
+      setAuthorityError(result.error)
+      return
+    }
+    setShowAuthorityForm(false)
+    const supabase = createClient()
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (currentUser) {
+      const { data: participant } = await supabase
+        .from('participants')
+        .select('*, teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)')
+        .eq('user_id', currentUser.id)
+        .single()
+      if (participant) setParticipantData(participant)
     }
   }
 
@@ -633,6 +676,66 @@ export default function DashboardPage() {
                       <p className="text-lg text-gray-900 mt-1">
                         {participantData.teams.created_at ? formatDate(participantData.teams.created_at) : 'N/A'}
                       </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-200/50">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          School / College Authority
+                        </span>
+                        {!showAuthorityForm && (
+                          <Button variant="outline" size="sm" onClick={openAuthorityForm}>
+                            Update authority details
+                          </Button>
+                        )}
+                      </div>
+                      {showAuthorityForm ? (
+                        <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                          <Input
+                            label="Authority name"
+                            value={authorityForm.name}
+                            onChange={(e) => setAuthorityForm((f) => ({ ...f, name: e.target.value }))}
+                            placeholder="Name of authority"
+                          />
+                          <Input
+                            label="Authority email"
+                            type="email"
+                            value={authorityForm.email}
+                            onChange={(e) => setAuthorityForm((f) => ({ ...f, email: e.target.value }))}
+                            placeholder="Email"
+                          />
+                          <Input
+                            label="Authority phone"
+                            value={authorityForm.phone}
+                            onChange={(e) => setAuthorityForm((f) => ({ ...f, phone: e.target.value }))}
+                            placeholder="Phone"
+                          />
+                          {authorityError && <p className="text-sm text-red-600">{authorityError}</p>}
+                          <div className="flex gap-2">
+                            <Button onClick={handleSaveAuthority} isLoading={authoritySaving} loadingText="Saving...">
+                              Save
+                            </Button>
+                            <Button variant="outline" onClick={() => { setShowAuthorityForm(false); setAuthorityError(null); }} disabled={authoritySaving}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-gray-900 mt-1">
+                          {participantData.teams.authority_name || participantData.teams.authority_email || participantData.teams.authority_phone ? (
+                            <div className="space-y-1 text-sm">
+                              {participantData.teams.authority_name && <p><span className="text-gray-500">Name:</span> {participantData.teams.authority_name}</p>}
+                              {participantData.teams.authority_email && <p><span className="text-gray-500">Email:</span> {participantData.teams.authority_email}</p>}
+                              {participantData.teams.authority_phone && <p><span className="text-gray-500">Phone:</span> {participantData.teams.authority_phone}</p>}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 italic">Not provided. You can add authority details above.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

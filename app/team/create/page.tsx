@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { createTeamAndInviteP2 } from '@/app/actions/team'
+import { createTeamAndInviteP2, checkTeamNameAvailability } from '@/app/actions/team'
 import { teamCreationSchema, type TeamCreationFormData } from '@/lib/validations'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -58,7 +58,7 @@ export default function TeamCreatePage() {
   const [step, setStep] = useState(1)
   const formRef = useRef<HTMLDivElement>(null)
 
-  const { register, handleSubmit, formState: { errors }, reset, trigger } = useForm<TeamCreationFormData>({
+  const { register, handleSubmit, formState: { errors }, reset, trigger, getValues, setError } = useForm<TeamCreationFormData>({
     resolver: zodResolver(teamCreationSchema),
     defaultValues: {
       p1Gender: '' as TeamCreationFormData['p1Gender'],
@@ -109,6 +109,11 @@ export default function TeamCreatePage() {
     if (step === 1) {
       const ok = await trigger(['p1Name', 'teamName', 'schoolName', 'p2Email'])
       if (!ok) return
+      const nameResult = await checkTeamNameAvailability(getValues('teamName'))
+      if (!nameResult.available) {
+        setError('teamName', { type: 'manual', message: nameResult.error })
+        return
+      }
     }
     if (step === 2) {
       const ok = await trigger(['p1Gender', 'p1Phone', 'p1Aadhar', 'p1Class'])
