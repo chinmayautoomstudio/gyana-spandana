@@ -1,16 +1,31 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { createTeamAndInviteP2 } from '@/app/actions/team'
 import { teamCreationSchema, type TeamCreationFormData } from '@/lib/validations'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { carouselSlides } from '@/lib/constants/carousel'
 import type { User } from '@supabase/supabase-js'
+
+const Carousel = dynamic(
+  () => import('@/components/ui/Carousel').then((m) => ({ default: m.Carousel })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full w-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+        <span className="text-white/60">Loading...</span>
+      </div>
+    ),
+  }
+)
 
 const STEPS = 2
 
@@ -114,177 +129,197 @@ export default function TeamCreatePage() {
   const avatarUrl = user ? getAvatarUrl(user) : null
 
   return (
-    <div className="min-h-screen bg-[#ECF0F1] py-12 px-4">
-      <div className="max-w-xl mx-auto" ref={formRef}>
-        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
-          <div className="flex items-start gap-4 mb-6">
-            {avatarUrl && (
-              <img
-                src={avatarUrl}
-                alt=""
-                className="w-14 h-14 rounded-full object-cover border-2 border-gray-200 flex-shrink-0"
-              />
-            )}
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Create your team</h1>
-              <p className="text-gray-600 text-sm mb-1">
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* Left side - Carousel (60%) - same as login */}
+      <div className="hidden lg:flex lg:w-[60%] relative">
+        <Carousel slides={carouselSlides} />
+      </div>
+
+      {/* Right side - Form (40%) */}
+      <div className="w-full lg:w-[40%] bg-white flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-6 sm:px-8 py-8 sm:py-12">
+          <div className="w-full max-w-md" ref={formRef}>
+            <div className="mb-8">
+              <div className="flex justify-center mb-4">
+                <Image
+                  src="/images/logo.webp"
+                  alt="GYANA SPARDHA"
+                  width={56}
+                  height={56}
+                  className="object-contain rounded-lg"
+                />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Create your team</h1>
+              <p className="text-gray-600 mb-4">
                 Enter your team details and invite your teammate. They will receive an email to complete registration.
               </p>
-              {user?.email && (
-                <p className="text-sm text-gray-500">
-                  Registered as: <span className="font-medium text-gray-700">{user.email}</span>
-                </p>
+            </div>
+
+            <div className="flex items-start gap-4 mb-6">
+              {avatarUrl && (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  className="w-14 h-14 rounded-full object-cover border-2 border-gray-200 flex-shrink-0"
+                />
               )}
-            </div>
-          </div>
-
-          {/* Stepper */}
-          <div className="flex items-center gap-2 mb-6">
-            <span className="text-sm font-medium text-gray-600">Step {step} of {STEPS}</span>
-            <div className="flex-1 flex gap-1">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
-                  aria-hidden
-                />
-              ))}
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Step 1: Team & your info */}
-            {step === 1 && (
-              <div className="space-y-4">
-                <Input
-                  label="Your full name"
-                  {...register('p1Name')}
-                  error={errors.p1Name?.message}
-                  placeholder="Enter your name"
-                  required
-                />
-                <Input
-                  label="Team name"
-                  {...register('teamName')}
-                  error={errors.teamName?.message}
-                  placeholder="Enter team name"
-                  required
-                />
-                <Input
-                  label="School / College name"
-                  {...register('schoolName')}
-                  error={errors.schoolName?.message}
-                  placeholder="Enter school or college name"
-                  required
-                />
-                <Input
-                  label="Participant 2 email address"
-                  type="email"
-                  {...register('p2Email')}
-                  error={errors.p2Email?.message}
-                  placeholder="teammate@example.com"
-                  required
-                />
-              </div>
-            )}
-
-            {/* Step 2: Authority (optional) + Terms & submit */}
-            {step === 2 && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900">School/College Authority (optional)</h3>
-                <p className="text-sm text-gray-500">You can skip this section if you don&apos;t have authority details.</p>
-                <Input
-                  label="Authority name"
-                  {...register('schoolAuthority.name')}
-                  error={errors.schoolAuthority?.name?.message}
-                  placeholder="e.g. Principal, Coordinator"
-                />
-                <Input
-                  label="Authority email"
-                  type="email"
-                  {...register('schoolAuthority.email')}
-                  error={errors.schoolAuthority?.email?.message}
-                  placeholder="authority@school.com"
-                />
-                <Input
-                  label="Authority phone"
-                  type="tel"
-                  {...register('schoolAuthority.phone')}
-                  error={errors.schoolAuthority?.phone?.message}
-                  placeholder="9876543210"
-                  maxLength={10}
-                />
-                <div className="pt-4 border-t border-gray-200">
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      id="consent"
-                      {...register('consent')}
-                      className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
-                    />
-                    <label htmlFor="consent" className="text-sm text-gray-700">
-                      I agree to the{' '}
-                      <Link href="/terms" className="text-[#C0392B] hover:underline">Terms and Conditions</Link>
-                      {' '}and{' '}
-                      <Link href="/privacy" className="text-[#C0392B] hover:underline">Privacy Policy</Link>.
-                      {errors.consent && (
-                        <span className="block text-red-600 mt-1">{errors.consent.message}</span>
-                      )}
-                    </label>
-                  </div>
-                </div>
-                {submitError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-800 text-sm">{submitError}</p>
-                  </div>
+              <div className="min-w-0">
+                {user?.email && (
+                  <p className="text-sm text-gray-500">
+                    Registered as: <span className="font-medium text-gray-700">{user.email}</span>
+                  </p>
                 )}
               </div>
-            )}
-
-            {/* Navigation */}
-            <div className="flex gap-3 pt-2">
-              {step > 1 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  onClick={onStepBack}
-                  className="flex-1"
-                >
-                  Back
-                </Button>
-              ) : (
-                <div className="flex-1" />
-              )}
-              {step < STEPS ? (
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  onClick={onStepNext}
-                  className="flex-1 bg-gray-900 hover:bg-gray-800"
-                >
-                  Next
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  isLoading={isSubmitting}
-                  loadingText="Creating team..."
-                  className="flex-1 bg-gray-900 hover:bg-gray-800"
-                >
-                  Create team and send invitation
-                </Button>
-              )}
             </div>
-          </form>
-        </div>
 
-        <p className="mt-6 text-center text-gray-600 text-sm">
-          <Link href="/dashboard" className="text-[#C0392B] hover:underline">Back to dashboard</Link>
-        </p>
+            {/* Stepper */}
+            <div className="flex items-center gap-2 mb-6">
+              <span className="text-sm font-medium text-gray-600">Step {step} of {STEPS}</span>
+              <div className="flex-1 flex gap-1">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
+                    aria-hidden
+                  />
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Step 1: Team & your info */}
+              {step === 1 && (
+                <div className="space-y-4">
+                  <Input
+                    label="Your full name"
+                    {...register('p1Name')}
+                    error={errors.p1Name?.message}
+                    placeholder="Enter your name"
+                    required
+                  />
+                  <Input
+                    label="Team name"
+                    {...register('teamName')}
+                    error={errors.teamName?.message}
+                    placeholder="Enter team name"
+                    required
+                  />
+                  <Input
+                    label="School / College name"
+                    {...register('schoolName')}
+                    error={errors.schoolName?.message}
+                    placeholder="Enter school or college name"
+                    required
+                  />
+                  <Input
+                    label="Participant 2 email address"
+                    type="email"
+                    {...register('p2Email')}
+                    error={errors.p2Email?.message}
+                    placeholder="teammate@example.com"
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Step 2: Authority (optional) + Terms & submit */}
+              {step === 2 && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-900">School/College Authority (optional)</h3>
+                  <p className="text-sm text-gray-500">You can skip this section if you don&apos;t have authority details.</p>
+                  <Input
+                    label="Authority name"
+                    {...register('schoolAuthority.name')}
+                    error={errors.schoolAuthority?.name?.message}
+                    placeholder="e.g. Principal, Coordinator"
+                  />
+                  <Input
+                    label="Authority email"
+                    type="email"
+                    {...register('schoolAuthority.email')}
+                    error={errors.schoolAuthority?.email?.message}
+                    placeholder="authority@school.com"
+                  />
+                  <Input
+                    label="Authority phone"
+                    type="tel"
+                    {...register('schoolAuthority.phone')}
+                    error={errors.schoolAuthority?.phone?.message}
+                    placeholder="9876543210"
+                    maxLength={10}
+                  />
+                  <div className="pt-4 border-t border-gray-200">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="consent"
+                        {...register('consent')}
+                        className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                      />
+                      <label htmlFor="consent" className="text-sm text-gray-700">
+                        I agree to the{' '}
+                        <Link href="/terms" className="text-[#C0392B] hover:underline">Terms and Conditions</Link>
+                        {' '}and{' '}
+                        <Link href="/privacy" className="text-[#C0392B] hover:underline">Privacy Policy</Link>.
+                        {errors.consent && (
+                          <span className="block text-red-600 mt-1">{errors.consent.message}</span>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+                  {submitError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <p className="text-red-800 text-sm">{submitError}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Navigation */}
+              <div className="flex gap-3 pt-2">
+                {step > 1 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={onStepBack}
+                    className="flex-1"
+                  >
+                    Back
+                  </Button>
+                ) : (
+                  <div className="flex-1" />
+                )}
+                {step < STEPS ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="lg"
+                    onClick={onStepNext}
+                    className="flex-1 bg-gray-900 hover:bg-gray-800"
+                  >
+                    Next
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    isLoading={isSubmitting}
+                    loadingText="Creating team..."
+                    className="flex-1 bg-gray-900 hover:bg-gray-800"
+                  >
+                    Create team and send invitation
+                  </Button>
+                )}
+              </div>
+            </form>
+
+            <p className="mt-6 text-center text-gray-600 text-sm">
+              <Link href="/dashboard" className="text-[#C0392B] hover:underline">Back to dashboard</Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )
