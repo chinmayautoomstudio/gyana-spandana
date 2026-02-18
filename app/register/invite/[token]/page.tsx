@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { getInvitationByToken, completeP2Registration } from '@/app/actions/team'
@@ -10,6 +12,19 @@ import { p2RegistrationSchema, type P2RegistrationFormData } from '@/lib/validat
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
+import { carouselSlides } from '@/lib/constants/carousel'
+
+const Carousel = dynamic(
+  () => import('@/components/ui/Carousel').then((m) => ({ default: m.Carousel })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full w-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+        <span className="text-white/60">Loading...</span>
+      </div>
+    ),
+  }
+)
 
 function formatAadhar(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 12)
@@ -83,21 +98,41 @@ export default function RegisterInvitePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#ECF0F1] py-12 px-4">
-      <div className="max-w-md mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Complete your registration</h1>
-          <p className="text-gray-600 text-sm mb-6">
-            You were invited to join <strong>{invitation.teamName}</strong>. Fill in your details below.
-          </p>
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* Left side - Carousel (60%) - same as login / team create */}
+      <div className="hidden lg:flex lg:w-[60%] relative">
+        <Carousel slides={carouselSlides} />
+      </div>
 
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <p className="text-sm text-gray-700"><strong>Team:</strong> {invitation.teamName}</p>
-            <p className="text-sm text-gray-700"><strong>Participant 1:</strong> {invitation.p1Name}</p>
-            <p className="text-sm text-gray-700"><strong>School / College:</strong> {invitation.schoolName || '—'}</p>
-          </div>
+      {/* Right side - Form (40%) */}
+      <div className="w-full lg:w-[40%] bg-white flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-6 sm:px-8 py-8 sm:py-12">
+          <div className="w-full max-w-md">
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-14 h-14 rounded-full border-2 border-gray-200 overflow-hidden flex-shrink-0 bg-white flex items-center justify-center shadow-sm">
+                  <Image
+                    src="/images/logo.webp"
+                    alt="GYANA SPARDHA"
+                    width={52}
+                    height={52}
+                    className="object-contain"
+                  />
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900">Complete your registration</h1>
+              </div>
+              <p className="text-gray-600 text-sm mb-4">
+                You were invited to join <strong>{invitation.teamName}</strong>. Fill in your details below.
+              </p>
+            </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-sm text-gray-700"><strong>Team:</strong> {invitation.teamName}</p>
+              <p className="text-sm text-gray-700"><strong>Participant 1:</strong> {invitation.p1Name}</p>
+              <p className="text-sm text-gray-700"><strong>School / College:</strong> {invitation.schoolName || '—'}</p>
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Input
               label="Your full name"
               {...register('name')}
@@ -201,6 +236,11 @@ export default function RegisterInvitePage() {
               Complete registration
             </Button>
           </form>
+
+            <p className="mt-6 text-center text-gray-600 text-sm">
+              <Link href="/login" className="text-[#C0392B] hover:underline">Back to sign in</Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -14,7 +14,8 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/admin') ||
     pathname.startsWith('/profile/edit') ||
     pathname.startsWith('/exams') ||  // Hide navbar/footer for all exam pages (including /exams list)
-    pathname.startsWith('/team/create')
+    pathname.startsWith('/team/create') ||
+    pathname.startsWith('/register/invite')  // P2 registration via invitation link
 
   return (
     <>
