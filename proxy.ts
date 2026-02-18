@@ -64,7 +64,7 @@ export default async function proxy(request: NextRequest) {
       url.searchParams.set('redirectedFrom', request.nextUrl.pathname)
       return NextResponse.redirect(url)
     }
-    
+
     // Check user role FIRST - admins should go to admin dashboard, not participant dashboard
     const role = await getUserRole(user.id)
     if (role === 'admin') {
@@ -72,21 +72,9 @@ export default async function proxy(request: NextRequest) {
       url.pathname = '/admin'
       return NextResponse.redirect(url)
     }
-    
-    // For non-admin users, check if they have a participant record (completed registration)
-    const { data: participant } = await supabase
-      .from('participants')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
-    
-    if (!participant) {
-      // User is authenticated but doesn't have participant record
-      // Redirect to team creation to complete registration
-      const url = request.nextUrl.clone()
-      url.pathname = '/team/create'
-      return NextResponse.redirect(url)
-    }
+    // Participant-record check removed from middleware.
+    // The dashboard page handles the "no participant yet" state itself,
+    // so newly registered users are not bounced back to /team/create.
   }
 
   // Protect admin routes - only admins can access

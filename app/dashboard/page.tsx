@@ -61,6 +61,12 @@ export default function DashboardPage() {
           .eq('user_id', currentUser.id)
           .single()
 
+        if (!participant) {
+          // No participant record: user hasn't created a team yet
+          router.replace('/team/create')
+          return
+        }
+
         if (participant) {
           setParticipantData(participant)
 
