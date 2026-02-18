@@ -126,12 +126,16 @@ export default function TeamCreatePage() {
   const onSubmit = async (data: TeamCreationFormData) => {
     setIsSubmitting(true)
     setSubmitError(null)
-    const result = await createTeamAndInviteP2(data)
-    if (result.success) {
-      router.push('/dashboard?invitation_sent=1')
-      return
+    try {
+      const result = await createTeamAndInviteP2(data)
+      if (result.success) {
+        router.push('/dashboard?invitation_sent=1')
+        return
+      }
+      setSubmitError(result.error)
+    } catch {
+      setSubmitError('Something went wrong. Please try again.')
     }
-    setSubmitError(result.error)
     setIsSubmitting(false)
   }
 
@@ -157,16 +161,18 @@ export default function TeamCreatePage() {
         <div className="flex-1 flex items-center justify-center px-6 sm:px-8 py-8 sm:py-12">
           <div className="w-full max-w-md" ref={formRef}>
             <div className="mb-8">
-              <div className="flex justify-center mb-4">
-                <Image
-                  src="/images/logo.webp"
-                  alt="GYANA SPARDHA"
-                  width={56}
-                  height={56}
-                  className="object-contain rounded-lg"
-                />
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-14 h-14 rounded-full border-2 border-gray-200 overflow-hidden flex-shrink-0 bg-white flex items-center justify-center shadow-sm">
+                  <Image
+                    src="/images/logo.webp"
+                    alt="GYANA SPARDHA"
+                    width={52}
+                    height={52}
+                    className="object-contain"
+                  />
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900">Create your team</h1>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Create your team</h1>
               <p className="text-gray-600 mb-4">
                 Enter your team details and invite your teammate. They will receive an email to complete registration.
               </p>
