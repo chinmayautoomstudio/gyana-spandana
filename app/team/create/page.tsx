@@ -126,14 +126,18 @@ export default function TeamCreatePage() {
   const onSubmit = async (data: TeamCreationFormData) => {
     setIsSubmitting(true)
     setSubmitError(null)
+    console.log('[TeamCreate] Submitting form data:', { teamName: data.teamName, p2Email: data.p2Email })
     try {
       const result = await createTeamAndInviteP2(data)
+      console.log('[TeamCreate] Server action result:', result)
       if (result.success) {
+        console.log('[TeamCreate] Success — navigating to dashboard...')
         router.push('/dashboard?invitation_sent=1')
         return
       }
       setSubmitError(result.error)
-    } catch {
+    } catch (err) {
+      console.error('[TeamCreate] Server action threw an exception:', err)
       setSubmitError('Something went wrong. Please try again.')
     }
     setIsSubmitting(false)
