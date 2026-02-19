@@ -28,6 +28,25 @@ export default function DashboardPage() {
   const [authorityForm, setAuthorityForm] = useState({ name: '', email: '', phone: '' })
   const [authoritySaving, setAuthoritySaving] = useState(false)
   const [authorityError, setAuthorityError] = useState<string | null>(null)
+  const [authorityFieldErrors, setAuthorityFieldErrors] = useState<{ email?: string; phone?: string }>({})
+  const [showInvitationBanner, setShowInvitationBanner] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('invitation_sent') === '1') {
+      setShowInvitationBanner(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showInvitationBanner) return
+    const timer = setTimeout(() => {
+      setShowInvitationBanner(false)
+      router.replace('/dashboard')
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [showInvitationBanner, router])
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -162,6 +181,14 @@ export default function DashboardPage() {
     }
   }
 
+  const authorityEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const authorityPhoneRegex = /^[6-9]\d{9}$/
+
+  const dismissInvitationBanner = () => {
+    setShowInvitationBanner(false)
+    router.replace('/dashboard')
+  }
+
   const openAuthorityForm = () => {
     const t = participantData?.teams
     setAuthorityForm({
@@ -170,17 +197,32 @@ export default function DashboardPage() {
       phone: t?.authority_phone ?? '',
     })
     setAuthorityError(null)
+    setAuthorityFieldErrors({})
     setShowAuthorityForm(true)
   }
 
   const handleSaveAuthority = async () => {
     if (!participantData?.team_id) return
-    setAuthoritySaving(true)
+    setAuthorityFieldErrors({})
     setAuthorityError(null)
+
+    const emailTrimmed = authorityForm.email.trim()
+    const phoneDigits = authorityForm.phone.replace(/\D/g, '')
+
+    if (emailTrimmed && !authorityEmailRegex.test(emailTrimmed)) {
+      setAuthorityFieldErrors((e) => ({ ...e, email: 'Invalid email address' }))
+      return
+    }
+    if (phoneDigits && !authorityPhoneRegex.test(phoneDigits)) {
+      setAuthorityFieldErrors((e) => ({ ...e, phone: 'Phone must be a valid 10-digit Indian mobile number' }))
+      return
+    }
+
+    setAuthoritySaving(true)
     const result = await updateTeamAuthority(participantData.team_id, {
       name: authorityForm.name || null,
-      email: authorityForm.email || null,
-      phone: authorityForm.phone || null,
+      email: emailTrimmed || null,
+      phone: phoneDigits || null,
     })
     setAuthoritySaving(false)
     if (!result.success) {
@@ -406,9 +448,19 @@ export default function DashboardPage() {
 
           {/* Main Content Area */}
           <main className="p-4 sm:p-6 lg:p-8">
-            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('invitation_sent') === '1' && (
-              <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            {showInvitationBanner && (
+              <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 relative pr-10">
                 <p className="text-green-800 text-sm">Invitation sent to your teammate. They will receive an email to complete registration.</p>
+                <button
+                  type="button"
+                  onClick={dismissInvitationBanner}
+                  className="absolute top-3 right-3 p-1 rounded text-green-700 hover:bg-green-100 transition-colors"
+                  aria-label="Dismiss"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             )}
             {participantData?.teams?.status === 'pending_p2' && (
@@ -706,19 +758,26 @@ export default function DashboardPage() {
                             value={authorityForm.email}
                             onChange={(e) => setAuthorityForm((f) => ({ ...f, email: e.target.value }))}
                             placeholder="Email"
+                            error={authorityFieldErrors.email}
                           />
                           <Input
                             label="Authority phone"
+                            type="tel"
                             value={authorityForm.phone}
-                            onChange={(e) => setAuthorityForm((f) => ({ ...f, phone: e.target.value }))}
-                            placeholder="Phone"
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+                              setAuthorityForm((f) => ({ ...f, phone: digits }))
+                            }}
+                            placeholder="10-digit mobile number"
+                            maxLength={10}
+                            error={authorityFieldErrors.phone}
                           />
                           {authorityError && <p className="text-sm text-red-600">{authorityError}</p>}
                           <div className="flex gap-2">
                             <Button onClick={handleSaveAuthority} isLoading={authoritySaving} loadingText="Saving...">
                               Save
                             </Button>
-                            <Button variant="outline" onClick={() => { setShowAuthorityForm(false); setAuthorityError(null); }} disabled={authoritySaving}>
+                            <Button variant="outline" onClick={() => { setShowAuthorityForm(false); setAuthorityError(null); setAuthorityFieldErrors({}); }} disabled={authoritySaving}>
                               Cancel
                             </Button>
                           </div>
