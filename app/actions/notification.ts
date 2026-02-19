@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error'
 
@@ -54,10 +55,10 @@ export async function notifyAllAdmins(
     type: NotificationType = 'info',
     link?: string
 ) {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     try {
-        // 1. Get all admin user IDs
+        // 1. Get all admin user IDs (admin client bypasses RLS so this works when called by participants)
         const { data: admins, error: adminError } = await supabase
             .from('user_profiles')
             .select('user_id')

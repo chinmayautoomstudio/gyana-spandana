@@ -302,10 +302,10 @@ export async function completeP2Registration(
   }
 
   const { data: teamRow } = await admin.from('teams').select('team_name, team_code').eq('id', team.id).single()
-  const { data: p1Row } = await admin.from('participants').select('school_name').eq('team_id', team.id).eq('is_participant1', true).single()
+  const { data: p1Row } = await admin.from('participants').select('id, school_name').eq('team_id', team.id).eq('is_participant1', true).single()
   const schoolName = p1Row?.school_name ?? ''
 
-  const { error: participantError } = await admin.from('participants').insert({
+  const { data: p2Participant, error: participantError } = await admin.from('participants').insert({
     user_id: newUser.user.id,
     team_id: team.id,
     name: data.name,
@@ -318,7 +318,7 @@ export async function completeP2Registration(
     is_participant1: false,
     email_verified: true,
     phone_verified: false,
-  })
+  }).select('id').single()
   if (participantError) {
     await admin.auth.admin.deleteUser(newUser.user.id)
     await admin.from('teams').update({ invitation_used_at: null, status: 'pending_p2' }).eq('id', team.id)
@@ -349,6 +349,7 @@ export async function completeP2Registration(
     teamName: string
     teamCode: string
     registrationDate: string
+    participantId?: string
   }) => {
     void fetch(apiUrl, {
       method: 'POST',
@@ -367,6 +368,7 @@ export async function completeP2Registration(
     teamName,
     teamCode,
     registrationDate,
+    participantId: p2Participant?.id,
   })
   if (p1Email) {
     sendConfirmation({
@@ -378,6 +380,7 @@ export async function completeP2Registration(
       teamName,
       teamCode,
       registrationDate,
+      participantId: p1Row?.id,
     })
   }
 
@@ -426,7 +429,7 @@ export async function completeP2RegistrationWithGoogle(
 
   const { data: p1Participant } = await admin
     .from('participants')
-    .select('name, email, school_name')
+    .select('id, name, email, school_name')
     .eq('team_id', team.id)
     .eq('is_participant1', true)
     .single()
@@ -461,7 +464,7 @@ export async function completeP2RegistrationWithGoogle(
   const { data: teamRow } = await admin.from('teams').select('team_name, team_code').eq('id', team.id).single()
 
   const profilePhotoUrl = (user.user_metadata?.avatar_url ?? user.user_metadata?.picture) ?? null
-  const { error: participantError } = await admin.from('participants').insert({
+  const { data: p2Participant, error: participantError } = await admin.from('participants').insert({
     user_id: user.id,
     team_id: team.id,
     name: data.name,
@@ -475,7 +478,7 @@ export async function completeP2RegistrationWithGoogle(
     email_verified: true,
     phone_verified: false,
     profile_photo_url: typeof profilePhotoUrl === 'string' ? profilePhotoUrl : null,
-  })
+  }).select('id').single()
   if (participantError) {
     await admin.from('teams').update({ invitation_used_at: null, status: 'pending_p2' }).eq('id', team.id)
     return { success: false, error: 'Failed to create participant record.' }
@@ -505,6 +508,7 @@ export async function completeP2RegistrationWithGoogle(
     teamName: string
     teamCode: string
     registrationDate: string
+    participantId?: string
   }) => {
     void fetch(apiUrl, {
       method: 'POST',
@@ -521,6 +525,7 @@ export async function completeP2RegistrationWithGoogle(
     teamName,
     teamCode,
     registrationDate,
+    participantId: p2Participant?.id,
   })
   if (p1Email) {
     sendConfirmation({
@@ -532,6 +537,7 @@ export async function completeP2RegistrationWithGoogle(
       teamName,
       teamCode,
       registrationDate,
+      participantId: p1Participant?.id,
     })
   }
   void notifyAllAdmins(
