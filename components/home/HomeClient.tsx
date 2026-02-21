@@ -70,7 +70,7 @@ const heroSlides = [
 
 const statistics = [
   {
-    value: 500,
+    value: 352,
     label: "Registered Teams",
     suffix: "+",
     icon: (
@@ -80,7 +80,7 @@ const statistics = [
     ),
   },
   {
-    value: 1000,
+    value: 704,
     label: "Active Participants",
     suffix: "+",
     icon: (
@@ -90,7 +90,7 @@ const statistics = [
     ),
   },
   {
-    value: 100,
+    value: 4570,
     label: "Quiz Questions",
     suffix: "+",
     icon: (
@@ -100,12 +100,12 @@ const statistics = [
     ),
   },
   {
-    value: 30,
-    label: "Days Until Competition",
-    suffix: "",
+    value: 50,
+    label: "Schools Involved",
+    suffix: "+",
     icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21h18M5 21V9l7-4 7 4v12M9 13h2m4 0h2M9 17h2m4 0h2" />
       </svg>
     ),
   },
