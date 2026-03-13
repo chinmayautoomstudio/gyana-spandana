@@ -18,6 +18,28 @@ export function Statistics({ stats }: StatisticsProps) {
   const [hasAnimated, setHasAnimated] = useState(false)
   const sectionRef = useRef<HTMLDivElement>(null)
 
+  const animateValue = (index: number, start: number, end: number, duration: number) => {
+    const startTime = performance.now()
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4)
+
+      setCountedValues((prev) => {
+        const newValues = [...prev]
+        newValues[index] = Math.floor(start + (end - start) * easeOutQuart)
+        return newValues
+      })
+
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      }
+    }
+
+    requestAnimationFrame(animate)
+  }
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -43,28 +65,6 @@ export function Statistics({ stats }: StatisticsProps) {
       }
     }
   }, [hasAnimated, stats])
-
-  const animateValue = (index: number, start: number, end: number, duration: number) => {
-    const startTime = performance.now()
-
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4)
-
-      setCountedValues((prev) => {
-        const newValues = [...prev]
-        newValues[index] = Math.floor(start + (end - start) * easeOutQuart)
-        return newValues
-      })
-
-      if (progress < 1) {
-        requestAnimationFrame(animate)
-      }
-    }
-
-    requestAnimationFrame(animate)
-  }
 
   return (
     <section ref={sectionRef} className="py-20 bg-[#ECF0F1]">

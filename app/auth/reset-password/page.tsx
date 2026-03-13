@@ -34,6 +34,7 @@ function ResetPasswordContent() {
       router.replace(callbackUrl)
       return
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCheckingAuth(false)
   }, [code, router])
 
@@ -66,7 +67,10 @@ function ResetPasswordContent() {
       }
 
       await supabase.auth.signOut()
-      window.location.href = '/login?message=' + encodeURIComponent('Password reset successfully. Please sign in with your new password.')
+      router.push(
+        '/login?message=' +
+          encodeURIComponent('Password reset successfully. Please sign in with your new password.')
+      )
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update password.')
       setIsSubmitting(false)

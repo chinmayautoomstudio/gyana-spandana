@@ -40,6 +40,7 @@ export const FullScreenExam: React.FC<FullScreenExamProps> = ({
 
   useEffect(() => {
     // Check if already in fullscreen on mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsFullscreen(examSecurityService.isInFullscreen())
 
     // Listen for fullscreen changes

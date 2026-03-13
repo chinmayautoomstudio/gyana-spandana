@@ -72,7 +72,7 @@ export default function QuestionBankPage() {
       console.log('User Error:', userError)
 
       let userRole: string | null = null
-      let userId: string | null = user?.id || null
+      const userId: string | null = user?.id || null
 
       if (user) {
         // Check user_profiles table first

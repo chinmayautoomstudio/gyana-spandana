@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 
 interface QuestionSet {
@@ -25,16 +26,16 @@ export function QuestionSetSelector({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchQuestionSets()
+    void fetchQuestionSets()
   }, [])
 
   useEffect(() => {
     if (selectedSetId) {
-      loadSetQuestions(selectedSetId)
+      void loadSetQuestions(selectedSetId)
     } else {
       onQuestionsLoaded([])
     }
-  }, [selectedSetId])
+  }, [selectedSetId, onQuestionsLoaded])
 
   const fetchQuestionSets = async () => {
     setLoading(true)
@@ -109,7 +110,10 @@ export function QuestionSetSelector({
       )}
       {!loading && questionSets.length === 0 && (
         <p className="text-sm text-gray-500">
-          No question sets available. <a href="/admin/question-sets" className="text-[#C0392B] hover:underline">Create one</a>
+          No question sets available.{' '}
+          <Link href="/admin/question-sets" className="text-[#C0392B] hover:underline">
+            Create one
+          </Link>
         </p>
       )}
     </div>

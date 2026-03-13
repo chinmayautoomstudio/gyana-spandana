@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 export default function PrivacyPage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-red-50">
@@ -291,7 +293,7 @@ export default function PrivacyPage() {
 
                     {/* Back to Home */}
                     <div className="mt-12 pt-8 border-t border-gray-200">
-                        <a
+                        <Link
                             href="/"
                             className="inline-flex items-center gap-2 text-[#E67E22] hover:text-[#C0392B] font-semibold transition-colors"
                         >
@@ -299,7 +301,7 @@ export default function PrivacyPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
                             Back to Home
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>

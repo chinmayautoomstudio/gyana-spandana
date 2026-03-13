@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 export default function ContactPage() {
     const [formData, setFormData] = useState({
@@ -156,7 +157,7 @@ export default function ContactPage() {
                             <p className="text-gray-700 mb-4">
                                 Looking for quick answers? Check out our FAQ section for commonly asked questions.
                             </p>
-                            <a
+                            <Link
                                 href="/#faq"
                                 className="inline-flex items-center gap-2 text-[#C0392B] hover:text-[#E67E22] font-semibold transition-colors"
                             >
@@ -164,7 +165,7 @@ export default function ContactPage() {
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                 </svg>
-                            </a>
+                            </Link>
                         </div>
                     </div>
 

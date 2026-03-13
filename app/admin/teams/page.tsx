@@ -14,6 +14,7 @@ interface TeamRow {
   status: string
   created_at: string
   participants_count: number
+  p2_invited_email: string | null
 }
 
 export default function AdminTeamsPage() {
@@ -21,12 +22,13 @@ export default function AdminTeamsPage() {
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [remindingId, setRemindingId] = useState<string | null>(null)
 
   const fetchTeams = async () => {
     const supabase = createClient()
     const { data: teamsData, error: teamsError } = await supabase
       .from('teams')
-      .select('id, team_name, team_code, status, created_at')
+      .select('id, team_name, team_code, status, created_at, p2_invited_email')
       .order('created_at', { ascending: false })
 
     if (teamsError) {
@@ -54,6 +56,7 @@ export default function AdminTeamsPage() {
         status: t.status || 'complete',
         created_at: t.created_at,
         participants_count: counts[t.id] ?? 0,
+        p2_invited_email: (t as any).p2_invited_email ?? null,
       }))
     )
     setLoading(false)
@@ -62,6 +65,32 @@ export default function AdminTeamsPage() {
   useEffect(() => {
     fetchTeams()
   }, [])
+
+  const handleSendReminder = async (team: TeamRow) => {
+    if (team.status !== 'pending_p2' || !team.p2_invited_email) {
+      return
+    }
+    setRemindingId(team.id)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/send-p2-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: team.id }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) {
+        const errorText = body.error || 'Failed to send reminder.'
+        setMessage({ type: 'error', text: errorText })
+      } else {
+        setMessage({ type: 'success', text: `Reminder email sent to ${team.p2_invited_email}.` })
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to send reminder. Please try again.' })
+    } finally {
+      setRemindingId(null)
+    }
+  }
 
   const handleDelete = async (team: TeamRow) => {
     const confirmMessage =
@@ -128,6 +157,17 @@ export default function AdminTeamsPage() {
       sortable: true,
     },
     {
+      key: 'p2_invited_email',
+      header: 'Participant 2 email',
+      render: (t: TeamRow) =>
+        t.status === 'pending_p2' && t.p2_invited_email ? (
+          <span className="text-sm text-gray-800">{t.p2_invited_email}</span>
+        ) : (
+          <span className="text-xs text-gray-400 italic">—</span>
+        ),
+      sortable: false,
+    },
+    {
       key: 'created_at',
       header: 'Created',
       render: (t: TeamRow) => format(new Date(t.created_at), 'MMM d, yyyy'),
@@ -137,16 +177,30 @@ export default function AdminTeamsPage() {
       key: 'actions',
       header: 'Actions',
       render: (t: TeamRow) => (
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-red-600 border-red-200 hover:bg-red-50"
-          onClick={() => handleDelete(t)}
-          disabled={deletingId === t.id}
-          isLoading={deletingId === t.id}
-        >
-          Delete
-        </Button>
+        <div className="flex items-center gap-2">
+          {t.status === 'pending_p2' && t.p2_invited_email && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-[#C0392B] border-[#F2C94C] hover:bg-amber-50"
+              onClick={() => handleSendReminder(t)}
+              disabled={remindingId === t.id}
+              isLoading={remindingId === t.id}
+            >
+              Send reminder
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-red-600 border-red-200 hover:bg-red-50"
+            onClick={() => handleDelete(t)}
+            disabled={deletingId === t.id}
+            isLoading={deletingId === t.id}
+          >
+            Delete
+          </Button>
+        </div>
       ),
       sortable: false,
     },

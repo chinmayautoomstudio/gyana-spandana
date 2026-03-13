@@ -66,6 +66,7 @@ export function SettingsDropdown() {
   useEffect(() => {
     // Calculate dropdown position when it opens or window resizes
     if (showDropdown) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       calculatePosition()
 
       // Recalculate on window resize

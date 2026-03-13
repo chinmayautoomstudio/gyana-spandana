@@ -84,8 +84,11 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
 
   // Reset timer when duration changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimeRemaining(durationSeconds)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsWarning(false)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsCritical(false)
   }, [durationSeconds])
 

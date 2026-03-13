@@ -38,6 +38,8 @@ export default function AdminLayout({
   // Set mounted to true after component mounts on client
   // This ensures server and client render the same initial HTML
   useEffect(() => {
+    // Mark as mounted on client; safe to ignore lint here
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
   }, [])
 

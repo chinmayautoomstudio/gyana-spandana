@@ -281,7 +281,7 @@ export default function TakeExamPage() {
         }
 
         // Now create attempt with validated question IDs and count
-        let attemptData: any = {
+        const attemptData: any = {
           exam_id: examId,
           participant_id: participant.id,
           total_questions: participantQuestionIds.length,

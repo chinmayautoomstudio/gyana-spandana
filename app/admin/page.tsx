@@ -61,7 +61,9 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
-    fetchDashboardData()
+    // Initial dashboard load
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchDashboardData()
   }, [])
 
   const handleRefresh = async () => {

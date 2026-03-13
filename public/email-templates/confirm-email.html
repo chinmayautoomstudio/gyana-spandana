@@ -2,7 +2,6 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Confirm Your Email - GYANA SPARDHA</title>
   <style>
     body {
       margin: 0;
@@ -110,7 +109,9 @@
       </p>
 
       <p class="alt-link">
-        {{ .ConfirmationURL }}
+        <a href="{{ .ConfirmationURL }}" style="color: #b54822; text-decoration: underline;">
+          {{ .ConfirmationURL }}
+        </a>
       </p>
 
       <p>

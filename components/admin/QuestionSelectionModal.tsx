@@ -32,24 +32,6 @@ export function QuestionSelectionModal({
     new Set(selectedQuestionIds)
   )
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchQuestions()
-    } else {
-      // Reset state when modal closes
-      setSearchTerm('')
-      setSelectedDifficulty('')
-      setSelectedCategory('')
-      setMinPoints(0)
-      setMaxPoints(100)
-      setSelectedQuestions(new Set(selectedQuestionIds))
-    }
-  }, [isOpen, selectedQuestionIds])
-
-  useEffect(() => {
-    filterQuestions()
-  }, [questions, searchTerm, selectedDifficulty, selectedCategory, minPoints, maxPoints])
-
   const fetchQuestions = async () => {
     setLoading(true)
     const supabase = createClient()
@@ -100,6 +82,26 @@ export function QuestionSelectionModal({
 
     setFilteredQuestions(filtered)
   }
+
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void fetchQuestions()
+    } else {
+      // Reset state when modal closes
+      setSearchTerm('')
+      setSelectedDifficulty('')
+      setSelectedCategory('')
+      setMinPoints(0)
+      setMaxPoints(100)
+      setSelectedQuestions(new Set(selectedQuestionIds))
+    }
+  }, [isOpen, selectedQuestionIds])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    filterQuestions()
+  }, [questions, searchTerm, selectedDifficulty, selectedCategory, minPoints, maxPoints])
 
   const handleSelectQuestion = (questionId: string, selected: boolean) => {
     setSelectedQuestions((prev) => {

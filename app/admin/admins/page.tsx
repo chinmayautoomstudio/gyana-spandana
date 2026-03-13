@@ -17,6 +17,21 @@ export default function AdminManagementPage() {
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
 
+  const fetchAdmins = async () => {
+    setLoading(true)
+    setError(null)
+
+    const result = await getAllAdmins()
+
+    if (result.error) {
+      setError(result.error)
+    } else {
+      setAdmins(result.data || [])
+    }
+
+    setLoading(false)
+  }
+
   useEffect(() => {
     const checkAdminAndFetch = async () => {
       const supabase = createClient()
@@ -47,21 +62,6 @@ export default function AdminManagementPage() {
 
     checkAdminAndFetch()
   }, [router])
-
-  const fetchAdmins = async () => {
-    setLoading(true)
-    setError(null)
-
-    const result = await getAllAdmins()
-
-    if (result.error) {
-      setError(result.error)
-    } else {
-      setAdmins(result.data || [])
-    }
-
-    setLoading(false)
-  }
 
   const handleRemoveSuccess = () => {
     fetchAdmins()

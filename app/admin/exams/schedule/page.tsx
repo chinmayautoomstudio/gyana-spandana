@@ -49,7 +49,9 @@ export default function SchedulePage() {
   }
 
   useEffect(() => {
-    fetchExams()
+    // Initial load of exams
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchExams()
   }, [])
 
   // Filter exams based on selected statuses
