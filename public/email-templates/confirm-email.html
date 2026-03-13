@@ -1,107 +1,132 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>OTP Verification</title>
-
-<style>
-body{
-  margin:0;
-  padding:0;
-  background:#f3f4f6;
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-.container{
-  max-width:600px;
-  margin:auto;
-  background:#ffffff;
-  border-radius:10px;
-  overflow:hidden;
-  box-shadow:0 4px 12px rgba(0,0,0,0.08);
-}
-
-.header{
-  text-align:center;
-  padding:24px;
-  border-bottom:1px solid #e5e7eb;
-}
-
-.logo{
-  font-size:22px;
-  font-weight:bold;
-  color:#B54822;
-  letter-spacing:1px;
-}
-
-.content{
-  padding:32px;
-  color:#374151;
-  line-height:1.6;
-}
-
-.otp-box{
-  margin:30px 0;
-  padding:18px;
-  background:#f9fafb;
-  text-align:center;
-  border-radius:8px;
-}
-
-.otp{
-  font-size:36px;
-  letter-spacing:10px;
-  font-weight:bold;
-  color:#B54822;
-}
-
-.footer{
-  text-align:center;
-  padding:20px;
-  font-size:13px;
-  color:#6b7280;
-  border-top:1px solid #e5e7eb;
-}
-
-</style>
+  <meta charset="UTF-8" />
+  <title>Confirm Your Email - GYANA SPARDHA</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f3f4f6;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: #ffffff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    .header {
+      text-align: center;
+      padding: 24px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #B54822;
+      color: #f9fafb;
+    }
+    .logo {
+      font-size: 22px;
+      font-weight: bold;
+      color: #ffedd5;
+      letter-spacing: 1px;
+      text-decoration: none;
+    }
+    a.logo,
+    a.logo:link,
+    a.logo:visited,
+    a.logo:hover,
+    a.logo:active {
+      color: #ffedd5 !important;
+      text-decoration: none !important;
+    }
+    .subtitle {
+      margin-top: 4px;
+      font-size: 13px;
+      color: #e5e7eb;
+    }
+    .content {
+      padding: 32px;
+      color: #374151;
+      line-height: 1.6;
+    }
+    .button-wrapper {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .confirm-button {
+      display: inline-block;
+      padding: 14px 28px;
+      background: #b54822;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-weight: bold;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    .confirm-button:hover {
+      background: #9f3f1e;
+    }
+    .alt-link {
+      margin-top: 20px;
+      font-size: 13px;
+      word-break: break-all;
+      color: #6b7280;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 13px;
+      color: #6b7280;
+      border-top: 1px solid #e5e7eb;
+      background: #f9fafb;
+    }
+  </style>
 </head>
 
 <body>
+  <div class="container">
+    <div class="header">
+      <a href="https://gyanaspardha.com" class="logo">GYANA SPARDHA</a>
+      <div class="subtitle">Odisha Quiz Competition</div>
+    </div>
 
-<div class="container">
+    <div class="content">
+      <h2>Confirm Your Email</h2>
 
-<div class="header">
-<div class="logo">GYANA SPARDHA</div>
-</div>
+      <p>Hello,</p>
 
-<div class="content">
+      <p>
+        You're almost done! To <strong>complete your registration for GYANA SPARDHA – Odisha Quiz Competition</strong>,
+        please confirm your email address by clicking the button below.
+      </p>
 
-<h2>Your OTP Code for Gyana Spardha</h2>
+      <div class="button-wrapper">
+        <a class="confirm-button" href="{{ .ConfirmationURL }}">Confirm Email</a>
+      </div>
 
-<p>Hello!</p>
+      <p>
+        If the button does not work, copy and paste the link below into your browser:
+      </p>
 
-<p>Your one-time password (OTP) for email verification is:</p>
+      <p class="alt-link">
+        {{ .ConfirmationURL }}
+      </p>
 
-<div class="otp-box">
-<div class="otp">{{ .Token }}</div>
-</div>
+      <p>
+        If you did not try to register on our website, you can safely ignore this email.
+        Your account will remain secure.
+      </p>
 
-<p>This code will expire in <strong>60 minutes</strong>.</p>
+      <p>
+        Thank you,<br />
+        <strong>Gyana Spardha Team</strong>
+      </p>
+    </div>
 
-<p>If you didn't request this code, please ignore this email.</p>
-
-<p>
-Thank you,<br>
-<strong>Gyana Spardha Team</strong>
-</p>
-
-</div>
-
-<div class="footer">
-© 2026 Gyana Spardha. All rights reserved.
-</div>
-
-</div>
-
+    <div class="footer">
+      © 2026 Gyana Spardha. All rights reserved.
+    </div>
+  </div>
 </body>
 </html>

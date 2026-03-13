@@ -74,7 +74,7 @@ export default function TeamCreatePage() {
       const supabase = createClient()
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (!authUser) {
-        router.replace('/login?message=Please sign in to create your team')
+        router.replace('/login?message=Please check your email to complete your registration')
         return
       }
       const { data: participant } = await supabase
