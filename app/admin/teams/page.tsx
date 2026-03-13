@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { DataTable } from '@/components/admin/DataTable'
 import { Button } from '@/components/ui/Button'
+import { KebabMenu } from '@/components/ui/KebabMenu'
 import { deleteTeam } from '@/app/actions/admin'
 import { format } from 'date-fns'
 
@@ -18,11 +20,14 @@ interface TeamRow {
 }
 
 export default function AdminTeamsPage() {
+  const router = useRouter()
   const [teams, setTeams] = useState<TeamRow[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [remindingId, setRemindingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const fetchTeams = async () => {
     const supabase = createClient()
@@ -40,9 +45,7 @@ export default function AdminTeamsPage() {
     const teamIds = (teamsData || []).map((t) => t.id)
     const counts: Record<string, number> = {}
     if (teamIds.length > 0) {
-      const { data: partData } = await supabase
-        .from('participants')
-        .select('team_id')
+      const { data: partData } = await supabase.from('participants').select('team_id')
       ;(partData || []).forEach((p) => {
         counts[p.team_id] = (counts[p.team_id] || 0) + 1
       })
@@ -57,13 +60,13 @@ export default function AdminTeamsPage() {
         created_at: t.created_at,
         participants_count: counts[t.id] ?? 0,
         p2_invited_email: (t as any).p2_invited_email ?? null,
-      }))
+      })),
     )
     setLoading(false)
   }
 
   useEffect(() => {
-    fetchTeams()
+    void fetchTeams()
   }, [])
 
   const handleSendReminder = async (team: TeamRow) => {
@@ -111,10 +114,61 @@ export default function AdminTeamsPage() {
     }
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    const selectedTeams = teams.filter((t) => selectedIds.has(t.id))
+    if (selectedTeams.length === 0) return
+
+    const confirmMessage =
+      selectedTeams.length === 1
+        ? `Delete team "${selectedTeams[0].team_name}" (${selectedTeams[0].team_code})? This will also remove its participant(s) and their exam data. This cannot be undone.`
+        : `Delete ${selectedTeams.length} teams? This will also remove their participants and exam data. This cannot be undone.`
+
+    if (!window.confirm(confirmMessage)) return
+
+    setBulkDeleting(true)
+    setMessage(null)
+
+    const results = await Promise.all(
+      selectedTeams.map(async (team) => {
+        const result = await deleteTeam(team.id)
+        return { id: team.id, ...result }
+      }),
+    )
+
+    const failed = results.filter((r) => !r.success)
+    const deletedIds = results.filter((r) => r.success).map((r) => r.id)
+
+    if (deletedIds.length > 0) {
+      setTeams((prev) => prev.filter((t) => !deletedIds.includes(t.id)))
+      setSelectedIds(new Set())
+    }
+
+    if (failed.length > 0) {
+      setMessage({
+        type: 'error',
+        text:
+          failed.length === results.length
+            ? 'Failed to delete the selected teams. Please try again.'
+            : 'Some teams could not be deleted. The list has been updated with the successfully deleted teams.',
+      })
+    } else if (deletedIds.length > 0) {
+      setMessage({
+        type: 'success',
+        text:
+          deletedIds.length === 1
+            ? 'Team deleted successfully.'
+            : `${deletedIds.length} teams deleted successfully.`,
+      })
+    }
+
+    setBulkDeleting(false)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C0392B]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C0392B]" />
       </div>
     )
   }
@@ -129,9 +183,7 @@ export default function AdminTeamsPage() {
     {
       key: 'team_code',
       header: 'Team code',
-      render: (t: TeamRow) => (
-        <span className="font-mono text-sm">{t.team_code}</span>
-      ),
+      render: (t: TeamRow) => <span className="font-mono text-sm">{t.team_code}</span>,
       sortable: true,
     },
     {
@@ -140,9 +192,7 @@ export default function AdminTeamsPage() {
       render: (t: TeamRow) => (
         <span
           className={`px-2 py-1 text-xs font-medium rounded-full ${
-            t.status === 'complete'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-amber-100 text-amber-800'
+            t.status === 'complete' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
           }`}
         >
           {t.status === 'complete' ? 'Complete' : 'Pending P2'}
@@ -177,30 +227,28 @@ export default function AdminTeamsPage() {
       key: 'actions',
       header: 'Actions',
       render: (t: TeamRow) => (
-        <div className="flex items-center gap-2">
-          {t.status === 'pending_p2' && t.p2_invited_email && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-[#C0392B] border-[#F2C94C] hover:bg-amber-50"
-              onClick={() => handleSendReminder(t)}
-              disabled={remindingId === t.id}
-              isLoading={remindingId === t.id}
-            >
-              Send reminder
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-red-600 border-red-200 hover:bg-red-50"
-            onClick={() => handleDelete(t)}
-            disabled={deletingId === t.id}
-            isLoading={deletingId === t.id}
-          >
-            Delete
-          </Button>
-        </div>
+        <KebabMenu
+          items={[
+            {
+              label: 'View',
+              onClick: () => router.push(`/admin/teams/${t.id}`),
+            },
+            ...(t.status === 'pending_p2' && t.p2_invited_email
+              ? [
+                  {
+                    label: 'Send reminder',
+                    onClick: () => handleSendReminder(t),
+                    disabled: remindingId === t.id,
+                  } as const,
+                ]
+              : []),
+            {
+              label: 'Delete',
+              onClick: () => handleDelete(t),
+              disabled: deletingId === t.id,
+            },
+          ]}
+        />
       ),
       sortable: false,
     },
@@ -210,6 +258,23 @@ export default function AdminTeamsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-3xl font-bold text-gray-900">Teams</h1>
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 hidden sm:inline">
+              {selectedIds.size} team{selectedIds.size > 1 ? 's' : ''} selected
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              isLoading={bulkDeleting}
+            >
+              Delete selected
+            </Button>
+          </div>
+        )}
       </div>
 
       {message && (
@@ -229,7 +294,12 @@ export default function AdminTeamsPage() {
         columns={columns}
         searchable
         searchPlaceholder="Search by team name or code..."
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        getRowId={(team: TeamRow) => team.id}
       />
     </div>
   )
 }
+

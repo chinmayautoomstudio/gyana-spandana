@@ -15,6 +15,10 @@ interface DataTableProps<T> {
   onRowClick?: (item: T) => void
   searchable?: boolean
   searchPlaceholder?: string
+  selectable?: boolean
+  selectedIds?: Set<string>
+  onSelectionChange?: (ids: Set<string>) => void
+  getRowId?: (item: T) => string
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -23,6 +27,10 @@ export function DataTable<T extends Record<string, any>>({
   onRowClick,
   searchable = false,
   searchPlaceholder = 'Search...',
+  selectable = false,
+  selectedIds,
+  onSelectionChange,
+  getRowId,
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortColumn, setSortColumn] = useState<keyof T | string | null>(null)
@@ -59,6 +67,49 @@ export function DataTable<T extends Record<string, any>>({
     return sortDirection === 'asc' ? comparison : -comparison
   })
 
+  const effectiveSelectedIds = selectedIds ?? new Set<string>()
+
+  const getIdForRow = (item: T): string => {
+    if (getRowId) {
+      return getRowId(item)
+    }
+    const idValue = item.id
+    return typeof idValue === 'string' ? idValue : String(idValue)
+  }
+
+  const toggleRowSelection = (rowId: string) => {
+    if (!onSelectionChange) return
+    const next = new Set(effectiveSelectedIds)
+    if (next.has(rowId)) {
+      next.delete(rowId)
+    } else {
+      next.add(rowId)
+    }
+    onSelectionChange(next)
+  }
+
+  const toggleAllVisible = () => {
+    if (!onSelectionChange) return
+    const visibleIds = sortedData.map((item) => getIdForRow(item))
+    const allSelected = visibleIds.every((id) => effectiveSelectedIds.has(id))
+    const next = new Set(effectiveSelectedIds)
+    if (allSelected) {
+      visibleIds.forEach((id) => next.delete(id))
+    } else {
+      visibleIds.forEach((id) => next.add(id))
+    }
+    onSelectionChange(next)
+  }
+
+  const allVisibleSelected =
+    selectable && sortedData.length > 0
+      ? sortedData.every((item) => effectiveSelectedIds.has(getIdForRow(item)))
+      : false
+  const someVisibleSelected =
+    selectable && sortedData.length > 0
+      ? sortedData.some((item) => effectiveSelectedIds.has(getIdForRow(item)))
+      : false
+
   return (
     <div className="space-y-4">
       {searchable && (
@@ -86,6 +137,22 @@ export function DataTable<T extends Record<string, any>>({
           <table className="w-full min-w-max">
             <thead className="bg-gray-50">
               <tr>
+                {selectable && (
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all rows"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) {
+                          // visually indicate partial selection
+                          el.indeterminate = someVisibleSelected && !allVisibleSelected
+                        }
+                      }}
+                      onChange={toggleAllVisible}
+                    />
+                  </th>
+                )}
                 {columns.map((column) => (
                   <th
                     key={String(column.key)}
@@ -125,6 +192,17 @@ export function DataTable<T extends Record<string, any>>({
                     onClick={() => onRowClick?.(item)}
                     className={onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''}
                   >
+                    {selectable && (
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          aria-label="Select row"
+                          checked={effectiveSelectedIds.has(getIdForRow(item))}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleRowSelection(getIdForRow(item))}
+                        />
+                      </td>
+                    )}
                     {columns.map((column) => (
                       <td key={String(column.key)} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {column.render ? column.render(item) : String(item[column.key] || '')}
