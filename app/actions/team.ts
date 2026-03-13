@@ -206,12 +206,14 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     console.error('Send invitation error', e)
   })
 
-  void notifyAllAdmins(
+  notifyAllAdmins(
     'New Team Created (Pending P2)',
     `Team "${data.teamName}" created. Invitation sent to ${data.p2Email}.`,
     'info',
     '/admin/teams'
-  ).catch(() => {})
+  ).catch((err) => {
+    console.error('[notifyAllAdmins] failed (createTeamAndInviteP2):', err)
+  })
 
   return { success: true }
 }
@@ -384,12 +386,14 @@ export async function completeP2Registration(
     })
   }
 
-  void notifyAllAdmins(
+  notifyAllAdmins(
     'New Team Registered',
     `Team "${teamName}" is now complete with both participants.`,
     'success',
     '/admin/teams'
-  ).catch(() => {})
+  ).catch((err) => {
+    console.error('[notifyAllAdmins] failed (completeP2Registration):', err)
+  })
 
   return { success: true }
 }
@@ -540,12 +544,14 @@ export async function completeP2RegistrationWithGoogle(
       participantId: p1Participant?.id,
     })
   }
-  void notifyAllAdmins(
+  notifyAllAdmins(
     'New Team Registered',
     `Team "${teamName}" is now complete with both participants.`,
     'success',
     '/admin/teams'
-  ).catch(() => {})
+  ).catch((err) => {
+    console.error('[notifyAllAdmins] failed (completeP2RegistrationWithGoogle):', err)
+  })
 
   return { success: true }
 }

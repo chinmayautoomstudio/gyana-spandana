@@ -54,24 +54,34 @@ export function NotificationBell() {
   }
 
   useEffect(() => {
-    fetchNotifications()
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    // Subscribe to realtime changes
-    const channel = supabase
-      .channel('notifications_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${supabase.auth.getUser().then(({ data }) => data.user?.id)}`,
-        },
-        () => {
-          fetchNotifications()
-        }
-      )
-      .subscribe()
+    const init = async () => {
+      await fetchNotifications()
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      channel = supabase
+        .channel('notifications_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            void fetchNotifications()
+          }
+        )
+        .subscribe()
+    }
+
+    void init()
 
     // Close dropdown when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
@@ -84,7 +94,9 @@ export function NotificationBell() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
-      supabase.removeChannel(channel)
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [])
 
