@@ -41,6 +41,7 @@ export default function SignupPage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [signupError, setSignupError] = useState<string | null>(null)
+  const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SignUpFormData>({
@@ -51,7 +52,21 @@ export default function SignupPage() {
   const onSubmit = async (data: SignUpFormData) => {
     setIsSubmitting(true)
     setSignupError(null)
+    setPendingInviteToken(null)
     try {
+      // Before calling signUp, check if this email has a pending P2 invitation
+      const { checkPendingInvitationForEmail } = await import('@/app/actions/team')
+      const pending = await checkPendingInvitationForEmail(data.email.trim().toLowerCase())
+      if (pending.hasPending) {
+        setSignupError(
+          `This email has already been invited to join a team ("${pending.teamName}"). ` +
+          'Please check your email for the invitation link, or click here to open it.'
+        )
+        setPendingInviteToken(pending.token)
+        setIsSubmitting(false)
+        return
+      }
+
       const supabase = createClient()
       const { data: authData, error } = await supabase.auth.signUp({
         email: data.email,
@@ -172,8 +187,16 @@ export default function SignupPage() {
               </div>
 
               {signupError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-800 text-sm">{signupError}</p>
+                <div className={`rounded-lg p-4 ${pendingInviteToken ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
+                  <p className={pendingInviteToken ? 'text-amber-800 text-sm' : 'text-red-800 text-sm'}>{signupError}</p>
+                  {pendingInviteToken && (
+                    <Link
+                      href={`/register/invite/${pendingInviteToken}`}
+                      className="text-[#C0392B] hover:underline text-sm font-medium mt-2 inline-block"
+                    >
+                      Open your invitation →
+                    </Link>
+                  )}
                 </div>
               )}
 
