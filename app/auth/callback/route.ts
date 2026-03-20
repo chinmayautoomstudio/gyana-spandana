@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { getInvitationByToken } from '@/app/actions/team'
+import { getInvitationByToken, checkPendingInvitationForEmail } from '@/app/actions/team'
 
 const ALLOWED_NEXT_PATHS = ['/auth/reset-password', '/dashboard', '/team/create'] as const
 
@@ -89,7 +89,15 @@ export async function GET(request: NextRequest) {
       .single()
 
     if (participantError || !participant) {
-      // User is authenticated but doesn't have a participant record
+      // User is authenticated but doesn't have a participant record.
+      // Check if their email has a pending P2 invitation - if so, redirect to accept it.
+      const userEmail = (user.email ?? (user.user_metadata?.email as string | undefined))?.trim().toLowerCase()
+      if (userEmail) {
+        const pending = await checkPendingInvitationForEmail(userEmail)
+        if (pending.hasPending) {
+          return NextResponse.redirect(`${baseUrl}/register/invite/${pending.token}`)
+        }
+      }
       // Redirect to team creation (two-step registration)
       const url = new URL(`${baseUrl}/team/create`)
       return NextResponse.redirect(url)

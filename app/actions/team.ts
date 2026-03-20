@@ -86,15 +86,21 @@ export async function checkTeamNameAvailability(teamName: string): Promise<TeamN
 export async function checkPendingInvitationForEmail(
   email: string
 ): Promise<{ hasPending: true; token: string; teamName: string } | { hasPending: false }> {
+  const trimmed = email?.trim().toLowerCase()
+  if (!trimmed) return { hasPending: false }
+
   const admin = createAdminClient()
-  const { data } = await admin
+  // Use limit(1) instead of maybeSingle() - maybeSingle errors when multiple rows match.
+  // Use ilike for case-insensitive match in case p2_invited_email has mixed case.
+  const { data: rows } = await admin
     .from('teams')
     .select('invitation_token, team_name, invitation_expires_at')
-    .eq('p2_invited_email', email.trim().toLowerCase())
+    .ilike('p2_invited_email', trimmed)
     .is('invitation_used_at', null)
     .eq('status', 'pending_p2')
-    .maybeSingle()
+    .limit(1)
 
+  const data = Array.isArray(rows) ? rows[0] : rows
   if (data?.invitation_token && (!data.invitation_expires_at || new Date(data.invitation_expires_at) > new Date())) {
     return { hasPending: true, token: data.invitation_token, teamName: data.team_name ?? '' }
   }
