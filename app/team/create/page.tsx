@@ -86,6 +86,15 @@ export default function TeamCreatePage() {
         router.replace('/dashboard')
         return
       }
+      const emailToCheck = (authUser.email ?? (authUser.user_metadata?.email as string | undefined))?.trim().toLowerCase()
+      if (emailToCheck) {
+        const { checkPendingInvitationForEmail } = await import('@/app/actions/team')
+        const pending = await checkPendingInvitationForEmail(emailToCheck)
+        if (pending.hasPending) {
+          router.replace(`/register/invite/${pending.token}`)
+          return
+        }
+      }
       setUser(authUser)
       const p1Name = getP1NameFromUser(authUser)
       reset({
@@ -112,6 +121,12 @@ export default function TeamCreatePage() {
       const nameResult = await checkTeamNameAvailability(getValues('teamName'))
       if (!nameResult.available) {
         setError('teamName', { type: 'manual', message: nameResult.error })
+        return
+      }
+      const p2Email = getValues('p2Email')?.trim().toLowerCase()
+      const p1Email = (user?.email ?? user?.user_metadata?.email as string | undefined)?.trim().toLowerCase()
+      if (p1Email && p2Email === p1Email) {
+        setError('p2Email', { type: 'manual', message: 'Participant 2 must use a different email address than yours.' })
         return
       }
     }

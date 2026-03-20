@@ -83,11 +83,40 @@ export async function checkTeamNameAvailability(teamName: string): Promise<TeamN
   return { available: true }
 }
 
+export async function checkPendingInvitationForEmail(
+  email: string
+): Promise<{ hasPending: true; token: string; teamName: string } | { hasPending: false }> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('teams')
+    .select('invitation_token, team_name, invitation_expires_at')
+    .eq('p2_invited_email', email.trim().toLowerCase())
+    .is('invitation_used_at', null)
+    .eq('status', 'pending_p2')
+    .maybeSingle()
+
+  if (data?.invitation_token && (!data.invitation_expires_at || new Date(data.invitation_expires_at) > new Date())) {
+    return { hasPending: true, token: data.invitation_token, teamName: data.team_name ?? '' }
+  }
+  return { hasPending: false }
+}
+
 export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise<CreateTeamResult> {
   const supabaseServer = await createClient()
   const { data: { user } } = await supabaseServer.auth.getUser()
-  if (!user?.email) {
+  if (!user) {
     return { success: false, error: 'You must be signed in to create a team.' }
+  }
+  // Get logged-in email (works for both email/password and Google/OAuth)
+  const p1EmailRaw = user.email ?? (user.user_metadata?.email as string | undefined)
+  if (!p1EmailRaw?.trim()) {
+    return { success: false, error: 'You must be signed in to create a team.' }
+  }
+
+  const p1Email = p1EmailRaw.trim().toLowerCase()
+  const p2Email = data.p2Email.trim().toLowerCase()
+  if (p1Email === p2Email) {
+    return { success: false, error: 'Participant 2 must use a different email address than yours.' }
   }
 
   const admin = createAdminClient()
@@ -99,6 +128,14 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     .single()
   if (existingParticipant) {
     return { success: false, error: 'You have already created or joined a team.' }
+  }
+
+  const pendingInvite = await checkPendingInvitationForEmail(p1Email)
+  if (pendingInvite.hasPending) {
+    return {
+      success: false,
+      error: `Your email already has a pending team invitation for "${pendingInvite.teamName}". Please check your email and use the invitation link to join your team instead.`,
+    }
   }
 
   const { data: existingTeam } = await admin

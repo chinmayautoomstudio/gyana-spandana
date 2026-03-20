@@ -152,10 +152,11 @@ export const teamRegistrationSchema = z.object({
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),
-}).refine((data) => data.participant1.email !== data.participant2.email, {
-  message: 'Both participants must have different email addresses',
-  path: ['participant2', 'email'],
-}).refine((data) => data.participant1.aadhar !== data.participant2.aadhar, {
+}).refine(
+  (data) =>
+    data.participant1.email.trim().toLowerCase() !== data.participant2.email.trim().toLowerCase(),
+  { message: 'Both participants must have different email addresses', path: ['participant2', 'email'] }
+).refine((data) => data.participant1.aadhar !== data.participant2.aadhar, {
   message: 'Both participants must have different Aadhar numbers',
   path: ['participant2', 'aadhar'],
 }).refine((data) => data.participant1.phone !== data.participant2.phone, {
