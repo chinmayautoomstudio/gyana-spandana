@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { TeamRegistrationFormData } from '@/lib/validations'
+import { TEAM_NAME_MAX_LENGTH, TeamRegistrationFormData } from '@/lib/validations'
 import { notifyAllAdmins } from '@/app/actions/notification'
 
 /** Team code: GS- + first 8 chars of UUID (e.g. GS-A7F2K9M4). Same format as team.ts. */
@@ -17,6 +17,14 @@ export async function registerTeam(
     const supabase = createAdminClient()
 
     try {
+        const teamNameTrimmed = data.teamName.trim()
+        if (teamNameTrimmed.length < 2 || teamNameTrimmed.length > TEAM_NAME_MAX_LENGTH) {
+            return {
+                success: false,
+                error: `Team name must be between 2 and ${TEAM_NAME_MAX_LENGTH} characters.`,
+            }
+        }
+
         // 1. Update passwords for both users
         // We use the admin client to update the user's password without needing their old password
         const { error: p1Error } = await supabase.auth.admin.updateUserById(p1UserId, {
@@ -39,7 +47,7 @@ export async function registerTeam(
         const { data: existingTeam } = await supabase
             .from('teams')
             .select('id')
-            .eq('team_name', data.teamName)
+            .eq('team_name', teamNameTrimmed)
             .single()
 
         if (existingTeam) {
@@ -53,7 +61,7 @@ export async function registerTeam(
         const { data: team, error: teamError } = await supabase
             .from('teams')
             .insert({
-                team_name: data.teamName,
+                team_name: teamNameTrimmed,
                 team_code: teamCode,
                 authority_name: authorityName,
                 authority_email: authorityEmail,
@@ -136,7 +144,7 @@ export async function registerTeam(
                     body: JSON.stringify({
                         authorityEmail,
                         authorityName,
-                        teamName: data.teamName,
+                        teamName: teamNameTrimmed,
                         teamCode: teamCode,
                         participant1Name: data.participant1.name,
                         participant1School: data.schoolName,
@@ -184,7 +192,7 @@ export async function registerTeam(
             participantSchool: data.schoolName,
             teammateName: data.participant2.name,
             teammateSchool: data.schoolName,
-            teamName: data.teamName,
+            teamName: teamNameTrimmed,
             teamCode: teamCode,
             registrationDate,
             participantId: participantIds[0],
@@ -195,7 +203,7 @@ export async function registerTeam(
             participantSchool: data.schoolName,
             teammateName: data.participant1.name,
             teammateSchool: data.schoolName,
-            teamName: data.teamName,
+            teamName: teamNameTrimmed,
             teamCode: teamCode,
             registrationDate,
             participantId: participantIds[1],
@@ -205,7 +213,7 @@ export async function registerTeam(
         try {
             await notifyAllAdmins(
                 'New Team Registered',
-                `Team "${data.teamName}" has registered with code ${teamCode}.`,
+                `Team "${teamNameTrimmed}" has registered with code ${teamCode}.`,
                 'success',
                 '/admin/teams'
             )

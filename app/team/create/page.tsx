@@ -9,7 +9,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { createTeamAndInviteP2, checkTeamNameAvailability } from '@/app/actions/team'
-import { teamCreationSchema, type TeamCreationFormData } from '@/lib/validations'
+import { teamCreationSchema, TEAM_NAME_MAX_LENGTH, type TeamCreationFormData } from '@/lib/validations'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { carouselSlides } from '@/lib/constants/carousel'
@@ -33,6 +33,9 @@ function formatAadhar(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 12)
   return digits.replace(/(\d{4})(?=\d)/g, '$1 ')
 }
+
+const dobMax = new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]
+const dobMin = new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0]
 
 function getP1NameFromUser(user: User): string {
   const m = user.user_metadata
@@ -65,6 +68,7 @@ export default function TeamCreatePage() {
       p1Phone: '',
       p1Aadhar: '',
       p1Class: '' as TeamCreationFormData['p1Class'],
+      p1DateOfBirth: '',
       schoolAuthority: { name: '', email: '', phone: '' },
     },
   })
@@ -106,6 +110,7 @@ export default function TeamCreatePage() {
         p1Phone: '',
         p1Aadhar: '',
         p1Class: '' as TeamCreationFormData['p1Class'],
+        p1DateOfBirth: '',
         schoolAuthority: { name: '', email: '', phone: '' },
         consent: false,
       })
@@ -131,7 +136,7 @@ export default function TeamCreatePage() {
       }
     }
     if (step === 2) {
-      const ok = await trigger(['p1Gender', 'p1Phone', 'p1Aadhar', 'p1Class'])
+      const ok = await trigger(['p1Gender', 'p1Phone', 'p1Aadhar', 'p1Class', 'p1DateOfBirth'])
       if (!ok) return
     }
     setStep((s) => Math.min(s + 1, STEPS))
@@ -249,6 +254,7 @@ export default function TeamCreatePage() {
                     {...register('teamName')}
                     error={errors.teamName?.message}
                     placeholder="Enter team name"
+                    maxLength={TEAM_NAME_MAX_LENGTH}
                     required
                   />
                   <Input
@@ -320,6 +326,15 @@ export default function TeamCreatePage() {
                     </select>
                     {errors.p1Class && <p className="mt-1.5 text-sm text-red-600">{errors.p1Class.message}</p>}
                   </div>
+                  <Input
+                    label="Date of Birth"
+                    type="date"
+                    {...register('p1DateOfBirth')}
+                    error={errors.p1DateOfBirth?.message}
+                    max={dobMax}
+                    min={dobMin}
+                    required
+                  />
                 </div>
               )}
 

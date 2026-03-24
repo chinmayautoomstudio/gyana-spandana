@@ -33,6 +33,9 @@ function formatAadhar(value: string) {
   return digits.replace(/(\d{4})(?=\d)/g, '$1 ')
 }
 
+const dobMax = new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]
+const dobMin = new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0]
+
 export default function RegisterInvitePage() {
   const params = useParams()
   const router = useRouter()
@@ -306,6 +309,15 @@ export default function RegisterInvitePage() {
                 </select>
                 {errorsGoogle.class && <p className="mt-1.5 text-sm text-red-600">{errorsGoogle.class.message}</p>}
               </div>
+              <Input
+                label="Date of Birth"
+                type="date"
+                {...registerGoogle('dateOfBirth')}
+                error={errorsGoogle.dateOfBirth?.message}
+                max={dobMax}
+                min={dobMin}
+                required
+              />
               <div className="flex items-start gap-3 pt-2">
                 <input
                   type="checkbox"
@@ -398,6 +410,15 @@ export default function RegisterInvitePage() {
               </select>
               {errors.class && <p className="mt-1.5 text-sm text-red-600">{errors.class.message}</p>}
             </div>
+            <Input
+              label="Date of Birth"
+              type="date"
+              {...register('dateOfBirth')}
+              error={errors.dateOfBirth?.message}
+              max={dobMax}
+              min={dobMin}
+              required
+            />
             <div>
               <Input
                 label="Password"

@@ -114,9 +114,7 @@ export async function completeProfile(
       updateData.school_address = data.schoolAddress
     }
 
-    if (data.dateOfBirth !== undefined && data.dateOfBirth !== null && data.dateOfBirth.trim() !== '') {
-      updateData.date_of_birth = data.dateOfBirth
-    }
+    updateData.date_of_birth = data.dateOfBirth
 
     // Add profile photo URL if provided
     if (profilePhotoUrl) {
@@ -236,7 +234,9 @@ export async function updateProfile(
     if (data.address !== undefined) updateData.address = data.address || null
     if (data.schoolAddress !== undefined) updateData.school_address = data.schoolAddress || null
     if (data.class !== undefined) updateData.class = data.class || null
-    if (data.dateOfBirth) updateData.date_of_birth = data.dateOfBirth || null
+    if (data.dateOfBirth !== undefined) {
+      updateData.date_of_birth = data.dateOfBirth || null
+    }
     if (data.profilePhoto) updateData.profile_photo_url = data.profilePhoto
 
     // Update participant record using the participant ID to ensure we're updating the correct record

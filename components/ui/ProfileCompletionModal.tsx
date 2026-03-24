@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { profileCompletionSchema, type ProfileCompletionFormData } from '@/lib/validations'
@@ -11,9 +11,14 @@ import { completeProfile } from '@/app/actions/profile'
 interface ProfileCompletionModalProps {
   onComplete: () => void
   onSkip: () => void
+  /** Pre-fill when participant already has DOB from registration */
+  initialDateOfBirth?: string | null
 }
 
-export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletionModalProps) {
+const dobMax = new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]
+const dobMin = new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0]
+
+export function ProfileCompletionModal({ onComplete, onSkip, initialDateOfBirth }: ProfileCompletionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -29,9 +34,17 @@ export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletion
   } = useForm<ProfileCompletionFormData>({
     resolver: zodResolver(profileCompletionSchema),
     mode: 'onChange',
+    defaultValues: {
+      dateOfBirth: initialDateOfBirth ?? '',
+    },
   })
 
   const selectedPhoto = watch('profilePhoto')
+
+  useEffect(() => {
+    const v = initialDateOfBirth?.trim()
+    if (v) setValue('dateOfBirth', v)
+  }, [initialDateOfBirth, setValue])
 
   // Handle photo selection and preview
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -238,8 +251,9 @@ export function ProfileCompletionModal({ onComplete, onSkip }: ProfileCompletion
             type="date"
             {...register('dateOfBirth')}
             error={errors.dateOfBirth?.message}
-            max={new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]}
-            min={new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0]}
+            max={dobMax}
+            min={dobMin}
+            required
           />
 
           {/* Upload Progress */}

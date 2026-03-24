@@ -1,5 +1,22 @@
 import { z } from 'zod'
 
+/** Max length for participant-created team names (registration). */
+export const TEAM_NAME_MAX_LENGTH = 20
+
+/** Trimmed team name: 2–TEAM_NAME_MAX_LENGTH characters. */
+export const teamNameSchema = z
+  .string()
+  .transform((s) => s.trim())
+  .pipe(
+    z
+      .string()
+      .min(2, 'Team name must be at least 2 characters')
+      .max(
+        TEAM_NAME_MAX_LENGTH,
+        `Team name must be at most ${TEAM_NAME_MAX_LENGTH} characters`
+      )
+  )
+
 // Aadhar validation (12 digits)
 const aadharRegex = /^\d{12}$/
 
@@ -12,8 +29,52 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Password validation: min 8 chars, at least one uppercase, one lowercase, one number
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
+/** Unicode letters and single spaces between words only; trims and collapses whitespace. */
+const PARTICIPANT_FULL_NAME_PATTERN = /^[\p{L}]+(?: [\p{L}]+)*$/u
+
+export const participantFullNameSchema = z
+  .string()
+  .transform((s) => s.trim().replace(/\s+/g, ' '))
+  .pipe(
+    z
+      .string()
+      .min(2, 'Name must be at least 2 characters')
+      .max(100, 'Name is too long')
+      .regex(PARTICIPANT_FULL_NAME_PATTERN, {
+        message: 'Name can only contain letters and spaces (no numbers or symbols)',
+      })
+  )
+
+function ageFromDateString(dateStr: string): number {
+  const birthDate = new Date(dateStr)
+  const today = new Date()
+  const age = today.getFullYear() - birthDate.getFullYear()
+  const monthDiff = today.getMonth() - birthDate.getMonth()
+  return monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ? age - 1
+    : age
+}
+
+/** Inclusive age bounds for participant date of birth (school quiz eligibility). */
+export const PARTICIPANT_MIN_AGE = 14
+export const PARTICIPANT_MAX_AGE = 18
+
+/** Non-empty date string; age must be between PARTICIPANT_MIN_AGE and PARTICIPANT_MAX_AGE (inclusive). */
+export const requiredDateOfBirthSchema = z
+  .string()
+  .min(1, 'Date of birth is required')
+  .refine((date) => !Number.isNaN(new Date(date).getTime()), {
+    message: 'Date of birth must be a valid date',
+  })
+  .refine((date) => {
+    const actualAge = ageFromDateString(date)
+    return actualAge >= PARTICIPANT_MIN_AGE && actualAge <= PARTICIPANT_MAX_AGE
+  }, {
+    message: `Date of birth must be valid and age must be between ${PARTICIPANT_MIN_AGE} and ${PARTICIPANT_MAX_AGE} years`,
+  })
+
 export const participantSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  name: participantFullNameSchema,
   gender: z.enum(['Male', 'Female', 'Other'], {
     message: 'Please select a valid gender option',
   }),
@@ -68,8 +129,8 @@ export const schoolAuthorityOptionalSchema = z.object({
 
 // P1 creates team and invites P2 (two-step registration)
 export const teamCreationSchema = z.object({
-  p1Name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
-  teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
+  p1Name: participantFullNameSchema,
+  teamName: teamNameSchema,
   schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),
   p2Email: z.string().email('Invalid email address').regex(emailRegex, 'Invalid email format'),
   p1Gender: z.enum(['Male', 'Female', 'Other'], {
@@ -86,6 +147,7 @@ export const teamCreationSchema = z.object({
     ['Class X', 'Class XI/+2 First Year', 'Class XII/+2 Second Year'],
     { message: 'Please select your class' }
   ),
+  p1DateOfBirth: requiredDateOfBirthSchema,
   schoolAuthority: schoolAuthorityOptionalSchema,
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
@@ -94,7 +156,7 @@ export const teamCreationSchema = z.object({
 
 // P2 completes registration via invitation link
 export const p2RegistrationSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  name: participantFullNameSchema,
   gender: z.enum(['Male', 'Female', 'Other'], {
     message: 'Please select a valid gender option',
   }),
@@ -114,6 +176,7 @@ export const p2RegistrationSchema = z.object({
     .string()
     .min(8, 'Password must be at least 8 characters')
     .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
+  dateOfBirth: requiredDateOfBirthSchema,
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),
@@ -121,7 +184,7 @@ export const p2RegistrationSchema = z.object({
 
 // P2 completes registration via invitation using existing Google account (no password)
 export const p2RegistrationWithGoogleSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  name: participantFullNameSchema,
   gender: z.enum(['Male', 'Female', 'Other'], {
     message: 'Please select a valid gender option',
   }),
@@ -136,6 +199,7 @@ export const p2RegistrationWithGoogleSchema = z.object({
     ['Class X', 'Class XI/+2 First Year', 'Class XII/+2 Second Year'],
     { message: 'Please select your class' }
   ),
+  dateOfBirth: requiredDateOfBirthSchema,
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),
@@ -144,7 +208,7 @@ export const p2RegistrationWithGoogleSchema = z.object({
 export type P2RegistrationWithGoogleFormData = z.infer<typeof p2RegistrationWithGoogleSchema>
 
 export const teamRegistrationSchema = z.object({
-  teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100, 'Team name is too long'),
+  teamName: teamNameSchema,
   schoolName: z.string().min(2, 'School / College name is required').max(200, 'School / College name is too long'),
   participant1: participantSchema,
   participant2: participantSchema,
@@ -194,7 +258,7 @@ export const resetPasswordSchema = z
     path: ['confirmPassword'],
   })
 
-// Profile completion validation schema (all fields optional)
+// Profile completion: date of birth required; photo, address, school address optional
 export const profileCompletionSchema = z.object({
   profilePhoto: z
     .custom<File | string | null | undefined>((val) => {
@@ -232,28 +296,12 @@ export const profileCompletionSchema = z.object({
       message: 'School / College address must be between 10 and 500 characters if provided',
     }),
 
-  dateOfBirth: z
-    .string()
-    .refine((date) => {
-      if (!date || date.trim() === '') return true // Optional field
-      const birthDate = new Date(date)
-      const today = new Date()
-      const age = today.getFullYear() - birthDate.getFullYear()
-      const monthDiff = today.getMonth() - birthDate.getMonth()
-      const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
-        ? age - 1
-        : age
-      return actualAge >= 10 && actualAge <= 100
-    }, {
-      message: 'Date of birth must be valid and age must be between 10 and 100 years',
-    })
-    .optional()
-    .nullable(),
+  dateOfBirth: requiredDateOfBirthSchema,
 })
 
 // Edit profile validation schema
 export const editProfileSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  name: participantFullNameSchema,
   gender: z.enum(['Male', 'Female', 'Other'], {
     message: 'Please select a valid gender option',
   }),
@@ -293,23 +341,7 @@ export const editProfileSchema = z.object({
     .max(50, 'Class / Grade is too long')
     .optional()
     .or(z.literal('')),
-  dateOfBirth: z
-    .string()
-    .optional()
-    .refine((date) => {
-      if (!date || date === '') return true
-      const birthDate = new Date(date)
-      const today = new Date()
-      const age = today.getFullYear() - birthDate.getFullYear()
-      const monthDiff = today.getMonth() - birthDate.getMonth()
-      const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
-        ? age - 1
-        : age
-      return actualAge >= 10 && actualAge <= 100
-    }, {
-      message: 'Date of birth must be valid and age must be between 10 and 100 years',
-    })
-    .or(z.literal('')),
+  dateOfBirth: requiredDateOfBirthSchema,
 })
 
 // Admin creation validation schemas

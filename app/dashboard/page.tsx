@@ -303,7 +303,11 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#ECF0F1]">
       {/* Profile Completion Modal */}
       {showProfileModal && (
-        <ProfileCompletionModal onComplete={handleProfileComplete} onSkip={handleProfileSkip} />
+        <ProfileCompletionModal
+          onComplete={handleProfileComplete}
+          onSkip={handleProfileSkip}
+          initialDateOfBirth={participantData?.date_of_birth}
+        />
       )}
 
       <div className="flex">

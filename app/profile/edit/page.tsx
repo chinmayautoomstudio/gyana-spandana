@@ -192,7 +192,7 @@ export default function EditProfilePage() {
         address: data.address || undefined,
         schoolAddress: data.schoolAddress || undefined,
         class: data.class || undefined,
-        dateOfBirth: data.dateOfBirth || undefined,
+        dateOfBirth: data.dateOfBirth,
         profilePhoto: profilePhotoUrl,
       })
 
@@ -457,6 +457,7 @@ export default function EditProfilePage() {
               error={errors.dateOfBirth?.message}
               max={new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]}
               min={new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0]}
+              required
             />
 
             {/* Success Message */}

@@ -2,7 +2,12 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { TeamCreationFormData, P2RegistrationFormData, P2RegistrationWithGoogleFormData } from '@/lib/validations'
+import {
+  TEAM_NAME_MAX_LENGTH,
+  type TeamCreationFormData,
+  type P2RegistrationFormData,
+  type P2RegistrationWithGoogleFormData,
+} from '@/lib/validations'
 import { notifyAllAdmins } from '@/app/actions/notification'
 
 const INVITATION_EXPIRY_DAYS = 7
@@ -73,6 +78,15 @@ export async function getInvitationByToken(token: string): Promise<InvitationDet
 export async function checkTeamNameAvailability(teamName: string): Promise<TeamNameAvailabilityResult> {
   const trimmed = teamName?.trim()
   if (!trimmed) return { available: false, error: 'Team name is required.' }
+  if (trimmed.length < 2) {
+    return { available: false, error: 'Team name must be at least 2 characters.' }
+  }
+  if (trimmed.length > TEAM_NAME_MAX_LENGTH) {
+    return {
+      available: false,
+      error: `Team name must be at most ${TEAM_NAME_MAX_LENGTH} characters.`,
+    }
+  }
   const admin = createAdminClient()
   const { data: existing } = await admin
     .from('teams')
@@ -144,10 +158,18 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     }
   }
 
+  const teamNameTrimmed = data.teamName.trim()
+  if (teamNameTrimmed.length < 2 || teamNameTrimmed.length > TEAM_NAME_MAX_LENGTH) {
+    return {
+      success: false,
+      error: `Team name must be between 2 and ${TEAM_NAME_MAX_LENGTH} characters.`,
+    }
+  }
+
   const { data: existingTeam } = await admin
     .from('teams')
     .select('id')
-    .eq('team_name', data.teamName)
+    .eq('team_name', teamNameTrimmed)
     .single()
   if (existingTeam) {
     return { success: false, error: 'Team name already exists.' }
@@ -168,7 +190,7 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     const result = await admin
       .from('teams')
       .insert({
-        team_name: data.teamName,
+        team_name: teamNameTrimmed,
         team_code: teamCode,
         authority_name: authorityName,
         authority_email: authorityEmail,
@@ -201,6 +223,7 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     phone: data.p1Phone?.trim() || null,
     aadhar: data.p1Aadhar?.replace(/\s/g, '') || null,
     class: data.p1Class ?? null,
+    date_of_birth: data.p1DateOfBirth,
     is_participant1: true,
     email_verified: true,
     phone_verified: false,
@@ -235,7 +258,7 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     body: JSON.stringify({
       p2Email: data.p2Email.trim(),
       p1Name: data.p1Name,
-      teamName: data.teamName,
+      teamName: teamNameTrimmed,
       schoolName: data.schoolName,
       invitationLink,
       expiresAt: expiresAtFormatted,
@@ -251,7 +274,7 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
 
   notifyAllAdmins(
     'New Team Created (Pending P2)',
-    `Team "${data.teamName}" created. Invitation sent to ${data.p2Email}.`,
+    `Team "${teamNameTrimmed}" created. Invitation sent to ${data.p2Email}.`,
     'info',
     '/admin/teams'
   ).catch((err) => {
@@ -360,6 +383,7 @@ export async function completeP2Registration(
     aadhar: data.aadhar,
     class: data.class,
     gender: data.gender,
+    date_of_birth: data.dateOfBirth,
     is_participant1: false,
     email_verified: true,
     phone_verified: false,
@@ -521,6 +545,7 @@ export async function completeP2RegistrationWithGoogle(
     aadhar: data.aadhar,
     class: data.class,
     gender: data.gender,
+    date_of_birth: data.dateOfBirth,
     is_participant1: false,
     email_verified: true,
     phone_verified: false,
