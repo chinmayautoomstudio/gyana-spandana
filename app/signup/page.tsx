@@ -167,7 +167,7 @@ export default function SignupPage() {
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-6">
               <Input
-                label="Email"
+                label="Enter your Email"
                 type="email"
                 {...register('email')}
                 error={errors.email?.message}
@@ -176,7 +176,7 @@ export default function SignupPage() {
               />
               <div>
                 <Input
-                  label="Password"
+                  label="Create a password"
                   type="password"
                   {...register('password')}
                   error={errors.password?.message}

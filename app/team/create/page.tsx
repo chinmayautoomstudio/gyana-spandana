@@ -253,7 +253,7 @@ export default function TeamCreatePage() {
                     label="Team name"
                     {...register('teamName')}
                     error={errors.teamName?.message}
-                    placeholder="Enter team name"
+                    placeholder="Suggest a team name"
                     maxLength={TEAM_NAME_MAX_LENGTH}
                     required
                   />
@@ -261,7 +261,7 @@ export default function TeamCreatePage() {
                     label="School / College name"
                     {...register('schoolName')}
                     error={errors.schoolName?.message}
-                    placeholder="Enter school or college name"
+                    placeholder="Enter your school/college name"
                     required
                   />
                   <Input
@@ -269,7 +269,7 @@ export default function TeamCreatePage() {
                     type="email"
                     {...register('p2Email')}
                     error={errors.p2Email?.message}
-                    placeholder="teammate@example.com"
+                    placeholder="Enter your teammate's name"
                     required
                   />
                 </div>
@@ -286,7 +286,7 @@ export default function TeamCreatePage() {
                       {...register('p1Gender')}
                       className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 ${errors.p1Gender ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'}`}
                     >
-                      <option value="">Select gender</option>
+                      <option value="">Select your Gender</option>
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>
@@ -298,7 +298,7 @@ export default function TeamCreatePage() {
                     type="tel"
                     {...register('p1Phone')}
                     error={errors.p1Phone?.message}
-                    placeholder="10-digit mobile number"
+                    placeholder="Enter your phone number"
                     maxLength={10}
                     required
                   />
@@ -309,7 +309,7 @@ export default function TeamCreatePage() {
                       onChange: (e) => { e.target.value = formatAadhar(e.target.value) },
                     })}
                     error={errors.p1Aadhar?.message}
-                    placeholder="1234 5678 9012"
+                    placeholder="Enter your Aadhar number"
                     maxLength={14}
                     required
                   />
@@ -319,7 +319,7 @@ export default function TeamCreatePage() {
                       {...register('p1Class')}
                       className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-offset-1 ${errors.p1Class ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-[#C0392B] focus:border-[#C0392B]'}`}
                     >
-                      <option value="">Select class</option>
+                      <option value="">Enter your Class</option>
                       <option value="Class X">Class X</option>
                       <option value="Class XI/+2 First Year">Class XI/+2 First Year</option>
                       <option value="Class XII/+2 Second Year">Class XII/+2 Second Year</option>
@@ -327,7 +327,7 @@ export default function TeamCreatePage() {
                     {errors.p1Class && <p className="mt-1.5 text-sm text-red-600">{errors.p1Class.message}</p>}
                   </div>
                   <Input
-                    label="Date of Birth"
+                    label="Select your Date of Birth"
                     type="date"
                     {...register('p1DateOfBirth')}
                     error={errors.p1DateOfBirth?.message}
