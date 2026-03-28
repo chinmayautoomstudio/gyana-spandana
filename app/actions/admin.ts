@@ -121,10 +121,10 @@ export async function checkScheduleConflicts(
 export async function getAllAdmins(): Promise<{ data: AdminUser[] | null; error: string | null }> {
   try {
     await requireAdmin()
-    const supabase = await createClient()
+    const adminClient = createAdminClient()
 
-    // Get all admin profiles
-    const { data: profiles, error: profileError } = await supabase
+    // Service role bypasses RLS so admin rows are not hidden when JWT user_metadata.role is missing
+    const { data: profiles, error: profileError } = await adminClient
       .from('user_profiles')
       .select('user_id, name, created_at')
       .eq('role', 'admin')
@@ -138,31 +138,23 @@ export async function getAllAdmins(): Promise<{ data: AdminUser[] | null; error:
       return { data: [], error: null }
     }
 
-    // Get user details from auth.users (requires admin client)
-    const adminClient = createAdminClient()
-    const userIds = profiles.map(p => p.user_id)
-    
-    const { data: users, error: usersError } = await adminClient.auth.admin.listUsers()
-    
-    if (usersError) {
-      return { data: null, error: usersError.message }
-    }
-
-    // Combine profile and user data
-    const admins: AdminUser[] = profiles
-      .map(profile => {
-        const user = users?.users?.find(u => u.id === profile.user_id)
-        if (!user) return null
-        
+    // Per-user lookup avoids listUsers() first-page pagination dropping admins
+    const combined = await Promise.all(
+      profiles.map(async (profile) => {
+        const { data, error } = await adminClient.auth.admin.getUserById(profile.user_id)
+        if (error || !data?.user) return null
+        const user = data.user
         return {
           id: user.id,
           email: user.email || '',
           name: profile.name || user.user_metadata?.name || null,
           created_at: profile.created_at || user.created_at,
           last_sign_in_at: user.last_sign_in_at || null,
-        }
+        } satisfies AdminUser
       })
-      .filter((admin): admin is AdminUser => admin !== null)
+    )
+
+    const admins = combined.filter((admin): admin is AdminUser => admin !== null)
 
     return { data: admins, error: null }
   } catch (error: any) {
