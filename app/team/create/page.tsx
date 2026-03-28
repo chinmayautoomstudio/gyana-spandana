@@ -295,13 +295,18 @@ export default function TeamCreatePage() {
                     maxLength={TEAM_NAME_MAX_LENGTH}
                     required
                   />
-                  <Input
-                    label="School / College name"
-                    {...register('schoolName')}
-                    error={errors.schoolName?.message}
-                    placeholder="Enter your school/college name"
-                    required
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      label="School / College name"
+                      {...register('schoolName')}
+                      error={errors.schoolName?.message}
+                      placeholder="Enter your school/college name"
+                      required
+                    />
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      Both participants must be from the same school.
+                    </p>
+                  </div>
                   <div className="space-y-1">
                     <Input
                       label="Participant 2 email address"
