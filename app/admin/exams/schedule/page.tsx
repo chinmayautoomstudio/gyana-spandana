@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { ExamCalendar } from '@/components/admin/ExamCalendar'
@@ -17,7 +18,9 @@ interface ScheduledExam {
   duration_minutes: number
 }
 
-export default function SchedulePage() {
+function SchedulePageContent() {
+  const searchParams = useSearchParams()
+  const openedForExamIdRef = useRef<string | null>(null)
   const [allExams, setAllExams] = useState<ScheduledExam[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -53,6 +56,27 @@ export default function SchedulePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchExams()
   }, [])
+
+  // Deep link from exam detail: /admin/exams/schedule?examId=...
+  useEffect(() => {
+    if (loading) return
+    const id = searchParams.get('examId')
+    if (!id) {
+      openedForExamIdRef.current = null
+      return
+    }
+    if (openedForExamIdRef.current === id) return
+    const found = allExams.find((e) => e.id === id)
+    if (found) {
+      openedForExamIdRef.current = id
+      setSelectedExam(found)
+      setSelectedDate(
+        found.scheduled_start ? new Date(found.scheduled_start) : new Date()
+      )
+      setShowExamSelector(false)
+      setShowScheduleModal(true)
+    }
+  }, [loading, allExams, searchParams])
 
   // Filter exams based on selected statuses
   const filteredExams = allExams.filter(exam => selectedStatuses.includes(exam.status))
@@ -364,3 +388,16 @@ export default function SchedulePage() {
   )
 }
 
+export default function SchedulePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C0392B]" />
+        </div>
+      }
+    >
+      <SchedulePageContent />
+    </Suspense>
+  )
+}

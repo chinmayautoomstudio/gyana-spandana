@@ -17,6 +17,10 @@ SENDGRID_API_KEY=SG.your_sendgrid_api_key
 SENDGRID_FROM_EMAIL=GYANA SPARDHA <noreply@yourdomain.com>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
+# Optional: protect GET /api/cron/update-exam-statuses (Vercel Cron or external scheduler)
+# Production requires this if you call the cron route; use Authorization: Bearer <CRON_SECRET>
+# CRON_SECRET=your-long-random-secret
+
 # AI Assistant Configuration (Required for admin AI assistant)
 # Get your API key from https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-your_openai_api_key_here

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { QuestionCard, type Question } from '@/components/admin/QuestionCard'
 import { QuestionForm } from '@/components/admin/QuestionForm'
 import { QuestionPreviewModal } from '@/components/admin/QuestionPreviewModal'
+import { syncExamTotalQuestions } from '@/lib/utils/syncExamQuestionCount'
 
 interface Exam {
   id: string
@@ -91,6 +92,18 @@ export default function QuestionsPage() {
       alert('Error deleting question: ' + error.message)
     } else {
       setQuestions(questions.filter(q => q.id !== questionId))
+      if (examId) {
+        const { error: syncErr } = await syncExamTotalQuestions(supabase, examId)
+        if (syncErr) console.error('Failed to sync exam question count:', syncErr)
+        const { data: refreshed } = await supabase
+          .from('exams')
+          .select('total_questions')
+          .eq('id', examId)
+          .single()
+        if (refreshed && exam) {
+          setExam({ ...exam, total_questions: refreshed.total_questions })
+        }
+      }
     }
   }
 
@@ -153,10 +166,14 @@ export default function QuestionsPage() {
             setShowAddForm(false)
             setEditingQuestion(null)
           }}
-          onSuccess={() => {
+          onSuccess={async () => {
             setShowAddForm(false)
             setEditingQuestion(null)
-            // Refresh questions
+            if (examId) {
+              const supabase = createClient()
+              const { error: syncErr } = await syncExamTotalQuestions(supabase, examId)
+              if (syncErr) console.error('Failed to sync exam question count:', syncErr)
+            }
             window.location.reload()
           }}
         />
@@ -222,6 +239,10 @@ export default function QuestionsPage() {
                 if (error) {
                   alert('Error duplicating question: ' + error.message)
                 } else {
+                  if (examId) {
+                    const { error: syncErr } = await syncExamTotalQuestions(supabase, examId)
+                    if (syncErr) console.error('Failed to sync exam question count:', syncErr)
+                  }
                   window.location.reload()
                 }
               }}

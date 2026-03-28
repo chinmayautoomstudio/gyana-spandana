@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
-import { calculateTotalScore } from '@/lib/utils/scoring'
 import { FullScreenExam } from '@/components/exam/FullScreenExam'
 import { SecurityViolation } from '@/lib/services/examSecurityService'
 import { MCQQuestion } from '@/components/exam/MCQQuestion'
@@ -745,11 +744,26 @@ export default function TakeExamPage() {
               <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-6 lg:p-8">
                 {/* Timer (Moved here) */}
                 <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                  <div>
+                  <div className="w-full md:flex-1">
                     <h1 className="text-xl font-bold text-gray-900">{exam.title}</h1>
                     <p className="text-sm text-gray-600">
                       Question {currentQuestionIndex + 1} of {questions.length}
                     </p>
+                    {submitError && (
+                      <div
+                        role="alert"
+                        className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 flex items-start justify-between gap-2"
+                      >
+                        <span>{submitError}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSubmitError(null)}
+                          className="shrink-0 text-red-600 hover:text-red-900 underline"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="w-full md:w-auto">
                     <ExamTimer

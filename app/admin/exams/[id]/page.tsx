@@ -73,14 +73,18 @@ export default function ExamDetailsPage() {
       const completionRate = totalAttempts && totalAttempts > 0
         ? Math.round((submittedAttempts.length / totalAttempts) * 100)
         : 0
-      const averageTime = submittedAttempts.length > 0
-        ? Math.round(
-            submittedAttempts
-              .filter(a => a.time_taken_minutes)
-              .reduce((sum, a) => sum + (a.time_taken_minutes || 0), 0) /
-            submittedAttempts.filter(a => a.time_taken_minutes).length
-          )
-        : 0
+      const attemptsWithTime = submittedAttempts.filter(
+        (a) => a.time_taken_minutes != null && a.time_taken_minutes > 0
+      )
+      const averageTime =
+        attemptsWithTime.length > 0
+          ? Math.round(
+              attemptsWithTime.reduce(
+                (sum, a) => sum + (a.time_taken_minutes || 0),
+                0
+              ) / attemptsWithTime.length
+            )
+          : 0
 
       // Fetch teams assigned to exam
       let totalTeams = 0
@@ -254,13 +258,7 @@ export default function ExamDetailsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    // Navigate to edit page or show schedule modal
-                    if (confirm('To schedule this exam, you need to set start and end times. Would you like to edit the exam?')) {
-                      // For now, just activate - edit functionality can be added later
-                      handleStatusChange('active')
-                    }
-                  }}
+                  onClick={() => router.push(`/admin/exams/schedule?examId=${examId}`)}
                 >
                   Edit & Schedule
                 </Button>

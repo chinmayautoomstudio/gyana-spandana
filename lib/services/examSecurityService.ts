@@ -26,6 +26,7 @@ export class ExamSecurityService {
   private eventListeners: Array<{ event: string; handler: EventListener }> = [];
   private violationCallback?: (violation: SecurityViolation) => void;
   private autoStopTimer?: NodeJS.Timeout;
+  private devToolsCheckInterval?: ReturnType<typeof setInterval>;
   private examDuration?: number; // in minutes
 
   constructor(config: Partial<SecurityConfig> = {}) {
@@ -121,6 +122,11 @@ export class ExamSecurityService {
     if (this.autoStopTimer) {
       clearTimeout(this.autoStopTimer);
       this.autoStopTimer = undefined;
+    }
+
+    if (this.devToolsCheckInterval !== undefined) {
+      clearInterval(this.devToolsCheckInterval);
+      this.devToolsCheckInterval = undefined;
     }
 
     // Remove all event listeners
@@ -510,7 +516,7 @@ export class ExamSecurityService {
       }
     };
 
-    setInterval(handler, 500);
+    this.devToolsCheckInterval = setInterval(handler, 500);
   }
 
   /**

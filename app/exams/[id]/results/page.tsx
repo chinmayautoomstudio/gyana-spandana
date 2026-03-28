@@ -33,6 +33,16 @@ interface Answer {
   option_d: string
   is_correct: boolean
   points_earned: number
+  /** Max points configured for this question */
+  question_points: number
+  is_skipped: boolean
+}
+
+function reviewNavButtonClass(index: number, currentIndex: number, a: Answer) {
+  if (index === currentIndex) return 'bg-[#C0392B] text-white'
+  if (a.is_skipped) return 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+  if (a.is_correct) return 'bg-green-100 text-green-600 hover:bg-green-200'
+  return 'bg-red-100 text-red-600 hover:bg-red-200'
 }
 
 export default function ExamResultsPage() {
@@ -82,14 +92,16 @@ export default function ExamResultsPage() {
 
       setExam(examData)
 
-      // Fetch attempt
+      // Latest submitted attempt (handles edge case of multiple rows)
       const { data: attemptData } = await supabase
         .from('exam_attempts')
         .select('*')
         .eq('exam_id', examId)
         .eq('participant_id', participant.id)
         .eq('status', 'submitted')
-        .single()
+        .order('submitted_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
       if (!attemptData) {
         router.push('/exams')
@@ -121,10 +133,24 @@ export default function ExamResultsPage() {
 
       const questionIdsToFetch = participantQuestionIds
 
-      // Fetch answers with question details (only for participant's questions)
-      const { data: answersData } = await supabase
-        .from('exam_answers')
-        .select(`
+      let questionRows: any[] = []
+      if (questionIdsToFetch.length > 0) {
+        const { data: qData } = await supabase
+          .from('questions')
+          .select(
+            'id, question_text, option_a, option_b, option_c, option_d, correct_answer, points'
+          )
+          .in('id', questionIdsToFetch)
+        questionRows = qData || []
+      }
+
+      const questionsById = new Map(questionRows.map((q: any) => [q.id, q]))
+
+      let answersData: any[] = []
+      if (questionIdsToFetch.length > 0) {
+        const { data: aData } = await supabase
+          .from('exam_answers')
+          .select(`
           *,
           questions (
             question_text,
@@ -132,41 +158,61 @@ export default function ExamResultsPage() {
             option_b,
             option_c,
             option_d,
-            correct_answer
+            correct_answer,
+            points
           )
         `)
-        .eq('attempt_id', attemptData.id)
-        .in('question_id', questionIdsToFetch)
-
-      if (answersData) {
-        // Create a map for quick lookup
-        const answersMap = new Map(answersData.map((a: any) => [a.question_id, a]))
-
-        // Format answers preserving the order from question_ids
-        const formattedAnswers: Answer[] = questionIdsToFetch
-          .map(questionId => {
-            const answer = answersMap.get(questionId)
-            if (!answer) {
-              // Question was assigned but no answer provided
-              return null
-            }
-            return {
-              question_id: answer.question_id,
-              question_text: answer.questions.question_text,
-              selected_answer: answer.selected_answer,
-              correct_answer: answer.questions.correct_answer,
-              option_a: answer.questions.option_a,
-              option_b: answer.questions.option_b,
-              option_c: answer.questions.option_c,
-              option_d: answer.questions.option_d,
-              is_correct: answer.is_correct,
-              points_earned: answer.points_earned,
-            }
-          })
-          .filter((a): a is Answer => a !== null)
-
-        setAnswers(formattedAnswers)
+          .eq('attempt_id', attemptData.id)
+          .in('question_id', questionIdsToFetch)
+        answersData = aData || []
       }
+
+      const answersMap = new Map(answersData.map((a: any) => [a.question_id, a]))
+
+      const formattedAnswers: Answer[] = questionIdsToFetch
+        .map((questionId) => {
+          const answer = answersMap.get(questionId)
+          const q = questionsById.get(questionId)
+          if (!q) return null
+
+          const questionPoints = Number(q.points) || 1
+
+          if (!answer) {
+            return {
+              question_id: questionId,
+              question_text: q.question_text,
+              selected_answer: null,
+              correct_answer: q.correct_answer,
+              option_a: q.option_a,
+              option_b: q.option_b,
+              option_c: q.option_c,
+              option_d: q.option_d,
+              is_correct: false,
+              points_earned: 0,
+              question_points: questionPoints,
+              is_skipped: true,
+            }
+          }
+
+          return {
+            question_id: answer.question_id,
+            question_text: answer.questions.question_text,
+            selected_answer: answer.selected_answer,
+            correct_answer: answer.questions.correct_answer,
+            option_a: answer.questions.option_a,
+            option_b: answer.questions.option_b,
+            option_c: answer.questions.option_c,
+            option_d: answer.questions.option_d,
+            is_correct: answer.is_correct,
+            points_earned: answer.points_earned,
+            question_points:
+              Number(answer.questions?.points) || questionPoints,
+            is_skipped: !answer.selected_answer,
+          }
+        })
+        .filter((a): a is Answer => a !== null)
+
+      setAnswers(formattedAnswers)
 
       setLoading(false)
     }
@@ -215,17 +261,12 @@ export default function ExamResultsPage() {
     )
   }
 
-  // Calculate total possible score from attempt's total_questions or answers length
-  // Use attempt.total_questions if available, otherwise calculate from answers
-  const totalPossibleScore = attempt.total_questions > 0
-    ? attempt.total_questions
-    : answers.length > 0
-      ? answers.length
-      : exam.total_questions || 0
+  const totalPossibleScore = answers.reduce((sum, a) => sum + a.question_points, 0)
 
-  const percentage = totalPossibleScore > 0
-    ? Math.round((attempt.score / totalPossibleScore) * 100)
-    : 0
+  const percentage =
+    totalPossibleScore > 0
+      ? Math.round((attempt.score / totalPossibleScore) * 100)
+      : 0
   const isPassed = exam.passing_score ? attempt.score >= exam.passing_score : true
 
   const getScoreColor = (percentage: number) => {
@@ -258,8 +299,8 @@ export default function ExamResultsPage() {
   }
 
   const currentAnswer = answers[currentQuestionIndex] || null
-  const wrongAnswers = answers.filter(a => !a.is_correct).length
-  const skippedQuestions = Math.max(0, (attempt.total_questions || answers.length) - answers.length)
+  const wrongAnswers = answers.filter((a) => !a.is_correct && !a.is_skipped).length
+  const skippedQuestions = answers.filter((a) => a.is_skipped).length
 
   return (
     <div className="min-h-screen bg-[#ECF0F1] pb-0">
@@ -381,11 +422,22 @@ export default function ExamResultsPage() {
 
             {/* Question Card */}
             {currentAnswer && (
-              <div className={`bg-white/70 backdrop-blur-xl rounded-xl border-2 shadow-lg p-6 mb-4 ${currentAnswer.is_correct ? 'border-green-200' : 'border-red-200'
-                }`}>
+              <div
+                className={`bg-white/70 backdrop-blur-xl rounded-xl border-2 shadow-lg p-6 mb-4 ${
+                  currentAnswer.is_skipped
+                    ? 'border-gray-200'
+                    : currentAnswer.is_correct
+                      ? 'border-green-200'
+                      : 'border-red-200'
+                }`}
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    {currentAnswer.is_correct ? (
+                    {currentAnswer.is_skipped ? (
+                      <svg className="w-6 h-6 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    ) : currentAnswer.is_correct ? (
                       <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
@@ -396,10 +448,14 @@ export default function ExamResultsPage() {
                     )}
                     <div>
                       <div className="font-semibold text-gray-900">
-                        {currentAnswer.is_correct ? 'Correct' : 'Incorrect'}
+                        {currentAnswer.is_skipped
+                          ? 'Skipped'
+                          : currentAnswer.is_correct
+                            ? 'Correct'
+                            : 'Incorrect'}
                       </div>
                       <div className="text-sm text-gray-600">
-                        Points: {currentAnswer.points_earned}/{currentAnswer.points_earned || 1}
+                        Points: {currentAnswer.points_earned}/{currentAnswer.question_points}
                       </div>
                     </div>
                   </div>
@@ -414,7 +470,8 @@ export default function ExamResultsPage() {
                 <div className="space-y-2 mb-6">
                   {(['A', 'B', 'C', 'D'] as const).map((option) => {
                     const optionText = currentAnswer[`option_${option.toLowerCase()}` as keyof Answer] as string
-                    const isSelected = currentAnswer.selected_answer === option
+                    const isSelected =
+                      !currentAnswer.is_skipped && currentAnswer.selected_answer === option
                     const isCorrect = currentAnswer.correct_answer === option
 
                     return (
@@ -536,12 +593,11 @@ export default function ExamResultsPage() {
                         <button
                           key={index}
                           onClick={() => setCurrentQuestionIndex(index)}
-                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${index === currentQuestionIndex
-                              ? 'bg-[#C0392B] text-white'
-                              : answers[index].is_correct
-                                ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                                : 'bg-red-100 text-red-600 hover:bg-red-200'
-                            }`}
+                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${reviewNavButtonClass(
+                              index,
+                              currentQuestionIndex,
+                              answers[index]
+                            )}`}
                         >
                           {index + 1}
                         </button>
@@ -553,12 +609,11 @@ export default function ExamResultsPage() {
                       <button
                         key={0}
                         onClick={() => setCurrentQuestionIndex(0)}
-                        className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${0 === currentQuestionIndex
-                            ? 'bg-[#C0392B] text-white'
-                            : answers[0].is_correct
-                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                              : 'bg-red-100 text-red-600 hover:bg-red-200'
-                          }`}
+                        className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${reviewNavButtonClass(
+                            0,
+                            currentQuestionIndex,
+                            answers[0]
+                          )}`}
                       >
                         1
                       </button>
@@ -577,12 +632,11 @@ export default function ExamResultsPage() {
                           <button
                             key={i}
                             onClick={() => setCurrentQuestionIndex(i)}
-                            className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${i === currentQuestionIndex
-                                ? 'bg-[#C0392B] text-white'
-                                : answers[i].is_correct
-                                  ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                                  : 'bg-red-100 text-red-600 hover:bg-red-200'
-                              }`}
+                            className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${reviewNavButtonClass(
+                                i,
+                                currentQuestionIndex,
+                                answers[i]
+                              )}`}
                           >
                             {i + 1}
                           </button>
@@ -599,12 +653,11 @@ export default function ExamResultsPage() {
                         <button
                           key={totalQuestions - 1}
                           onClick={() => setCurrentQuestionIndex(totalQuestions - 1)}
-                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${totalQuestions - 1 === currentQuestionIndex
-                              ? 'bg-[#C0392B] text-white'
-                              : answers[totalQuestions - 1].is_correct
-                                ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                                : 'bg-red-100 text-red-600 hover:bg-red-200'
-                            }`}
+                          className={`w-10 h-10 rounded-lg font-medium transition-colors text-sm ${reviewNavButtonClass(
+                              totalQuestions - 1,
+                              currentQuestionIndex,
+                              answers[totalQuestions - 1]
+                            )}`}
                         >
                           {totalQuestions}
                         </button>

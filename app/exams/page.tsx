@@ -29,7 +29,6 @@ export default function AvailableExamsPage() {
   const [exams, setExams] = useState<Exam[]>([])
   const [attempts, setAttempts] = useState<Record<string, ExamAttempt>>({})
   const [loading, setLoading] = useState(true)
-  const [participantId, setParticipantId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,8 +52,6 @@ export default function AvailableExamsPage() {
         .single()
 
       if (participant) {
-        setParticipantId(participant.id)
-
         try {
           const { getAvailableExams } = await import('@/app/actions/exam')
           const filteredExams = await getAvailableExams()
@@ -92,7 +89,12 @@ export default function AvailableExamsPage() {
     const end = exam.scheduled_end ? new Date(exam.scheduled_end) : null
 
     if (exam.status === 'active') return true
-    if (exam.status === 'scheduled' && start && now >= start && end && now <= end) return true
+    // Align with take page: scheduled exams are allowed after start (if any) until end (if any)
+    if (exam.status === 'scheduled') {
+      if (start && now < start) return false
+      if (end && now > end) return false
+      return true
+    }
     return false
   }
 
