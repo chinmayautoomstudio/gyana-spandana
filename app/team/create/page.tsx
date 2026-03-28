@@ -264,14 +264,19 @@ export default function TeamCreatePage() {
                     placeholder="Enter your school/college name"
                     required
                   />
-                  <Input
-                    label="Participant 2 email address"
-                    type="email"
-                    {...register('p2Email')}
-                    error={errors.p2Email?.message}
-                    placeholder="Enter your teammate's name"
-                    required
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      label="Participant 2 email address"
+                      type="email"
+                      {...register('p2Email')}
+                      error={errors.p2Email?.message}
+                      placeholder="Enter your teammate's email address"
+                      required
+                    />
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      Participant 2 must complete their details by following the instructions sent to their provided email address.
+                    </p>
+                  </div>
                 </div>
               )}
 
