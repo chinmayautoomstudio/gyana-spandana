@@ -52,6 +52,13 @@ function getAvatarUrl(user: User): string | null {
   return typeof url === 'string' && url ? url : null
 }
 
+function maskAadharDisplay(raw: string | undefined): string {
+  const digits = (raw ?? '').replace(/\D/g, '')
+  if (digits.length < 4) return '—'
+  const last4 = digits.slice(-4)
+  return `XXXX XXXX ${last4}`
+}
+
 export default function TeamCreatePage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -61,7 +68,7 @@ export default function TeamCreatePage() {
   const [step, setStep] = useState(1)
   const formRef = useRef<HTMLDivElement>(null)
 
-  const { register, handleSubmit, formState: { errors }, reset, trigger, getValues, setError } = useForm<TeamCreationFormData>({
+  const { register, handleSubmit, formState: { errors }, reset, trigger, getValues, setError, watch, setValue } = useForm<TeamCreationFormData>({
     resolver: zodResolver(teamCreationSchema),
     defaultValues: {
       p1Gender: '' as TeamCreationFormData['p1Gender'],
@@ -70,8 +77,12 @@ export default function TeamCreatePage() {
       p1Class: '' as TeamCreationFormData['p1Class'],
       p1DateOfBirth: '',
       schoolAuthority: { name: '', email: '', phone: '' },
+      informationAccurate: false,
+      consent: false,
     },
   })
+
+  const previewValues = watch()
 
   useEffect(() => {
     const check = async () => {
@@ -112,6 +123,7 @@ export default function TeamCreatePage() {
         p1Class: '' as TeamCreationFormData['p1Class'],
         p1DateOfBirth: '',
         schoolAuthority: { name: '', email: '', phone: '' },
+        informationAccurate: false,
         consent: false,
       })
       setIsChecking(false)
@@ -145,6 +157,13 @@ export default function TeamCreatePage() {
 
   const onStepBack = () => {
     setStep((s) => Math.max(s - 1, 1))
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const onUpdateDetailsFromPreview = () => {
+    setStep(1)
+    setValue('informationAccurate', false)
+    setValue('consent', false)
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -369,7 +388,99 @@ export default function TeamCreatePage() {
                     placeholder="9876543210"
                     maxLength={10}
                   />
-                  <div className="pt-4 border-t border-gray-200">
+
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <h3 className="text-sm font-semibold text-gray-900">Review your details</h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={onUpdateDetailsFromPreview}
+                        className="shrink-0"
+                      >
+                        Update
+                      </Button>
+                    </div>
+                    <dl className="space-y-2 text-sm">
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Registered as</dt>
+                        <dd className="text-gray-900 font-medium break-all">{user?.email ?? '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Your full name</dt>
+                        <dd className="text-gray-900">{previewValues.p1Name || '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Team name</dt>
+                        <dd className="text-gray-900">{previewValues.teamName || '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">School / College</dt>
+                        <dd className="text-gray-900">{previewValues.schoolName || '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Participant 2 email</dt>
+                        <dd className="text-gray-900 break-all">{previewValues.p2Email || '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Gender</dt>
+                        <dd className="text-gray-900">{previewValues.p1Gender || '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Phone</dt>
+                        <dd className="text-gray-900">{previewValues.p1Phone || '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Aadhar</dt>
+                        <dd className="text-gray-900 tracking-wide">{maskAadharDisplay(previewValues.p1Aadhar)}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Class</dt>
+                        <dd className="text-gray-900">{previewValues.p1Class || '—'}</dd>
+                      </div>
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Date of birth</dt>
+                        <dd className="text-gray-900">{previewValues.p1DateOfBirth || '—'}</dd>
+                      </div>
+                      <div className="pt-1 border-t border-gray-200">
+                        <dt className="text-gray-500 mb-1">School authority</dt>
+                        <dd className="text-gray-900">
+                          {(() => {
+                            const a = previewValues.schoolAuthority
+                            const n = a?.name?.trim()
+                            const e = a?.email?.trim()
+                            const p = a?.phone?.trim()
+                            if (!n && !e && !p) return <span className="text-gray-500">Not provided</span>
+                            return (
+                              <ul className="list-disc list-inside space-y-0.5">
+                                {n ? <li>Name: {n}</li> : null}
+                                {e ? <li>Email: {e}</li> : null}
+                                {p ? <li>Phone: {p}</li> : null}
+                              </ul>
+                            )
+                          })()}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="informationAccurate"
+                      {...register('informationAccurate')}
+                      className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                    />
+                    <label htmlFor="informationAccurate" className="text-sm text-gray-700">
+                      I confirm that the information above is accurate and complete.
+                      {errors.informationAccurate && (
+                        <span className="block text-red-600 mt-1">{errors.informationAccurate.message}</span>
+                      )}
+                    </label>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-200">
                     <div className="flex items-start gap-3">
                       <input
                         type="checkbox"

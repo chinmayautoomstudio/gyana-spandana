@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -36,6 +36,14 @@ function formatAadhar(value: string) {
 const dobMax = new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]
 const dobMin = new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0]
 
+const P2_STEPS = 2
+
+function maskAadharDisplay(raw: string | undefined): string {
+  const digits = (raw ?? '').replace(/\D/g, '')
+  if (digits.length < 4) return '—'
+  return `XXXX XXXX ${digits.slice(-4)}`
+}
+
 export default function RegisterInvitePage() {
   const params = useParams()
   const router = useRouter()
@@ -47,17 +55,40 @@ export default function RegisterInvitePage() {
   const [completeWithGoogle, setCompleteWithGoogle] = useState(false)
   const [sessionUser, setSessionUser] = useState<User | null>(null)
   const [googleButtonLoading, setGoogleButtonLoading] = useState(false)
+  const [regStep, setRegStep] = useState(1)
+  const formAreaRef = useRef<HTMLDivElement>(null)
 
   const emailForm = useForm<P2RegistrationFormData>({
     resolver: zodResolver(p2RegistrationSchema),
+    defaultValues: {
+      informationAccurate: false,
+      consent: false,
+    },
   })
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = emailForm
+  const { register, handleSubmit, watch, setValue, trigger, formState: { errors } } = emailForm
   const password = watch('password')
+  const emailPreview = watch()
 
   const googleForm = useForm<P2RegistrationWithGoogleFormData>({
     resolver: zodResolver(p2RegistrationWithGoogleSchema),
+    defaultValues: {
+      informationAccurate: false,
+      consent: false,
+    },
   })
-  const { register: registerGoogle, handleSubmit: handleSubmitGoogle, setValue: setValueGoogle, formState: { errors: errorsGoogle } } = googleForm
+  const {
+    register: registerGoogle,
+    handleSubmit: handleSubmitGoogle,
+    watch: watchGoogle,
+    setValue: setValueGoogle,
+    trigger: triggerGoogle,
+    formState: { errors: errorsGoogle },
+  } = googleForm
+  const googlePreview = watchGoogle()
+
+  useEffect(() => {
+    setRegStep(1)
+  }, [completeWithGoogle])
 
   useEffect(() => {
     if (!token) {
@@ -147,6 +178,38 @@ export default function RegisterInvitePage() {
     setIsSubmitting(false)
   }
 
+  const scrollFormTop = () => {
+    formAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const onEmailStepNext = async () => {
+    const ok = await trigger(['name', 'gender', 'email', 'phone', 'aadhar', 'class', 'dateOfBirth', 'password'])
+    if (!ok) return
+    setRegStep(2)
+    scrollFormTop()
+  }
+
+  const onEmailBackToStep1 = () => {
+    setRegStep(1)
+    setValue('informationAccurate', false)
+    setValue('consent', false)
+    scrollFormTop()
+  }
+
+  const onGoogleStepNext = async () => {
+    const ok = await triggerGoogle(['name', 'gender', 'phone', 'aadhar', 'class', 'dateOfBirth'])
+    if (!ok) return
+    setRegStep(2)
+    scrollFormTop()
+  }
+
+  const onGoogleBackToStep1 = () => {
+    setRegStep(1)
+    setValueGoogle('informationAccurate', false)
+    setValueGoogle('consent', false)
+    scrollFormTop()
+  }
+
   if (invitation === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#ECF0F1] px-4">
@@ -184,7 +247,7 @@ export default function RegisterInvitePage() {
       {/* Right side - Form (40%) */}
       <div className="w-full lg:w-[40%] bg-white flex flex-col">
         <div className="flex-1 flex items-center justify-center px-6 sm:px-8 py-8 sm:py-12">
-          <div className="w-full max-w-md">
+          <div className="w-full max-w-md" ref={formAreaRef}>
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-14 h-14 rounded-full border-2 border-gray-200 overflow-hidden flex-shrink-0 bg-white flex items-center justify-center shadow-sm">
@@ -247,7 +310,22 @@ export default function RegisterInvitePage() {
 
             {completeWithGoogle ? (
             <form onSubmit={handleSubmitGoogle(onSubmitGoogle)} className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-medium text-gray-600">Step {regStep} of {P2_STEPS}</span>
+                <div className="flex-1 flex gap-1">
+                  {[1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full ${i <= regStep ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
+                      aria-hidden
+                    />
+                  ))}
+                </div>
+              </div>
               <p className="text-sm text-gray-600 mb-2">Signed in with Google. Your email cannot be changed.</p>
+
+              {regStep === 1 && (
+              <>
               <Input
                 label="Email address"
                 type="email"
@@ -318,14 +396,87 @@ export default function RegisterInvitePage() {
                 min={dobMin}
                 required
               />
-              <div className="flex items-start gap-3 pt-2">
+              </>
+              )}
+
+              {regStep === 2 && (
+              <>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900">Review your details</h3>
+                  <Button type="button" variant="outline" size="sm" onClick={onGoogleBackToStep1} className="shrink-0">
+                    Update
+                  </Button>
+                </div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Team invitation</p>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Team</dt>
+                    <dd className="text-gray-900">{invitation.teamName}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Participant 1</dt>
+                    <dd className="text-gray-900">{invitation.p1Name}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">School / College</dt>
+                    <dd className="text-gray-900">{invitation.schoolName || '—'}</dd>
+                  </div>
+                </dl>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pt-2 border-t border-gray-200">Your details</p>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Email</dt>
+                    <dd className="text-gray-900 break-all">{sessionUser?.email ?? '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Your full name</dt>
+                    <dd className="text-gray-900">{googlePreview.name || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Gender</dt>
+                    <dd className="text-gray-900">{googlePreview.gender || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Phone</dt>
+                    <dd className="text-gray-900">{googlePreview.phone || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Aadhar</dt>
+                    <dd className="text-gray-900 tracking-wide">{maskAadharDisplay(googlePreview.aadhar)}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Class</dt>
+                    <dd className="text-gray-900">{googlePreview.class || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Date of birth</dt>
+                    <dd className="text-gray-900">{googlePreview.dateOfBirth || '—'}</dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
-                  id="consent-google"
+                  id="p2g-informationAccurate"
+                  {...registerGoogle('informationAccurate')}
+                  className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                />
+                <label htmlFor="p2g-informationAccurate" className="text-sm text-gray-700">
+                  I confirm that the information above is accurate and complete.
+                  {errorsGoogle.informationAccurate && (
+                    <span className="block text-red-600 mt-1">{errorsGoogle.informationAccurate.message}</span>
+                  )}
+                </label>
+              </div>
+              <div className="flex items-start gap-3 pt-2 border-t border-gray-200">
+                <input
+                  type="checkbox"
+                  id="p2g-consent"
                   {...registerGoogle('consent')}
                   className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
                 />
-                <label htmlFor="consent-google" className="text-sm text-gray-700">
+                <label htmlFor="p2g-consent" className="text-sm text-gray-700">
                   I agree to the <Link href="/terms" className="text-[#C0392B] hover:underline">Terms and Conditions</Link>
                   {' '}and <Link href="/privacy" className="text-[#C0392B] hover:underline">Privacy Policy</Link>.
                   {errorsGoogle.consent && <span className="block text-red-600 mt-1">{errorsGoogle.consent.message}</span>}
@@ -336,19 +487,59 @@ export default function RegisterInvitePage() {
                   <p className="text-red-800 text-sm">{submitError}</p>
                 </div>
               )}
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                isLoading={isSubmitting}
-                loadingText="Registering..."
-                className="w-full bg-gray-900 hover:bg-gray-800"
-              >
-                Complete registration
-              </Button>
+              </>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                {regStep === 1 ? (
+                  <>
+                    <div className="flex-1" />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="lg"
+                      onClick={onGoogleStepNext}
+                      className="flex-1 bg-gray-900 hover:bg-gray-800"
+                    >
+                      Next
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="outline" size="lg" onClick={onGoogleBackToStep1} className="flex-1">
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="lg"
+                      isLoading={isSubmitting}
+                      loadingText="Registering..."
+                      className="flex-1 bg-gray-900 hover:bg-gray-800"
+                    >
+                      Complete registration
+                    </Button>
+                  </>
+                )}
+              </div>
             </form>
             ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-medium text-gray-600">Step {regStep} of {P2_STEPS}</span>
+                <div className="flex-1 flex gap-1">
+                  {[1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full ${i <= regStep ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
+                      aria-hidden
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {regStep === 1 && (
+              <>
             <Input
               label="Your full name"
               {...register('name')}
@@ -430,36 +621,138 @@ export default function RegisterInvitePage() {
               />
               {password && <PasswordStrength password={password} />}
             </div>
-            <div className="flex items-start gap-3 pt-2">
-              <input
-                type="checkbox"
-                id="consent"
-                {...register('consent')}
-                className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
-              />
-              <label htmlFor="consent" className="text-sm text-gray-700">
-                I agree to the <Link href="/terms" className="text-[#C0392B] hover:underline">Terms and Conditions</Link>
-                {' '}and <Link href="/privacy" className="text-[#C0392B] hover:underline">Privacy Policy</Link>.
-                {errors.consent && <span className="block text-red-600 mt-1">{errors.consent.message}</span>}
-              </label>
-            </div>
+              </>
+              )}
 
-            {submitError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-red-800 text-sm">{submitError}</p>
+              {regStep === 2 && (
+              <>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900">Review your details</h3>
+                  <Button type="button" variant="outline" size="sm" onClick={onEmailBackToStep1} className="shrink-0">
+                    Update
+                  </Button>
+                </div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Team invitation</p>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Team</dt>
+                    <dd className="text-gray-900">{invitation.teamName}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Participant 1</dt>
+                    <dd className="text-gray-900">{invitation.p1Name}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">School / College</dt>
+                    <dd className="text-gray-900">{invitation.schoolName || '—'}</dd>
+                  </div>
+                </dl>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pt-2 border-t border-gray-200">Your details</p>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Your full name</dt>
+                    <dd className="text-gray-900">{emailPreview.name || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Gender</dt>
+                    <dd className="text-gray-900">{emailPreview.gender || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Email</dt>
+                    <dd className="text-gray-900 break-all">{emailPreview.email || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Phone</dt>
+                    <dd className="text-gray-900">{emailPreview.phone || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Aadhar</dt>
+                    <dd className="text-gray-900 tracking-wide">{maskAadharDisplay(emailPreview.aadhar)}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Class</dt>
+                    <dd className="text-gray-900">{emailPreview.class || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Date of birth</dt>
+                    <dd className="text-gray-900">{emailPreview.dateOfBirth || '—'}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Password</dt>
+                    <dd className="text-gray-900">
+                      {password && String(password).length > 0 ? 'Entered (hidden)' : '—'}
+                    </dd>
+                  </div>
+                </dl>
               </div>
-            )}
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="p2e-informationAccurate"
+                  {...register('informationAccurate')}
+                  className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                />
+                <label htmlFor="p2e-informationAccurate" className="text-sm text-gray-700">
+                  I confirm that the information above is accurate and complete.
+                  {errors.informationAccurate && (
+                    <span className="block text-red-600 mt-1">{errors.informationAccurate.message}</span>
+                  )}
+                </label>
+              </div>
+              <div className="flex items-start gap-3 pt-2 border-t border-gray-200">
+                <input
+                  type="checkbox"
+                  id="p2e-consent"
+                  {...register('consent')}
+                  className="mt-1 w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
+                />
+                <label htmlFor="p2e-consent" className="text-sm text-gray-700">
+                  I agree to the <Link href="/terms" className="text-[#C0392B] hover:underline">Terms and Conditions</Link>
+                  {' '}and <Link href="/privacy" className="text-[#C0392B] hover:underline">Privacy Policy</Link>.
+                  {errors.consent && <span className="block text-red-600 mt-1">{errors.consent.message}</span>}
+                </label>
+              </div>
+              {submitError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-800 text-sm">{submitError}</p>
+                </div>
+              )}
+              </>
+              )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              isLoading={isSubmitting}
-              loadingText="Registering..."
-              className="w-full bg-gray-900 hover:bg-gray-800"
-            >
-              Complete registration
-            </Button>
+              <div className="flex gap-3 pt-2">
+                {regStep === 1 ? (
+                  <>
+                    <div className="flex-1" />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="lg"
+                      onClick={onEmailStepNext}
+                      className="flex-1 bg-gray-900 hover:bg-gray-800"
+                    >
+                      Next
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="outline" size="lg" onClick={onEmailBackToStep1} className="flex-1">
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="lg"
+                      isLoading={isSubmitting}
+                      loadingText="Registering..."
+                      className="flex-1 bg-gray-900 hover:bg-gray-800"
+                    >
+                      Complete registration
+                    </Button>
+                  </>
+                )}
+              </div>
           </form>
             )}
 

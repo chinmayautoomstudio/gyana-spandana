@@ -149,6 +149,9 @@ export const teamCreationSchema = z.object({
   ),
   p1DateOfBirth: requiredDateOfBirthSchema,
   schoolAuthority: schoolAuthorityOptionalSchema,
+  informationAccurate: z.boolean().refine((val) => val === true, {
+    message: 'Please confirm that your information is accurate',
+  }),
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),
@@ -177,6 +180,9 @@ export const p2RegistrationSchema = z.object({
     .min(8, 'Password must be at least 8 characters')
     .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
   dateOfBirth: requiredDateOfBirthSchema,
+  informationAccurate: z.boolean().refine((val) => val === true, {
+    message: 'Please confirm that your information is accurate',
+  }),
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),
@@ -200,6 +206,9 @@ export const p2RegistrationWithGoogleSchema = z.object({
     { message: 'Please select your class' }
   ),
   dateOfBirth: requiredDateOfBirthSchema,
+  informationAccurate: z.boolean().refine((val) => val === true, {
+    message: 'Please confirm that your information is accurate',
+  }),
   consent: z.boolean().refine((val) => val === true, {
     message: 'You must agree to the terms and conditions',
   }),
