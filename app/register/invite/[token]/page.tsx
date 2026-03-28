@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
-import { useForm } from 'react-hook-form'
+import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
 import { getInvitationByToken, completeP2Registration, completeP2RegistrationWithGoogle } from '@/app/actions/team'
@@ -38,10 +38,19 @@ const dobMin = new Date(new Date().setFullYear(new Date().getFullYear() - 100)).
 
 const P2_STEPS = 2
 
-function maskAadharDisplay(raw: string | undefined): string {
+function formatAadharFullDisplay(raw: string | undefined): string {
   const digits = (raw ?? '').replace(/\D/g, '')
-  if (digits.length < 4) return '—'
-  return `XXXX XXXX ${digits.slice(-4)}`
+  if (!digits) return '—'
+  return formatAadhar(raw ?? '')
+}
+
+function PreviewField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="text-sm border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
+      <div className="text-gray-500">{label}</div>
+      <div className="text-gray-900 font-medium mt-1 break-words">{children}</div>
+    </div>
+  )
 }
 
 export default function RegisterInvitePage() {
@@ -59,7 +68,8 @@ export default function RegisterInvitePage() {
   const formAreaRef = useRef<HTMLDivElement>(null)
 
   const emailForm = useForm<P2RegistrationFormData>({
-    resolver: zodResolver(p2RegistrationSchema),
+    resolver: zodResolver(p2RegistrationSchema) as Resolver<P2RegistrationFormData>,
+    shouldUnregister: false,
     defaultValues: {
       informationAccurate: false,
       consent: false,
@@ -70,7 +80,8 @@ export default function RegisterInvitePage() {
   const emailPreview = watch()
 
   const googleForm = useForm<P2RegistrationWithGoogleFormData>({
-    resolver: zodResolver(p2RegistrationWithGoogleSchema),
+    resolver: zodResolver(p2RegistrationWithGoogleSchema) as Resolver<P2RegistrationWithGoogleFormData>,
+    shouldUnregister: false,
     defaultValues: {
       informationAccurate: false,
       consent: false,
@@ -154,6 +165,7 @@ export default function RegisterInvitePage() {
 
   const onSubmit = async (data: P2RegistrationFormData) => {
     if (!token || !invitation?.valid) return
+    if (!data.informationAccurate || !data.consent) return
     setIsSubmitting(true)
     setSubmitError(null)
     const result = await completeP2Registration(token, data)
@@ -167,6 +179,7 @@ export default function RegisterInvitePage() {
 
   const onSubmitGoogle = async (data: P2RegistrationWithGoogleFormData) => {
     if (!token || !invitation?.valid) return
+    if (!data.informationAccurate || !data.consent) return
     setIsSubmitting(true)
     setSubmitError(null)
     const result = await completeP2RegistrationWithGoogle(token, data)
@@ -309,7 +322,16 @@ export default function RegisterInvitePage() {
             )}
 
             {completeWithGoogle ? (
-            <form onSubmit={handleSubmitGoogle(onSubmitGoogle)} className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                if (regStep < P2_STEPS) {
+                  e.preventDefault()
+                  return
+                }
+                void handleSubmitGoogle(onSubmitGoogle)(e)
+              }}
+              className="space-y-4"
+            >
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm font-medium text-gray-600">Step {regStep} of {P2_STEPS}</span>
                 <div className="flex-1 flex gap-1">
@@ -409,51 +431,25 @@ export default function RegisterInvitePage() {
                   </Button>
                 </div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Team invitation</p>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Team</dt>
-                    <dd className="text-gray-900">{invitation.teamName}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Participant 1</dt>
-                    <dd className="text-gray-900">{invitation.p1Name}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">School / College</dt>
-                    <dd className="text-gray-900">{invitation.schoolName || '—'}</dd>
-                  </div>
-                </dl>
+                <div className="space-y-1">
+                  <PreviewField label="Team">{invitation.teamName}</PreviewField>
+                  <PreviewField label="Participant 1">{invitation.p1Name}</PreviewField>
+                  <PreviewField label="School / College">{invitation.schoolName || '—'}</PreviewField>
+                </div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pt-2 border-t border-gray-200">Your details</p>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Email</dt>
-                    <dd className="text-gray-900 break-all">{sessionUser?.email ?? '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Your full name</dt>
-                    <dd className="text-gray-900">{googlePreview.name || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Gender</dt>
-                    <dd className="text-gray-900">{googlePreview.gender || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Phone</dt>
-                    <dd className="text-gray-900">{googlePreview.phone || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Aadhar</dt>
-                    <dd className="text-gray-900 tracking-wide">{maskAadharDisplay(googlePreview.aadhar)}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Class</dt>
-                    <dd className="text-gray-900">{googlePreview.class || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Date of birth</dt>
-                    <dd className="text-gray-900">{googlePreview.dateOfBirth || '—'}</dd>
-                  </div>
-                </dl>
+                <div className="space-y-1">
+                  <PreviewField label="Email">
+                    <span className="break-all">{sessionUser?.email ?? '—'}</span>
+                  </PreviewField>
+                  <PreviewField label="Your full name">{googlePreview.name || '—'}</PreviewField>
+                  <PreviewField label="Gender">{googlePreview.gender || '—'}</PreviewField>
+                  <PreviewField label="Phone">{googlePreview.phone || '—'}</PreviewField>
+                  <PreviewField label="Aadhar">
+                    <span className="font-mono tracking-wide">{formatAadharFullDisplay(googlePreview.aadhar)}</span>
+                  </PreviewField>
+                  <PreviewField label="Class">{googlePreview.class || '—'}</PreviewField>
+                  <PreviewField label="Date of birth">{googlePreview.dateOfBirth || '—'}</PreviewField>
+                </div>
               </div>
               <div className="flex items-start gap-3">
                 <input
@@ -524,7 +520,16 @@ export default function RegisterInvitePage() {
               </div>
             </form>
             ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                if (regStep < P2_STEPS) {
+                  e.preventDefault()
+                  return
+                }
+                void handleSubmit(onSubmit)(e)
+              }}
+              className="space-y-4"
+            >
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm font-medium text-gray-600">Step {regStep} of {P2_STEPS}</span>
                 <div className="flex-1 flex gap-1">
@@ -634,57 +639,28 @@ export default function RegisterInvitePage() {
                   </Button>
                 </div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Team invitation</p>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Team</dt>
-                    <dd className="text-gray-900">{invitation.teamName}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Participant 1</dt>
-                    <dd className="text-gray-900">{invitation.p1Name}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">School / College</dt>
-                    <dd className="text-gray-900">{invitation.schoolName || '—'}</dd>
-                  </div>
-                </dl>
+                <div className="space-y-1">
+                  <PreviewField label="Team">{invitation.teamName}</PreviewField>
+                  <PreviewField label="Participant 1">{invitation.p1Name}</PreviewField>
+                  <PreviewField label="School / College">{invitation.schoolName || '—'}</PreviewField>
+                </div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide pt-2 border-t border-gray-200">Your details</p>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Your full name</dt>
-                    <dd className="text-gray-900">{emailPreview.name || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Gender</dt>
-                    <dd className="text-gray-900">{emailPreview.gender || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Email</dt>
-                    <dd className="text-gray-900 break-all">{emailPreview.email || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Phone</dt>
-                    <dd className="text-gray-900">{emailPreview.phone || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Aadhar</dt>
-                    <dd className="text-gray-900 tracking-wide">{maskAadharDisplay(emailPreview.aadhar)}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Class</dt>
-                    <dd className="text-gray-900">{emailPreview.class || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Date of birth</dt>
-                    <dd className="text-gray-900">{emailPreview.dateOfBirth || '—'}</dd>
-                  </div>
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                    <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Password</dt>
-                    <dd className="text-gray-900">
-                      {password && String(password).length > 0 ? 'Entered (hidden)' : '—'}
-                    </dd>
-                  </div>
-                </dl>
+                <div className="space-y-1">
+                  <PreviewField label="Your full name">{emailPreview.name || '—'}</PreviewField>
+                  <PreviewField label="Gender">{emailPreview.gender || '—'}</PreviewField>
+                  <PreviewField label="Email">
+                    <span className="break-all">{emailPreview.email || '—'}</span>
+                  </PreviewField>
+                  <PreviewField label="Phone">{emailPreview.phone || '—'}</PreviewField>
+                  <PreviewField label="Aadhar">
+                    <span className="font-mono tracking-wide">{formatAadharFullDisplay(emailPreview.aadhar)}</span>
+                  </PreviewField>
+                  <PreviewField label="Class">{emailPreview.class || '—'}</PreviewField>
+                  <PreviewField label="Date of birth">{emailPreview.dateOfBirth || '—'}</PreviewField>
+                  <PreviewField label="Password">
+                    {password && String(password).length > 0 ? 'Entered (hidden)' : '—'}
+                  </PreviewField>
+                </div>
               </div>
               <div className="flex items-start gap-3">
                 <input

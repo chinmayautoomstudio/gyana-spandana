@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -52,11 +52,19 @@ function getAvatarUrl(user: User): string | null {
   return typeof url === 'string' && url ? url : null
 }
 
-function maskAadharDisplay(raw: string | undefined): string {
+function formatAadharFullDisplay(raw: string | undefined): string {
   const digits = (raw ?? '').replace(/\D/g, '')
-  if (digits.length < 4) return '—'
-  const last4 = digits.slice(-4)
-  return `XXXX XXXX ${last4}`
+  if (!digits) return '—'
+  return formatAadhar(raw ?? '')
+}
+
+function PreviewField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="text-sm border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
+      <div className="text-gray-500">{label}</div>
+      <div className="text-gray-900 font-medium mt-1 break-words">{children}</div>
+    </div>
+  )
 }
 
 export default function TeamCreatePage() {
@@ -69,7 +77,8 @@ export default function TeamCreatePage() {
   const formRef = useRef<HTMLDivElement>(null)
 
   const { register, handleSubmit, formState: { errors }, reset, trigger, getValues, setError, watch, setValue } = useForm<TeamCreationFormData>({
-    resolver: zodResolver(teamCreationSchema),
+    resolver: zodResolver(teamCreationSchema) as Resolver<TeamCreationFormData>,
+    shouldUnregister: false,
     defaultValues: {
       p1Gender: '' as TeamCreationFormData['p1Gender'],
       p1Phone: '',
@@ -168,6 +177,7 @@ export default function TeamCreatePage() {
   }
 
   const onSubmit = async (data: TeamCreationFormData) => {
+    if (!data.informationAccurate || !data.consent) return
     setIsSubmitting(true)
     setSubmitError(null)
     console.log('[TeamCreate] Submitting form data:', { teamName: data.teamName, p2Email: data.p2Email })
@@ -257,7 +267,16 @@ export default function TeamCreatePage() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form
+              onSubmit={(e) => {
+                if (step < STEPS) {
+                  e.preventDefault()
+                  return
+                }
+                void handleSubmit(onSubmit)(e)
+              }}
+              className="space-y-6"
+            >
               {/* Step 1: Team & your info */}
               {step === 1 && (
                 <div className="space-y-4">
@@ -402,67 +421,40 @@ export default function TeamCreatePage() {
                         Update
                       </Button>
                     </div>
-                    <dl className="space-y-2 text-sm">
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Registered as</dt>
-                        <dd className="text-gray-900 font-medium break-all">{user?.email ?? '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Your full name</dt>
-                        <dd className="text-gray-900">{previewValues.p1Name || '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Team name</dt>
-                        <dd className="text-gray-900">{previewValues.teamName || '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">School / College</dt>
-                        <dd className="text-gray-900">{previewValues.schoolName || '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Participant 2 email</dt>
-                        <dd className="text-gray-900 break-all">{previewValues.p2Email || '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Gender</dt>
-                        <dd className="text-gray-900">{previewValues.p1Gender || '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Phone</dt>
-                        <dd className="text-gray-900">{previewValues.p1Phone || '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Aadhar</dt>
-                        <dd className="text-gray-900 tracking-wide">{maskAadharDisplay(previewValues.p1Aadhar)}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Class</dt>
-                        <dd className="text-gray-900">{previewValues.p1Class || '—'}</dd>
-                      </div>
-                      <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        <dt className="text-gray-500 shrink-0 sm:min-w-[10rem]">Date of birth</dt>
-                        <dd className="text-gray-900">{previewValues.p1DateOfBirth || '—'}</dd>
-                      </div>
-                      <div className="pt-1 border-t border-gray-200">
-                        <dt className="text-gray-500 mb-1">School authority</dt>
-                        <dd className="text-gray-900">
-                          {(() => {
-                            const a = previewValues.schoolAuthority
-                            const n = a?.name?.trim()
-                            const e = a?.email?.trim()
-                            const p = a?.phone?.trim()
-                            if (!n && !e && !p) return <span className="text-gray-500">Not provided</span>
-                            return (
-                              <ul className="list-disc list-inside space-y-0.5">
-                                {n ? <li>Name: {n}</li> : null}
-                                {e ? <li>Email: {e}</li> : null}
-                                {p ? <li>Phone: {p}</li> : null}
-                              </ul>
-                            )
-                          })()}
-                        </dd>
-                      </div>
-                    </dl>
+                    <div className="space-y-1">
+                      <PreviewField label="Registered as">
+                        <span className="break-all">{user?.email ?? '—'}</span>
+                      </PreviewField>
+                      <PreviewField label="Your full name">{previewValues.p1Name || '—'}</PreviewField>
+                      <PreviewField label="Team name">{previewValues.teamName || '—'}</PreviewField>
+                      <PreviewField label="School / College">{previewValues.schoolName || '—'}</PreviewField>
+                      <PreviewField label="Participant 2 email">
+                        <span className="break-all">{previewValues.p2Email || '—'}</span>
+                      </PreviewField>
+                      <PreviewField label="Gender">{previewValues.p1Gender || '—'}</PreviewField>
+                      <PreviewField label="Phone">{previewValues.p1Phone || '—'}</PreviewField>
+                      <PreviewField label="Aadhar">
+                        <span className="font-mono tracking-wide">{formatAadharFullDisplay(previewValues.p1Aadhar)}</span>
+                      </PreviewField>
+                      <PreviewField label="Class">{previewValues.p1Class || '—'}</PreviewField>
+                      <PreviewField label="Date of birth">{previewValues.p1DateOfBirth || '—'}</PreviewField>
+                      <PreviewField label="School authority">
+                        {(() => {
+                          const a = previewValues.schoolAuthority
+                          const n = a?.name?.trim()
+                          const e = a?.email?.trim()
+                          const ph = a?.phone?.trim()
+                          if (!n && !e && !ph) return <span className="text-gray-500 font-normal">Not provided</span>
+                          return (
+                            <ul className="list-disc list-inside space-y-0.5 font-normal">
+                              {n ? <li>Name: {n}</li> : null}
+                              {e ? <li>Email: {e}</li> : null}
+                              {ph ? <li>Phone: {ph}</li> : null}
+                            </ul>
+                          )
+                        })()}
+                      </PreviewField>
+                    </div>
                   </div>
 
                   <div className="flex items-start gap-3">

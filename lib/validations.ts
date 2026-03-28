@@ -105,6 +105,24 @@ export const schoolAuthoritySchema = z.object({
     .regex(phoneRegex, 'Phone must be a valid 10-digit Indian mobile number'),
 })
 
+/** Attestation checkboxes: must be checked; normalizes unknown / "on" / boolean from HTML + RHF. */
+function requiredChecked(message: string) {
+  return z
+    .unknown()
+    .transform((val) => val === true || val === 'on')
+    .pipe(
+      z.boolean().refine((v) => v === true, {
+        message,
+      })
+    )
+}
+
+/** RHF + Zod v4 infer `unknown` for piped checkbox fields; forms use boolean in state. */
+type WithAccurateConsentBooleans<T> = Omit<T, 'informationAccurate' | 'consent'> & {
+  informationAccurate: boolean
+  consent: boolean
+}
+
 // Optional authority: all fields optional; when present and non-empty, validate format
 export const schoolAuthorityOptionalSchema = z.object({
   name: z
@@ -149,12 +167,8 @@ export const teamCreationSchema = z.object({
   ),
   p1DateOfBirth: requiredDateOfBirthSchema,
   schoolAuthority: schoolAuthorityOptionalSchema,
-  informationAccurate: z.boolean().refine((val) => val === true, {
-    message: 'Please confirm that your information is accurate',
-  }),
-  consent: z.boolean().refine((val) => val === true, {
-    message: 'You must agree to the terms and conditions',
-  }),
+  informationAccurate: requiredChecked('Please confirm that your information is accurate'),
+  consent: requiredChecked('You must agree to the terms and conditions'),
 })
 
 // P2 completes registration via invitation link
@@ -180,12 +194,8 @@ export const p2RegistrationSchema = z.object({
     .min(8, 'Password must be at least 8 characters')
     .regex(passwordRegex, 'Password must contain uppercase, lowercase, and a number'),
   dateOfBirth: requiredDateOfBirthSchema,
-  informationAccurate: z.boolean().refine((val) => val === true, {
-    message: 'Please confirm that your information is accurate',
-  }),
-  consent: z.boolean().refine((val) => val === true, {
-    message: 'You must agree to the terms and conditions',
-  }),
+  informationAccurate: requiredChecked('Please confirm that your information is accurate'),
+  consent: requiredChecked('You must agree to the terms and conditions'),
 })
 
 // P2 completes registration via invitation using existing Google account (no password)
@@ -206,15 +216,10 @@ export const p2RegistrationWithGoogleSchema = z.object({
     { message: 'Please select your class' }
   ),
   dateOfBirth: requiredDateOfBirthSchema,
-  informationAccurate: z.boolean().refine((val) => val === true, {
-    message: 'Please confirm that your information is accurate',
-  }),
-  consent: z.boolean().refine((val) => val === true, {
-    message: 'You must agree to the terms and conditions',
-  }),
+  informationAccurate: requiredChecked('Please confirm that your information is accurate'),
+  consent: requiredChecked('You must agree to the terms and conditions'),
 })
 
-export type P2RegistrationWithGoogleFormData = z.infer<typeof p2RegistrationWithGoogleSchema>
 
 export const teamRegistrationSchema = z.object({
   teamName: teamNameSchema,
@@ -365,8 +370,11 @@ export const inviteAdminSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
 })
 
-export type TeamCreationFormData = z.infer<typeof teamCreationSchema>
-export type P2RegistrationFormData = z.infer<typeof p2RegistrationSchema>
+export type TeamCreationFormData = WithAccurateConsentBooleans<z.infer<typeof teamCreationSchema>>
+export type P2RegistrationFormData = WithAccurateConsentBooleans<z.infer<typeof p2RegistrationSchema>>
+export type P2RegistrationWithGoogleFormData = WithAccurateConsentBooleans<
+  z.infer<typeof p2RegistrationWithGoogleSchema>
+>
 export type TeamRegistrationFormData = z.infer<typeof teamRegistrationSchema>
 export type SignUpFormData = z.infer<typeof signUpSchema>
 export type LoginFormData = z.infer<typeof loginSchema>
