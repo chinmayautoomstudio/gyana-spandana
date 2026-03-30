@@ -132,7 +132,8 @@ export const ParticipantExamLinks: React.FC<ParticipantExamLinksProps> = ({
     <div className={`bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 ${className}`}>
       <h3 className="text-lg font-bold text-gray-900 mb-2">Participant Exam Links</h3>
       <p className="text-sm text-gray-600 mb-4">
-        Each participant takes the exam individually. Team scores are calculated by summing both participants' scores.
+        Links appear only for participants assigned to this exam. Each takes the exam individually; team
+        scores sum both participants&apos; scores.
       </p>
 
       <div className="space-y-6">

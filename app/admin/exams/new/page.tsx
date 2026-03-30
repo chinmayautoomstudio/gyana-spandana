@@ -19,6 +19,31 @@ interface Team {
   participant_count: number
 }
 
+/** Detach questions and remove exam so a failed team assignment never leaves a public unrestricted exam. */
+async function rollbackExamAfterFailedTeamAssignment(
+  supabase: ReturnType<typeof createClient>,
+  examId: string,
+  assignedQuestionIds: string[]
+) {
+  if (assignedQuestionIds.length > 0) {
+    const { error } = await supabase
+      .from('questions')
+      .update({ exam_id: null, order_index: null })
+      .eq('exam_id', examId)
+      .in('id', assignedQuestionIds)
+    if (error) {
+      console.error('Rollback: failed to detach questions from exam', error)
+    }
+  }
+  const { error: deleteError } = await supabase.from('exams').delete().eq('id', examId)
+  if (deleteError) {
+    console.error('Rollback: failed to delete exam after team assignment failure', deleteError)
+    throw new Error(
+      `Team assignment failed and cleanup could not delete the draft exam (id: ${examId}). Fix assignments manually or delete the exam in admin.`
+    )
+  }
+}
+
 const examSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
   description: z.string().optional(),
@@ -277,10 +302,15 @@ export default function NewExamPage() {
         }
       }
 
-      // Assign participants from selected teams
+      // Assign participants from selected teams (required when teams are selected — avoids a public exam)
       if (selectedTeamIds.length > 0) {
+        const teamAssignErrorAlreadyRolledBack = (e: unknown) =>
+          e instanceof Error &&
+          (/Could not load participants for the selected teams|No participants found in the selected teams|Could not assign participants to the exam|cleanup could not delete the draft exam/.test(
+            e.message
+          ))
+
         try {
-          // Fetch all participants from selected teams
           const { data: participants, error: participantsError } = await supabase
             .from('participants')
             .select('id, team_id, teams(id, team_name)')
@@ -288,55 +318,80 @@ export default function NewExamPage() {
 
           if (participantsError) {
             console.error('Error fetching participants:', participantsError)
-            // Don't throw - allow exam creation to succeed even if team assignment fails
-          } else if (participants && participants.length > 0) {
-            // Check for teams without participants
-            const teamsWithParticipants = new Set(participants.map((p: any) => p.team_id))
-            const teamsWithoutParticipants = selectedTeamIds.filter(
-              (teamId) => !teamsWithParticipants.has(teamId)
+            await rollbackExamAfterFailedTeamAssignment(
+              supabase,
+              exam.id,
+              selectedQuestionIds
             )
-
-            if (teamsWithoutParticipants.length > 0) {
-              const teamNames = teamsWithoutParticipants
-                .map((teamId) => teams.find((t) => t.id === teamId)?.team_name)
-                .filter(Boolean)
-                .join(', ')
-              console.warn(`Teams without participants: ${teamNames}`)
-            }
-
-            // Create exam_participants entries
-            const assignments = participants.map((participant) => ({
-              exam_id: exam.id,
-              participant_id: participant.id,
-              assigned_by: user.id,
-            }))
-
-            // Insert assignments (using upsert to handle duplicates gracefully)
-            const { data: assignedData, error: assignError } = await supabase
-              .from('exam_participants')
-              .upsert(assignments, {
-                onConflict: 'exam_id,participant_id',
-                ignoreDuplicates: true,
-              })
-              .select()
-
-            if (assignError) {
-              console.error('Error assigning participants:', assignError)
-              // Don't throw - allow exam creation to succeed even if team assignment fails
-            } else {
-              const assignedCount = assignedData?.length || 0
-              const skippedCount = participants.length - assignedCount
-              if (skippedCount > 0) {
-                console.info(`${skippedCount} participant(s) were already assigned to this exam`)
-              }
-            }
-          } else {
-            // No participants found in selected teams
-            console.warn('No participants found in selected teams')
+            throw new Error(
+              `Could not load participants for the selected teams: ${participantsError.message}`
+            )
           }
-        } catch (teamAssignError: any) {
-          console.error('Error in team assignment:', teamAssignError)
-          // Don't throw - allow exam creation to succeed even if team assignment fails
+
+          if (!participants || participants.length === 0) {
+            await rollbackExamAfterFailedTeamAssignment(
+              supabase,
+              exam.id,
+              selectedQuestionIds
+            )
+            throw new Error(
+              'No participants found in the selected teams. Add members to those teams, or clear team selection to create a public exam.'
+            )
+          }
+
+          const teamsWithParticipants = new Set(participants.map((p: { team_id: string }) => p.team_id))
+          const teamsWithoutParticipants = selectedTeamIds.filter(
+            (teamId) => !teamsWithParticipants.has(teamId)
+          )
+
+          if (teamsWithoutParticipants.length > 0) {
+            const teamNames = teamsWithoutParticipants
+              .map((teamId) => teams.find((t) => t.id === teamId)?.team_name)
+              .filter(Boolean)
+              .join(', ')
+            console.warn(`Teams without participants: ${teamNames}`)
+          }
+
+          const assignments = participants.map((participant: { id: string }) => ({
+            exam_id: exam.id,
+            participant_id: participant.id,
+            assigned_by: user.id,
+          }))
+
+          const { data: assignedData, error: assignError } = await supabase
+            .from('exam_participants')
+            .upsert(assignments, {
+              onConflict: 'exam_id,participant_id',
+              ignoreDuplicates: true,
+            })
+            .select()
+
+          if (assignError) {
+            console.error('Error assigning participants:', assignError)
+            await rollbackExamAfterFailedTeamAssignment(
+              supabase,
+              exam.id,
+              selectedQuestionIds
+            )
+            throw new Error(
+              `Could not assign participants to the exam: ${assignError.message}`
+            )
+          }
+
+          const assignedCount = assignedData?.length || 0
+          const skippedCount = participants.length - assignedCount
+          if (skippedCount > 0) {
+            console.info(`${skippedCount} participant(s) were already assigned to this exam`)
+          }
+        } catch (teamAssignError: unknown) {
+          if (!teamAssignErrorAlreadyRolledBack(teamAssignError)) {
+            await rollbackExamAfterFailedTeamAssignment(
+              supabase,
+              exam.id,
+              selectedQuestionIds
+            )
+          }
+          throw teamAssignError
         }
       }
 

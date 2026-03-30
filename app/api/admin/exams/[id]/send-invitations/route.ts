@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { findParticipantsNotAssignedToExam } from '@/lib/utils/examInvitationEligibility'
 
 export async function POST(
   request: NextRequest,
@@ -74,7 +75,10 @@ export async function POST(
       .in('participant_id', participantIds)
 
     const assignedParticipantIds = new Set((assignments || []).map(a => a.participant_id))
-    const unassignedParticipants = participants.filter(p => !assignedParticipantIds.has(p.id))
+    const unassignedParticipants = findParticipantsNotAssignedToExam(
+      participants,
+      assignedParticipantIds
+    )
 
     if (unassignedParticipants.length > 0) {
       return NextResponse.json({

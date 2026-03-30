@@ -354,7 +354,12 @@ export default function ExamParticipantsPage() {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4">
+      <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4 space-y-3">
+        <p className="text-xs text-gray-500">
+          Invitation emails are sent only to participants assigned to this exam. Unassigned rows are excluded
+          when you open the send dialog.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -366,7 +371,7 @@ export default function ExamParticipantsPage() {
             Select All ({filteredParticipants.length} participant{filteredParticipants.length !== 1 ? 's' : ''})
           </span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {assignedParticipants.size > 0 && (
             <Button
               variant="secondary"
@@ -429,6 +434,7 @@ export default function ExamParticipantsPage() {
           >
             Unassign Selected ({selectedParticipants.size})
           </Button>
+        </div>
         </div>
       </div>
 

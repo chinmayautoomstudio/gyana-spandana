@@ -197,6 +197,10 @@ export const ExamInvitationModal: React.FC<ExamInvitationModalProps> = ({
               <p className="text-gray-600 mt-1">
                 {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''} selected
               </p>
+              <p className="text-sm text-gray-500 mt-2 max-w-xl">
+                Only participants assigned to this exam receive invitation emails. The server rejects any
+                unassigned addresses.
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -269,7 +273,13 @@ export const ExamInvitationModal: React.FC<ExamInvitationModalProps> = ({
               </svg>
               <div className="text-sm text-blue-800">
                 <p className="font-semibold mb-1">Individual Exam Participation:</p>
-                <p>Each participant will receive their own exam link and must take the exam individually. Team scores are calculated by summing both participants' scores.</p>
+                <p>
+                  Each participant listed here is assigned to this exam. They will receive the same take URL;
+                  unassigned users cannot start the exam even if someone forwards the link.
+                </p>
+                <p className="mt-2">
+                  Team scores are calculated by summing both participants&apos; scores.
+                </p>
               </div>
             </div>
           </div>

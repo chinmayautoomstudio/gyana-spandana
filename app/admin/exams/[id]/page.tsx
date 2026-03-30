@@ -238,6 +238,7 @@ export default function ExamDetailsPage() {
               <Button
                 variant="secondary"
                 size="md"
+                title="Emails go only to participants assigned to this exam."
                 onClick={() => setShowInvitationModal(true)}
               >
                 <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
