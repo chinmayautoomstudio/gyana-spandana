@@ -14,7 +14,11 @@ export interface AvailableExam {
     status: string
 }
 
-export async function getAvailableExams(): Promise<AvailableExam[]> {
+/**
+ * @param verifiedParticipantId - When provided, skips a separate participant lookup after auth
+ *   (caller must have loaded this id for the same user). Server still verifies id belongs to the session user.
+ */
+export async function getAvailableExams(verifiedParticipantId?: string): Promise<AvailableExam[]> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -22,15 +26,31 @@ export async function getAvailableExams(): Promise<AvailableExam[]> {
         return []
     }
 
-    // Get participant ID
-    const { data: participant } = await supabase
-        .from('participants')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
+    let participantId: string
 
-    if (!participant) {
-        return []
+    if (verifiedParticipantId) {
+        const { data: row, error } = await supabase
+            .from('participants')
+            .select('id')
+            .eq('id', verifiedParticipantId)
+            .eq('user_id', user.id)
+            .single()
+
+        if (error || !row) {
+            return []
+        }
+        participantId = row.id
+    } else {
+        const { data: participant } = await supabase
+            .from('participants')
+            .select('id')
+            .eq('user_id', user.id)
+            .single()
+
+        if (!participant) {
+            return []
+        }
+        participantId = participant.id
     }
 
     const supabaseAdmin = createAdminClient()
@@ -51,7 +71,7 @@ export async function getAvailableExams(): Promise<AvailableExam[]> {
     const { data: myAssignments } = await supabaseAdmin
         .from('exam_participants')
         .select('exam_id')
-        .eq('participant_id', participant.id)
+        .eq('participant_id', participantId)
 
     const myExamIds = new Set((myAssignments || []).map(a => a.exam_id))
 

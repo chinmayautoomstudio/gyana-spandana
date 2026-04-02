@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { resendInvitation, updateTeamAuthority } from '@/app/actions/team'
 import { ProfileCompletionModal } from '@/components/ui/ProfileCompletionModal'
-import { updateExamStatuses } from '@/lib/utils/examScheduler'
 import { NotificationBell } from '@/components/admin/NotificationBell'
 
 export default function DashboardPage() {
@@ -64,79 +63,70 @@ export default function DashboardPage() {
 
         setUser(currentUser)
 
-        // Check user role - admins should not access participant dashboard
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('user_id', currentUser.id)
-          .single()
+        const [profileResult, participantResult] = await Promise.all([
+          supabase.from('user_profiles').select('role').eq('user_id', currentUser.id).single(),
+          supabase
+            .from('participants')
+            .select(
+              '*, teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)'
+            )
+            .eq('user_id', currentUser.id)
+            .single(),
+        ])
 
-        const role = profile?.role || currentUser.user_metadata?.role || 'participant'
+        const role =
+          profileResult.data?.role || currentUser.user_metadata?.role || 'participant'
 
         if (role === 'admin') {
           router.push('/admin')
           return
         }
 
-        // Fetch participant data using user_id (include team status for pending P2)
-        const { data: participant } = await supabase
-          .from('participants')
-          .select('*, teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)')
-          .eq('user_id', currentUser.id)
-          .single()
+        const participant = participantResult.data
 
         if (!participant) {
-          // No participant record: user hasn't created a team yet
           router.replace('/team/create')
           return
         }
 
-        if (participant) {
-          setParticipantData(participant)
+        setParticipantData(participant)
 
-          // Check if profile needs to be completed
-          // Only show modal if:
-          // 1. Profile is not completed
-          // 2. Modal hasn't been shown before (checked via localStorage)
-          if (!participant.profile_completed) {
-            // Check localStorage only in browser environment
-            if (typeof window !== 'undefined') {
-              const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
-              const hasModalBeenShown = localStorage.getItem(modalDismissedKey) === 'true'
+        if (!participant.profile_completed) {
+          if (typeof window !== 'undefined') {
+            const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
+            const hasModalBeenShown = localStorage.getItem(modalDismissedKey) === 'true'
 
-              if (!hasModalBeenShown) {
-                setShowProfileModal(true)
-              }
-            } else {
-              // If localStorage not available, show modal (first time)
+            if (!hasModalBeenShown) {
               setShowProfileModal(true)
             }
+          } else {
+            setShowProfileModal(true)
           }
+        }
 
-          // Fetch teammate data (the other participant in the same team)
-          if (participant.team_id) {
-            const { data: teammate } = await supabase
+        const teammatePromise = participant.team_id
+          ? supabase
               .from('participants')
               .select('name, email, school_name, is_participant1')
               .eq('team_id', participant.team_id)
               .neq('user_id', currentUser.id)
               .single()
+          : Promise.resolve({ data: null as null })
 
-            setTeammateData(teammate)
-          }
-
-          // Fetch available exams count using server action
-          await updateExamStatuses(supabase)
-
+        const examsPromise = (async () => {
           try {
             const { getAvailableExams } = await import('@/app/actions/exam')
-            const availableExams = await getAvailableExams()
-            setAvailableExamsCount(availableExams.length)
+            return await getAvailableExams(participant.id)
           } catch (error) {
             console.error('Error fetching available exams count:', error)
-            setAvailableExamsCount(0)
+            return []
           }
-        }
+        })()
+
+        const [teammateRes, availableExams] = await Promise.all([teammatePromise, examsPromise])
+
+        setTeammateData(teammateRes.data ?? null)
+        setAvailableExamsCount(availableExams.length)
       } finally {
         setLoading(false)
       }
@@ -419,9 +409,11 @@ export default function DashboardPage() {
                   {/* User profile */}
                   <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-3 border-l border-gray-200">
                     {participantData?.profile_photo_url ? (
-                      <img
+                      <Image
                         src={participantData.profile_photo_url}
                         alt={participantData?.name || 'Profile'}
+                        width={40}
+                        height={40}
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-white shadow-lg flex-shrink-0"
                       />
                     ) : (
@@ -507,9 +499,11 @@ export default function DashboardPage() {
                 {/* Profile Photo Display */}
                 {participantData?.profile_photo_url && (
                   <div className="mb-6 flex justify-center">
-                    <img
+                    <Image
                       src={participantData.profile_photo_url}
                       alt={participantData?.name || 'Profile'}
+                      width={128}
+                      height={128}
                       className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
                     />
                   </div>

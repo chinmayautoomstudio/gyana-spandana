@@ -102,17 +102,13 @@ export default function LoginForm() {
         // Fallback to user_metadata if profile doesn't exist
         const role = profile?.role || authData.user.user_metadata?.role || 'participant'
 
-        // Show success message before redirecting
         setLoginSuccess(true)
-        
-        // Delay redirect to show success message
-        setTimeout(() => {
-          if (role === 'admin') {
-            router.push('/admin')
-          } else {
-            router.push('/dashboard')
-          }
-        }, 1500)
+        setIsSubmitting(false)
+        if (role === 'admin') {
+          router.push('/admin')
+        } else {
+          router.push('/dashboard')
+        }
       }
     } catch (error: any) {
       // Handle connection errors specifically

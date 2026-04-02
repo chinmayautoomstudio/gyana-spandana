@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import type { User } from '@supabase/supabase-js'
 
 export default async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -34,26 +35,20 @@ export default async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Helper function to get user role (checks user_profiles first, then user_metadata)
-  const getUserRole = async (userId: string): Promise<string> => {
-    // Try user_profiles table first (primary source)
+  // Prefer JWT user_metadata to avoid a DB round-trip; fall back to user_profiles when missing
+  const getUserRole = async (authUser: User): Promise<string> => {
+    const metaRole = authUser.user_metadata?.role
+    if (typeof metaRole === 'string' && metaRole.length > 0) {
+      return metaRole
+    }
+
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('role')
-      .eq('user_id', userId)
+      .eq('user_id', authUser.id)
       .single()
 
-    if (profile?.role) {
-      return profile.role
-    }
-
-    // Fallback to user_metadata (for backward compatibility)
-    if (user?.user_metadata?.role) {
-      return user.user_metadata.role
-    }
-
-    // Default to participant
-    return 'participant'
+    return profile?.role ?? 'participant'
   }
 
   // Protect dashboard routes
@@ -66,7 +61,7 @@ export default async function proxy(request: NextRequest) {
     }
 
     // Check user role FIRST - admins should go to admin dashboard, not participant dashboard
-    const role = await getUserRole(user.id)
+    const role = await getUserRole(user)
     if (role === 'admin') {
       const url = request.nextUrl.clone()
       url.pathname = '/admin'
@@ -79,7 +74,7 @@ export default async function proxy(request: NextRequest) {
 
   // Protect admin routes - only admins can access
   if (request.nextUrl.pathname.startsWith('/admin') && user) {
-    const role = await getUserRole(user.id)
+    const role = await getUserRole(user)
     if (role !== 'admin') {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
@@ -108,8 +103,8 @@ export default async function proxy(request: NextRequest) {
     (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') &&
     user
   ) {
-    const role = await getUserRole(user.id)
-    
+    const role = await getUserRole(user)
+
     // If admin, redirect to admin dashboard
     if (role === 'admin') {
       const url = request.nextUrl.clone()

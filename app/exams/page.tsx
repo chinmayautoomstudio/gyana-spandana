@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
-import { updateExamStatuses } from '@/lib/utils/examScheduler'
-
 interface Exam {
   id: string
   title: string
@@ -34,9 +32,6 @@ export default function AvailableExamsPage() {
     const fetchData = async () => {
       const supabase = createClient()
 
-      // Update exam statuses based on schedule
-      await updateExamStatuses(supabase)
-
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
@@ -44,7 +39,6 @@ export default function AvailableExamsPage() {
         return
       }
 
-      // Get participant ID
       const { data: participant } = await supabase
         .from('participants')
         .select('id')
@@ -54,15 +48,16 @@ export default function AvailableExamsPage() {
       if (participant) {
         try {
           const { getAvailableExams } = await import('@/app/actions/exam')
-          const filteredExams = await getAvailableExams()
+          const [filteredExams, attemptsResult] = await Promise.all([
+            getAvailableExams(participant.id),
+            supabase
+              .from('exam_attempts')
+              .select('exam_id, status, score')
+              .eq('participant_id', participant.id),
+          ])
           setExams(filteredExams)
 
-          // Fetch user's attempts
-          const { data: attemptsData } = await supabase
-            .from('exam_attempts')
-            .select('exam_id, status, score')
-            .eq('participant_id', participant.id)
-
+          const attemptsData = attemptsResult.data
           if (attemptsData) {
             const attemptsMap: Record<string, ExamAttempt> = {}
             attemptsData.forEach(attempt => {
@@ -72,7 +67,6 @@ export default function AvailableExamsPage() {
           }
         } catch (error) {
           console.error('Error fetching exams:', error)
-          // Fallback or empty state
           setExams([])
         }
       }
