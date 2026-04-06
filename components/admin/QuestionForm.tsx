@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -12,6 +12,10 @@ interface QuestionFormProps {
   onClose: () => void
   onSuccess: () => void
   allowNoExam?: boolean
+  /** Hide title and top-right close when the modal shell provides them. */
+  embeddedInModal?: boolean
+  /** Fires on first field change (for tab-switch dirty guard). */
+  onInteraction?: () => void
 }
 
 export function QuestionForm({
@@ -20,6 +24,8 @@ export function QuestionForm({
   onClose,
   onSuccess,
   allowNoExam = false,
+  embeddedInModal = false,
+  onInteraction,
 }: QuestionFormProps) {
   const [formData, setFormData] = useState({
     question_text: question?.question_text || '',
@@ -36,6 +42,14 @@ export function QuestionForm({
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const interactionFired = useRef(false)
+
+  const markTouched = () => {
+    if (!interactionFired.current) {
+      interactionFired.current = true
+      onInteraction?.()
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -120,20 +134,29 @@ export function QuestionForm({
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {question ? 'Edit Question' : 'Add New Question'}
-        </h2>
-        <button
-          onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+    <div
+      className={
+        embeddedInModal
+          ? 'p-1 sm:p-2'
+          : 'bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8'
+      }
+    >
+      {!embeddedInModal && (
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {question ? 'Edit Question' : 'Add New Question'}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
@@ -142,7 +165,10 @@ export function QuestionForm({
           </label>
           <textarea
             value={formData.question_text}
-            onChange={(e) => setFormData({ ...formData, question_text: e.target.value })}
+            onChange={(e) => {
+              markTouched()
+              setFormData({ ...formData, question_text: e.target.value })
+            }}
             rows={3}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
             placeholder="Enter your question..."
@@ -156,7 +182,10 @@ export function QuestionForm({
             <input
               type="text"
               value={formData.option_a}
-              onChange={(e) => setFormData({ ...formData, option_a: e.target.value })}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, option_a: e.target.value })
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               required
             />
@@ -166,7 +195,10 @@ export function QuestionForm({
             <input
               type="text"
               value={formData.option_b}
-              onChange={(e) => setFormData({ ...formData, option_b: e.target.value })}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, option_b: e.target.value })
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               required
             />
@@ -176,7 +208,10 @@ export function QuestionForm({
             <input
               type="text"
               value={formData.option_c}
-              onChange={(e) => setFormData({ ...formData, option_c: e.target.value })}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, option_c: e.target.value })
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               required
             />
@@ -186,7 +221,10 @@ export function QuestionForm({
             <input
               type="text"
               value={formData.option_d}
-              onChange={(e) => setFormData({ ...formData, option_d: e.target.value })}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, option_d: e.target.value })
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               required
             />
@@ -198,9 +236,10 @@ export function QuestionForm({
             <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer *</label>
             <select
               value={formData.correct_answer}
-              onChange={(e) =>
+              onChange={(e) => {
+                markTouched()
                 setFormData({ ...formData, correct_answer: e.target.value as 'A' | 'B' | 'C' | 'D' })
-              }
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               required
             >
@@ -215,7 +254,10 @@ export function QuestionForm({
               label="Points *"
               type="number"
               value={formData.points}
-              onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) || 1 })}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, points: parseInt(e.target.value) || 1 })
+              }}
               min={1}
               required
             />
@@ -224,9 +266,10 @@ export function QuestionForm({
             <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty Level</label>
             <select
               value={formData.difficulty_level}
-              onChange={(e) =>
+              onChange={(e) => {
+                markTouched()
                 setFormData({ ...formData, difficulty_level: e.target.value as 'easy' | 'medium' | 'hard' })
-              }
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
             >
               <option value="easy">Easy</option>
@@ -242,7 +285,10 @@ export function QuestionForm({
             <input
               type="text"
               value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, category: e.target.value })
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               placeholder="e.g., History, Geography"
             />
@@ -252,7 +298,10 @@ export function QuestionForm({
             <input
               type="text"
               value={formData.tags}
-              onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, tags: e.target.value })
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               placeholder="Comma-separated tags (e.g., odisha, culture, temple)"
             />
@@ -265,7 +314,10 @@ export function QuestionForm({
           </label>
           <textarea
             value={formData.explanation}
-            onChange={(e) => setFormData({ ...formData, explanation: e.target.value })}
+            onChange={(e) => {
+              markTouched()
+              setFormData({ ...formData, explanation: e.target.value })
+            }}
             rows={2}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
             placeholder="Explain why this is the correct answer..."

@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
+  serverExternalPackages: ["pdf-parse"],
 
   experimental: {
     inlineCss: true, // Inline critical CSS to eliminate render-blocking (Next.js 16)

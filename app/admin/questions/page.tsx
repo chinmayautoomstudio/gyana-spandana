@@ -1,17 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import Papa from 'papaparse'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { type Question } from '@/components/admin/QuestionCard'
 import { QuestionsTable } from '@/components/admin/QuestionsTable'
-import { QuestionForm } from '@/components/admin/QuestionForm'
 import { QuestionSearch } from '@/components/admin/QuestionSearch'
 import { QuestionFilters } from '@/components/admin/QuestionFilters'
 import { QuestionStats } from '@/components/admin/QuestionStats'
 import { BulkQuestionActions } from '@/components/admin/BulkQuestionActions'
 import { QuestionPreviewModal } from '@/components/admin/QuestionPreviewModal'
 import { ExportButton } from '@/components/admin/ExportButton'
+import { QuestionFormModal } from '@/components/admin/QuestionFormModal'
+import { QuestionBankCharts } from '@/components/admin/QuestionBankCharts'
+import { RecentImportsPanel, type ImportBatchRow } from '@/components/admin/RecentImportsPanel'
+import { normalizeQuestionTextForDedupe } from '@/lib/questions/import-schema'
 
 interface Exam {
   id: string
@@ -38,6 +43,11 @@ export default function QuestionBankPage() {
     rawQuestionsSample: any[] | null
   } | null>(null)
   const [bypassFilters, setBypassFilters] = useState(false)
+  const [importBatches, setImportBatches] = useState<ImportBatchRow[]>([])
+  const [sortBy, setSortBy] = useState<'created_at' | 'points' | 'difficulty'>('created_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [page, setPage] = useState(1)
+  const pageSize = 25
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -364,6 +374,18 @@ export default function QuestionBankPage() {
       console.error('Stack Trace:', errorStack)
       setError(`Unexpected error: ${errorMessage}`)
     } finally {
+      try {
+        const sb = createClient()
+        const { data: batchData, error: batchError } = await sb
+          .from('import_batches')
+          .select('id, created_at, filename, source, row_count, inserted_count, skipped_count, status')
+          .order('created_at', { ascending: false })
+          .limit(8)
+        if (!batchError && batchData) setImportBatches(batchData as ImportBatchRow[])
+        else setImportBatches([])
+      } catch {
+        setImportBatches([])
+      }
       setLoading(false)
     }
   }
@@ -451,7 +473,10 @@ export default function QuestionBankPage() {
 
     // Points filter
     const beforeCount = filtered.length
-    filtered = filtered.filter((q) => q.points >= minPoints && q.points <= maxPoints)
+    filtered = filtered.filter((q) => {
+      const pts = typeof q.points === 'number' && !Number.isNaN(q.points) ? q.points : 0
+      return pts >= minPoints && pts <= maxPoints
+    })
     if (minPoints > 0 || maxPoints < 100) {
       console.log(`Points filter (${minPoints}-${maxPoints}): ${beforeCount} -> ${filtered.length} questions`)
     }
@@ -480,8 +505,9 @@ export default function QuestionBankPage() {
     const { error } = await supabase.from('questions').delete().eq('id', questionId)
 
     if (error) {
-      alert('Error deleting question: ' + error.message)
+      toast.error('Error deleting question: ' + error.message)
     } else {
+      toast.success('Question deleted')
       setQuestions(questions.filter((q) => q.id !== questionId))
       setSelectedQuestions((prev) => {
         const next = new Set(prev)
@@ -564,6 +590,68 @@ export default function QuestionBankPage() {
 
   const categories = Array.from(new Set(questions.map((q) => q.category).filter(Boolean) as string[]))
 
+  const bankTextToId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const q of questions) {
+      if (q.exam_id != null) continue
+      const n = normalizeQuestionTextForDedupe(q.question_text)
+      if (n.length > 5) m.set(n, q.id)
+    }
+    return m
+  }, [questions])
+
+  const sortedFiltered = useMemo(() => {
+    const arr = [...filteredQuestions]
+    const dir = sortDir === 'asc' ? 1 : -1
+    arr.sort((a, b) => {
+      if (sortBy === 'points') return ((a.points ?? 0) - (b.points ?? 0)) * dir
+      if (sortBy === 'difficulty') {
+        const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 }
+        const da = order[a.difficulty_level || 'medium'] ?? 1
+        const db = order[b.difficulty_level || 'medium'] ?? 1
+        return (da - db) * dir
+      }
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+      return (ta - tb) * dir
+    })
+    return arr
+  }, [filteredQuestions, sortBy, sortDir])
+
+  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const pagedQuestions = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return sortedFiltered.slice(start, start + pageSize)
+  }, [sortedFiltered, safePage, pageSize])
+
+  const exportRows = useMemo(
+    () =>
+      sortedFiltered.map((q) => ({
+        'Question Text': q.question_text,
+        'Option A': q.option_a,
+        'Option B': q.option_b,
+        'Option C': q.option_c,
+        'Option D': q.option_d,
+        'Correct Answer': q.correct_answer,
+        Points: q.points,
+        Difficulty: q.difficulty_level || 'medium',
+        Category: q.category || '',
+        Tags: Array.isArray(q.tags) ? q.tags.join(', ') : '',
+        'Exam Title': q.exam?.title || 'Unassigned',
+        Explanation: q.explanation || '',
+      })),
+    [sortedFiltered]
+  )
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchTerm, selectedExam, selectedDifficulty, selectedCategory, minPoints, maxPoints, bypassFilters])
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages))
+  }, [totalPages])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -580,19 +668,21 @@ export default function QuestionBankPage() {
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Question Bank</h1>
           <p className="text-gray-600 mt-1 text-xs sm:text-sm lg:text-base">Manage all questions across all exams</p>
         </div>
-        <Button
-          variant="primary"
-          size="md"
-          onClick={() => {
-            setEditingQuestion(null)
-            setShowAddForm(true)
-          }}
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Question
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              setEditingQuestion(null)
+              setShowAddForm(true)
+            }}
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Question
+          </Button>
+        </div>
       </div>
 
       {/* Debug Info Panel (Development) */}
@@ -748,6 +838,18 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
         questionsByCategory={stats.questionsByCategory}
       />
 
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="xl:col-span-2">
+          <QuestionBankCharts
+            questionsByDifficulty={stats.questionsByDifficulty}
+            questionsByCategory={stats.questionsByCategory}
+          />
+        </div>
+        <div className="xl:col-span-1">
+          <RecentImportsPanel batches={importBatches} />
+        </div>
+      </div>
+
       {/* Search and Filters */}
       <div className="space-y-4">
         <div className="flex gap-4">
@@ -794,6 +896,37 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
           onCategoryChange={setSelectedCategory}
           categories={categories}
         />
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 justify-between">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="text-gray-600 whitespace-nowrap">Sort by</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'created_at' | 'points' | 'difficulty')}
+              className="border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 bg-white text-sm min-w-[8rem]"
+            >
+              <option value="created_at">Date added</option>
+              <option value="points">Marks / points</option>
+              <option value="difficulty">Difficulty</option>
+            </select>
+            <select
+              value={sortDir}
+              onChange={(e) => setSortDir(e.target.value as 'asc' | 'desc')}
+              className="border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 bg-white text-sm"
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+          {exportRows.length > 0 && (
+            <ExportButton
+              data={exportRows}
+              filename={`questions-filtered-${new Date().toISOString().split('T')[0]}`}
+              exportType="both"
+              pdfTitle="Question bank export (filtered)"
+              size="sm"
+            />
+          )}
+        </div>
       </div>
 
       {/* Bulk Actions */}
@@ -805,23 +938,20 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
         onClearSelection={() => setSelectedQuestions(new Set())}
       />
 
-      {/* Questions List */}
-      {showAddForm && (
-        <QuestionForm
-          examId={editingQuestion?.exam_id}
-          question={editingQuestion}
-          onClose={() => {
-            setShowAddForm(false)
-            setEditingQuestion(null)
-          }}
-          onSuccess={() => {
-            setShowAddForm(false)
-            setEditingQuestion(null)
-            fetchData()
-          }}
-          allowNoExam={true}
-        />
-      )}
+      <QuestionFormModal
+        open={showAddForm}
+        question={editingQuestion}
+        bankTextToId={bankTextToId}
+        onClose={() => {
+          setShowAddForm(false)
+          setEditingQuestion(null)
+        }}
+        onSuccess={() => {
+          setShowAddForm(false)
+          setEditingQuestion(null)
+          fetchData()
+        }}
+      />
 
       {filteredQuestions.length === 0 ? (
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 flex flex-col items-center justify-center text-center min-h-[400px]">
@@ -851,18 +981,45 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
           )}
         </div>
       ) : (
-        <QuestionsTable
-          questions={filteredQuestions}
-          selectedQuestions={selectedQuestions}
-          onSelectQuestion={handleSelectQuestion}
-          onSelectAll={handleSelectAll}
-          onEdit={(q) => {
-            setEditingQuestion(q)
-            setShowAddForm(true)
-          }}
-          onDelete={handleDelete}
-          onPreview={setPreviewQuestion}
-        />
+        <>
+          <QuestionsTable
+            questions={pagedQuestions}
+            selectedQuestions={selectedQuestions}
+            onSelectQuestion={handleSelectQuestion}
+            onSelectAll={handleSelectAll}
+            onEdit={(q) => {
+              setEditingQuestion(q)
+              setShowAddForm(true)
+            }}
+            onDelete={handleDelete}
+            onPreview={setPreviewQuestion}
+          />
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-3 text-sm text-gray-600">
+              <span>
+                Page {safePage} of {totalPages} · {sortedFiltered.length} questions
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Preview Modal */}
@@ -872,7 +1029,3 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
     </div>
   )
 }
-
-// Import Papa for CSV export
-import Papa from 'papaparse'
-
