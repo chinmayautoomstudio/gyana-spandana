@@ -1,12 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+
+function getByPath(obj: Record<string, unknown>, path: string): unknown {
+  if (!path.includes('.')) return obj[path]
+  return path.split('.').reduce<unknown>((acc, key) => {
+    if (acc == null || typeof acc !== 'object') return undefined
+    return (acc as Record<string, unknown>)[key]
+  }, obj)
+}
 
 interface Column<T> {
   key: keyof T | string
   header: string
   render?: (item: T) => React.ReactNode
   sortable?: boolean
+  /** If set, used for search matching instead of raw `key` value (e.g. human-readable status labels). */
+  getSearchText?: (item: T) => string
+  /** When true, cell text may wrap (e.g. long school names). Default is single-line nowrap. */
+  allowWrap?: boolean
+  /** Tailwind max-width utilities for allowWrap cells; defaults to max-w-xs sm:max-w-sm. */
+  cellMaxWidthClass?: string
 }
 
 interface DataTableProps<T> {
@@ -15,6 +29,8 @@ interface DataTableProps<T> {
   onRowClick?: (item: T) => void
   searchable?: boolean
   searchPlaceholder?: string
+  /** Rendered between the search field and the table card (e.g. total count). */
+  belowSearch?: ReactNode
   selectable?: boolean
   selectedIds?: Set<string>
   onSelectionChange?: (ids: Set<string>) => void
@@ -27,6 +43,7 @@ export function DataTable<T extends Record<string, any>>({
   onRowClick,
   searchable = false,
   searchPlaceholder = 'Search...',
+  belowSearch,
   selectable = false,
   selectedIds,
   onSelectionChange,
@@ -47,19 +64,29 @@ export function DataTable<T extends Record<string, any>>({
     }
   }
 
+  const cellValueForKey = (item: T, key: keyof T | string): unknown => {
+    const path = String(key)
+    if (path.includes('.')) return getByPath(item as Record<string, unknown>, path)
+    return item[key as keyof T]
+  }
+
   const filteredData = data.filter((item) => {
     if (!searchTerm) return true
+    const q = searchTerm.toLowerCase()
     return columns.some((col) => {
-      const value = item[col.key]
-      return value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
+      if (col.key === 'actions') return false
+      const text = col.getSearchText?.(item) ?? String(cellValueForKey(item, col.key) ?? '')
+      return text.toLowerCase().includes(q)
     })
   })
 
   const sortedData = [...filteredData].sort((a, b) => {
     if (!sortColumn) return 0
 
-    const aValue = a[sortColumn]
-    const bValue = b[sortColumn]
+    const aRaw = cellValueForKey(a, sortColumn)
+    const bRaw = cellValueForKey(b, sortColumn)
+    const aValue = aRaw ?? ''
+    const bValue = bRaw ?? ''
 
     if (aValue === bValue) return 0
 
@@ -132,13 +159,15 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
+      {belowSearch}
+
       <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden max-w-full">
         <div className="overflow-x-auto max-w-full">
-          <table className="w-full min-w-max">
+          <table className="w-max max-w-full min-w-0">
             <thead className="bg-gray-50">
               <tr>
                 {selectable && (
-                  <th className="px-4 py-3 w-10">
+                  <th className="px-3 py-2.5 w-10">
                     <input
                       type="checkbox"
                       aria-label="Select all rows"
@@ -157,7 +186,7 @@ export function DataTable<T extends Record<string, any>>({
                   <th
                     key={String(column.key)}
                     onClick={() => handleSort(column)}
-                    className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                    className={`px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
                       column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
                     }`}
                   >
@@ -181,7 +210,10 @@ export function DataTable<T extends Record<string, any>>({
             <tbody className="bg-white divide-y divide-gray-200">
               {sortedData.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="px-6 py-8 text-center text-gray-500">
+                  <td
+                    colSpan={columns.length + (selectable ? 1 : 0)}
+                    className="px-3 py-8 text-center text-gray-500"
+                  >
                     No data available
                   </td>
                 </tr>
@@ -193,7 +225,7 @@ export function DataTable<T extends Record<string, any>>({
                     className={onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''}
                   >
                     {selectable && (
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-2.5">
                         <input
                           type="checkbox"
                           aria-label="Select row"
@@ -204,8 +236,17 @@ export function DataTable<T extends Record<string, any>>({
                       </td>
                     )}
                     {columns.map((column) => (
-                      <td key={String(column.key)} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {column.render ? column.render(item) : String(item[column.key] || '')}
+                      <td
+                        key={String(column.key)}
+                        className={`px-3 py-2.5 text-sm text-gray-900 ${
+                          column.allowWrap
+                            ? `whitespace-normal break-words min-w-0 align-top ${column.cellMaxWidthClass ?? 'max-w-xs sm:max-w-sm'}`
+                            : 'whitespace-nowrap'
+                        }`}
+                      >
+                        {column.render
+                          ? column.render(item)
+                          : String(cellValueForKey(item, column.key) ?? '')}
                       </td>
                     ))}
                   </tr>
