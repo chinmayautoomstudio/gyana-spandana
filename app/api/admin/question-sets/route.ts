@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+const QUESTION_SET_LIST_SELECT =
+  'id, name, description, total_questions, created_by, created_at, updated_at'
+
 // GET: List all question sets with question counts
 export async function GET(request: NextRequest) {
   try {
@@ -26,8 +29,9 @@ export async function GET(request: NextRequest) {
     // Fetch all question sets with question counts
     const { data: questionSets, error } = await supabase
       .from('question_sets')
-      .select('*')
+      .select(QUESTION_SET_LIST_SELECT)
       .order('created_at', { ascending: false })
+      .limit(100)
 
     if (error) {
       throw new Error(error.message)
@@ -80,7 +84,7 @@ export async function POST(request: NextRequest) {
         description: description?.trim() || null,
         created_by: user.id,
       })
-      .select()
+      .select(QUESTION_SET_LIST_SELECT)
       .single()
 
     if (setError) {
@@ -107,7 +111,7 @@ export async function POST(request: NextRequest) {
     // Fetch the created set with question count
     const { data: createdSet } = await supabase
       .from('question_sets')
-      .select('*')
+      .select(QUESTION_SET_LIST_SELECT)
       .eq('id', questionSet.id)
       .single()
 

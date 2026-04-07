@@ -1,10 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
 import { type Question } from '@/components/admin/QuestionCard'
 import { QuestionForm } from '@/components/admin/QuestionForm'
-import { QuestionImportFlow, type ImportCompleteResult } from '@/components/admin/QuestionImportFlow'
+import type { ImportCompleteResult } from '@/components/admin/QuestionImportFlow'
+
+const QuestionImportFlow = dynamic(
+  () => import('@/components/admin/QuestionImportFlow').then((m) => m.QuestionImportFlow),
+  { ssr: false }
+)
 
 type Tab = 'manual' | 'import'
 

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import Papa from 'papaparse'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -14,9 +15,17 @@ import { BulkQuestionActions } from '@/components/admin/BulkQuestionActions'
 import { QuestionPreviewModal } from '@/components/admin/QuestionPreviewModal'
 import { ExportButton } from '@/components/admin/ExportButton'
 import { QuestionFormModal } from '@/components/admin/QuestionFormModal'
-import { QuestionBankCharts } from '@/components/admin/QuestionBankCharts'
+const QuestionBankCharts = dynamic(
+  () => import('@/components/admin/QuestionBankCharts').then((m) => m.QuestionBankCharts),
+  { ssr: false }
+)
 import { RecentImportsPanel, type ImportBatchRow } from '@/components/admin/RecentImportsPanel'
 import { normalizeQuestionTextForDedupe } from '@/lib/questions/import-schema'
+import {
+  fetchQuestionBankPage,
+  fetchQuestionBankStats,
+  fetchBankDedupeMap,
+} from '@/lib/questions/bank-queries'
 
 interface Exam {
   id: string
@@ -26,7 +35,8 @@ interface Exam {
 export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [exams, setExams] = useState<Exam[]>([])
-  const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([])
+  const [totalFilteredCount, setTotalFilteredCount] = useState(0)
+  const [bankTextToId, setBankTextToId] = useState(() => new Map<string, string>())
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null)
@@ -47,6 +57,7 @@ export default function QuestionBankPage() {
   const [sortBy, setSortBy] = useState<'created_at' | 'points' | 'difficulty'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const pageSize = 25
 
   // Filters
@@ -65,332 +76,26 @@ export default function QuestionBankPage() {
     questionsByCategory: [] as { category: string; count: number }[],
   })
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const mapStatsRowsToQuestions = (rows: any[]): Question[] =>
+    (rows || []).map((q) => ({
+      id: q.id,
+      exam_id: q.exam_id,
+      question_text: '',
+      option_a: '',
+      option_b: '',
+      option_c: '',
+      option_d: '',
+      correct_answer: 'A' as const,
+      points: 1,
+      explanation: null,
+      order_index: null,
+      category: q.category,
+      difficulty_level: q.difficulty_level,
+      tags: null,
+      exam: q.exam ? { id: q.exam_id || '', title: q.exam.title } : null,
+    }))
 
-  const fetchData = async () => {
-    const supabase = createClient()
-    setError(null)
-
-    try {
-      // Step 1: Verify user authentication and role
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      console.log('=== DEBUG: User Authentication ===')
-      console.log('User:', user ? { id: user.id, email: user.email } : 'Not authenticated')
-      console.log('User Error:', userError)
-
-      let userRole: string | null = null
-      const userId: string | null = user?.id || null
-
-      if (user) {
-        // Check user_profiles table first
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('user_id', user.id)
-          .single()
-
-        console.log('=== DEBUG: User Profile ===')
-        console.log('Profile:', profile)
-        console.log('Profile Error:', profileError)
-        
-        // Check if profile query also returns 500
-        const profileHttpStatus = (profileError as any)?.status || (profileError as any)?.statusCode || null
-        if (profileHttpStatus === 500) {
-          console.error('⚠️ CRITICAL: user_profiles query returning 500 - RLS policy blocking role check!')
-          console.error('This confirms RLS policies are broken. The is_admin_user() function or RLS policy is failing.')
-        }
-
-        if (profile?.role) {
-          userRole = profile.role
-        } else if (user.user_metadata?.role) {
-          userRole = user.user_metadata.role
-          console.warn('Using user_metadata role as fallback (user_profiles query may have failed)')
-        } else {
-          userRole = 'participant'
-          console.warn('No role found, defaulting to participant')
-        }
-
-        console.log('Detected Role:', userRole)
-      }
-
-      // Step 2: Test direct query without joins (to verify questions exist)
-      console.log('=== DEBUG: Direct Query Test (Count Only) ===')
-      const { count: directCount, error: directError } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true })
-
-      console.log('Direct Query Count:', directCount)
-      console.log('Direct Query Error:', directError)
-
-      // Step 2b: Test raw query WITHOUT join (to see if join is the issue)
-      console.log('=== DEBUG: Raw Query Test (No Join) ===')
-      const { data: rawQuestionsData, error: rawQuestionsError } = await supabase
-        .from('questions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10) // Get first 10 for testing
-
-      console.log('Raw Questions (No Join):', {
-        count: rawQuestionsData?.length || 0,
-        data: rawQuestionsData?.slice(0, 2),
-        error: rawQuestionsError,
-      })
-
-      // Step 3: Fetch all exams
-      console.log('=== DEBUG: Fetching Exams ===')
-      const { data: examsData, error: examsError } = await supabase
-        .from('exams')
-        .select('id, title')
-        .order('title')
-
-      console.log('Exams Data:', examsData)
-      console.log('Exams Error:', examsError)
-
-      if (examsError) {
-        const examErrorMessage = examsError.message || 'Unknown error'
-        const examErrorCode = examsError.code || 'N/A'
-        const examHttpStatus = (examsError as any)?.status || (examsError as any)?.statusCode || null
-        const is500Error = examHttpStatus === 500 || examErrorCode === '500'
-        
-        console.error('Error fetching exams:', {
-          message: examErrorMessage,
-          code: examErrorCode,
-          httpStatus: examHttpStatus,
-          details: examsError.details,
-          hint: examsError.hint,
-          fullError: examsError,
-        })
-        
-        if (is500Error) {
-          console.warn('⚠️ Exams query also returning 500 - RLS policy issue confirmed')
-        }
-        
-        // Don't set error for exams - it's not critical, just log it
-        console.warn('Exams fetch failed, continuing without exam list')
-        setExams([])
-      } else {
-        setExams(examsData || [])
-      }
-
-      // Step 4: Fetch all questions with exam info
-      // Try with LEFT JOIN semantics (exam is optional)
-      console.log('=== DEBUG: Fetching Questions with Join ===')
-      let questionsData: any[] | null = null
-      let questionsError: any = null
-
-      // First, try the join query
-      const joinResult = await supabase
-        .from('questions')
-        .select(`
-          *,
-          exam:exams(id, title)
-        `)
-        .order('created_at', { ascending: false })
-
-      questionsData = joinResult.data
-      questionsError = joinResult.error
-
-      // If join query fails or returns empty but raw query worked, try alternative approach
-      if (questionsError || (questionsData?.length === 0 && rawQuestionsData && rawQuestionsData.length > 0)) {
-        console.warn('=== DEBUG: Join query failed or returned empty, trying alternative ===')
-        console.warn('Join Error:', questionsError)
-        console.warn('Join Result Count:', questionsData?.length || 0)
-        console.warn('Raw Query Count:', rawQuestionsData?.length || 0)
-
-        // Alternative: Fetch questions without join, then manually attach exam info
-        const { data: questionsWithoutJoin, error: questionsWithoutJoinError } = await supabase
-          .from('questions')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (!questionsWithoutJoinError && questionsWithoutJoin) {
-          console.log('=== DEBUG: Fetching exam info separately ===')
-          // Get unique exam IDs
-          const examIds = [...new Set(questionsWithoutJoin.map((q: any) => q.exam_id).filter(Boolean))]
-          
-          let examsMap: Record<string, any> = {}
-          if (examIds.length > 0) {
-            const { data: examsDataForJoin } = await supabase
-              .from('exams')
-              .select('id, title')
-              .in('id', examIds)
-
-            if (examsDataForJoin) {
-              examsMap = examsDataForJoin.reduce((acc: any, exam: any) => {
-                acc[exam.id] = exam
-                return acc
-              }, {})
-            }
-          }
-
-          // Manually attach exam info
-          questionsData = questionsWithoutJoin.map((q: any) => ({
-            ...q,
-            exam: q.exam_id ? examsMap[q.exam_id] || null : null,
-          }))
-
-          questionsError = null
-          console.log('=== DEBUG: Alternative query successful ===')
-          console.log(`Loaded ${questionsData.length} questions with manual exam join`)
-        } else {
-          questionsError = questionsWithoutJoinError
-        }
-      }
-
-      console.log('Questions Query Response:', {
-        dataLength: questionsData?.length || 0,
-        data: questionsData?.slice(0, 2), // Log first 2 for inspection
-        error: questionsError,
-        errorCode: questionsError?.code,
-        errorMessage: questionsError?.message,
-        errorDetails: questionsError?.details,
-        errorHint: questionsError?.hint,
-      })
-
-      // Update debug info
-      setDebugInfo({
-        userRole,
-        userId,
-        questionsCount: (questionsData || [])?.length || 0,
-        directQueryCount: directCount || 0,
-        rawQueryCount: rawQuestionsData?.length || 0,
-        hasError: !!questionsError,
-        rawQuestionsSample: rawQuestionsData?.slice(0, 3) || null,
-      })
-
-      if (questionsError) {
-        // Properly serialize error for logging
-        const errorMessage = questionsError.message || 'Unknown error'
-        const errorCode = questionsError.code || 'N/A'
-        const errorDetails = questionsError.details || null
-        const errorHint = questionsError.hint || null
-        const httpStatus = (questionsError as any)?.status || (questionsError as any)?.statusCode || null
-        
-        console.error('Error fetching questions:', {
-          message: errorMessage,
-          code: errorCode,
-          httpStatus: httpStatus,
-          details: errorDetails,
-          hint: errorHint,
-          fullError: questionsError,
-        })
-        
-        // Check if it's a 500 error (server-side RLS policy issue)
-        const is500Error = httpStatus === 500 || errorCode === '500' || errorMessage.includes('500') || 
-                          errorMessage.toLowerCase().includes('internal server error')
-        
-        if (is500Error) {
-          console.error('=== CRITICAL: 500 Server Error Detected ===')
-          console.error('This indicates RLS policies are causing server-side errors.')
-          console.error('The RLS policy function or query is likely failing on the server.')
-          
-          // Try fallback: simple query without join
-          console.log('=== Attempting Fallback Query (No Join) ===')
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('questions')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(50)
-          
-          if (!fallbackError && fallbackData && fallbackData.length > 0) {
-            console.log('✅ Fallback query succeeded! Loaded', fallbackData.length, 'questions')
-            const questionsWithExam = fallbackData.map((q: any) => ({
-              ...q,
-              exam: null, // No exam info in fallback
-            }))
-            setQuestions(questionsWithExam)
-            setFilteredQuestions(questionsWithExam)
-            calculateStats(questionsWithExam)
-            
-            setError(
-              `⚠️ Main query failed with 500 error, but fallback query succeeded. ` +
-              `Loaded ${fallbackData.length} questions without exam information. ` +
-              `The join query is failing - likely due to RLS policy issues. ` +
-              `Please run: docs/sql/fix-questions-rls-policy-v2.sql or docs/sql/fix-questions-rls-policy-simple.sql`
-            )
-            return // Exit early since fallback worked
-          } else {
-            console.error('Fallback query also failed:', fallbackError)
-          }
-        }
-        
-        // Build error message for display
-        let errorDisplayMessage = `Error fetching questions: ${errorMessage}`
-        if (errorCode !== 'N/A') {
-          errorDisplayMessage += ` (Code: ${errorCode})`
-        }
-        if (httpStatus) {
-          errorDisplayMessage += ` [HTTP ${httpStatus}]`
-        }
-        if (errorHint) {
-          errorDisplayMessage += `. Hint: ${errorHint}`
-        }
-        
-        if (is500Error) {
-          errorDisplayMessage += `. ⚠️ CRITICAL: Server returned 500 error. This indicates RLS policies have syntax errors or the is_admin_user() function doesn't exist. Please check the RLS policies in Supabase.`
-        } else {
-          errorDisplayMessage += `. This might be due to RLS policies. Please check if you have admin role in the user_profiles table.`
-        }
-        
-        errorDisplayMessage += ` Direct query count: ${directCount || 0} questions exist in database.`
-        
-        setError(errorDisplayMessage)
-      } else {
-        const questionsWithExam = ((questionsData || []) as any[]).map((q: any) => ({
-          ...q,
-          exam: q.exam || null,
-        }))
-        
-        console.log('=== DEBUG: Processed Questions ===')
-        console.log('Total questions processed:', questionsWithExam.length)
-        console.log('Sample question:', questionsWithExam[0])
-        
-        setQuestions(questionsWithExam)
-        setFilteredQuestions(questionsWithExam)
-        calculateStats(questionsWithExam)
-        
-        // Log success for debugging
-        if (questionsWithExam.length === 0) {
-          console.warn('⚠️ No questions found in database after query.')
-          console.warn('Direct query count:', directCount)
-          console.warn('This suggests RLS policies might be blocking access.')
-          console.warn('Make sure:')
-          console.warn('1. You have admin role in user_profiles table')
-          console.warn('2. RLS policy fix has been applied (docs/sql/fix-questions-rls-policy.sql)')
-          console.warn('3. Questions exist in database (run sample questions SQL)')
-        } else {
-          console.log(`✅ Successfully loaded ${questionsWithExam.length} questions`)
-        }
-      }
-    } catch (err: any) {
-      const errorMessage = err?.message || 'Unknown error occurred'
-      const errorStack = err?.stack || 'No stack trace available'
-      console.error('=== DEBUG: Unexpected Error ===')
-      console.error('Error Message:', errorMessage)
-      console.error('Error Object:', err)
-      console.error('Stack Trace:', errorStack)
-      setError(`Unexpected error: ${errorMessage}`)
-    } finally {
-      try {
-        const sb = createClient()
-        const { data: batchData, error: batchError } = await sb
-          .from('import_batches')
-          .select('id, created_at, filename, source, row_count, inserted_count, skipped_count, status')
-          .order('created_at', { ascending: false })
-          .limit(8)
-        if (!batchError && batchData) setImportBatches(batchData as ImportBatchRow[])
-        else setImportBatches([])
-      } catch {
-        setImportBatches([])
-      }
-      setLoading(false)
-    }
-  }
-
-  const calculateStats = (questionsList: Question[]) => {
+  const calculateStats = useCallback((questionsList: Question[]) => {
     const byExam: Record<string, number> = {}
     const byDifficulty: Record<string, number> = {}
     const byCategory: Record<string, number> = {}
@@ -419,86 +124,136 @@ export default function QuestionBankPage() {
       })),
       questionsByCategory: Object.entries(byCategory).map(([category, count]) => ({ category, count })),
     })
-  }
+  }, [])
+
+  const refreshStats = useCallback(async () => {
+    const supabase = createClient()
+    const { rows, error } = await fetchQuestionBankStats(supabase)
+    if (error) return
+    calculateStats(mapStatsRowsToQuestions(rows))
+  }, [calculateStats])
+
+  const loadInitialMeta = useCallback(async () => {
+    const supabase = createClient()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      let userRole: string | null = null
+      if (user) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        userRole = profile?.role || user.user_metadata?.role || 'participant'
+      }
+      const [{ count: directCount }, examsRes, statsRes] = await Promise.all([
+        supabase.from('questions').select('id', { count: 'exact', head: true }),
+        supabase.from('exams').select('id, title').order('title'),
+        fetchQuestionBankStats(supabase),
+      ])
+      if (!examsRes.error && examsRes.data) setExams(examsRes.data)
+      else setExams([])
+      if (!statsRes.error && statsRes.rows) {
+        calculateStats(mapStatsRowsToQuestions(statsRes.rows))
+      }
+      setDebugInfo({
+        userRole,
+        userId: user?.id || null,
+        questionsCount: 0,
+        directQueryCount: directCount || 0,
+        rawQueryCount: 0,
+        hasError: !!statsRes.error,
+        rawQuestionsSample: null,
+      })
+      const { data: batchData, error: batchError } = await supabase
+        .from('import_batches')
+        .select('id, created_at, filename, source, row_count, inserted_count, skipped_count, status')
+        .order('created_at', { ascending: false })
+        .limit(8)
+      if (!batchError && batchData) setImportBatches(batchData as ImportBatchRow[])
+      else setImportBatches([])
+    } catch (e) {
+      console.error(e)
+    }
+  }, [calculateStats])
+
+  const loadQuestionsPage = useCallback(async () => {
+    const supabase = createClient()
+    setError(null)
+    setLoading(true)
+    try {
+      const filterState = {
+        bypassFilters,
+        searchTerm,
+        selectedExam,
+        selectedDifficulty,
+        selectedCategory,
+        minPoints,
+        maxPoints,
+      }
+      const { data, error: pageError, count } = await fetchQuestionBankPage(
+        supabase,
+        page,
+        pageSize,
+        sortBy,
+        sortDir,
+        filterState
+      )
+      if (pageError) throw pageError
+      const normalized = (data || []).map((q: any) => ({
+        ...q,
+        exam: q.exam ?? null,
+      })) as Question[]
+      setQuestions(normalized)
+      setTotalFilteredCount(count ?? 0)
+      setDebugInfo((d) => (d ? { ...d, questionsCount: count ?? 0, hasError: false } : d))
+    } catch (err: any) {
+      setError(err?.message || 'Error fetching questions')
+    } finally {
+      setLoading(false)
+      setHasLoadedOnce(true)
+    }
+  }, [
+    page,
+    pageSize,
+    sortBy,
+    sortDir,
+    bypassFilters,
+    searchTerm,
+    selectedExam,
+    selectedDifficulty,
+    selectedCategory,
+    minPoints,
+    maxPoints,
+  ])
 
   useEffect(() => {
-    // If bypass is enabled, show all questions
-    if (bypassFilters) {
-      console.log('=== DEBUG: Bypass Mode Active - Showing All Questions ===')
-      setFilteredQuestions(questions)
-      calculateStats(questions)
-      return
+    void loadInitialMeta()
+  }, [loadInitialMeta])
+
+  useEffect(() => {
+    void loadQuestionsPage()
+  }, [loadQuestionsPage])
+
+  useEffect(() => {
+    if (!showAddForm) return
+    let cancelled = false
+    void (async () => {
+      const supabase = createClient()
+      const rows = await fetchBankDedupeMap(supabase)
+      if (cancelled) return
+      const m = new Map<string, string>()
+      for (const row of rows) {
+        if (row.exam_id != null) continue
+        const n = normalizeQuestionTextForDedupe(row.question_text || '')
+        if (n.length > 5) m.set(n, row.id)
+      }
+      setBankTextToId(m)
+    })()
+    return () => {
+      cancelled = true
     }
-
-    let filtered = [...questions]
-    const initialCount = filtered.length
-
-    // Search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(
-        (q) =>
-          q.question_text?.toLowerCase().includes(term) ||
-          q.option_a?.toLowerCase().includes(term) ||
-          q.option_b?.toLowerCase().includes(term) ||
-          q.option_c?.toLowerCase().includes(term) ||
-          q.option_d?.toLowerCase().includes(term) ||
-          q.exam?.title?.toLowerCase().includes(term) ||
-          q.category?.toLowerCase().includes(term) ||
-          (Array.isArray(q.tags) && q.tags.some((tag) => tag.toLowerCase().includes(term)))
-      )
-      console.log(`Search filter: ${initialCount} -> ${filtered.length} questions`)
-    }
-
-    // Exam filter
-    if (selectedExam) {
-      const beforeCount = filtered.length
-      filtered = filtered.filter((q) => q.exam_id === selectedExam)
-      console.log(`Exam filter (${selectedExam}): ${beforeCount} -> ${filtered.length} questions`)
-    }
-
-    // Difficulty filter
-    if (selectedDifficulty) {
-      const beforeCount = filtered.length
-      filtered = filtered.filter((q) => q.difficulty_level === selectedDifficulty)
-      console.log(`Difficulty filter (${selectedDifficulty}): ${beforeCount} -> ${filtered.length} questions`)
-    }
-
-    // Category filter
-    if (selectedCategory) {
-      const beforeCount = filtered.length
-      filtered = filtered.filter((q) => q.category === selectedCategory)
-      console.log(`Category filter (${selectedCategory}): ${beforeCount} -> ${filtered.length} questions`)
-    }
-
-    // Points filter
-    const beforeCount = filtered.length
-    filtered = filtered.filter((q) => {
-      const pts = typeof q.points === 'number' && !Number.isNaN(q.points) ? q.points : 0
-      return pts >= minPoints && pts <= maxPoints
-    })
-    if (minPoints > 0 || maxPoints < 100) {
-      console.log(`Points filter (${minPoints}-${maxPoints}): ${beforeCount} -> ${filtered.length} questions`)
-    }
-
-    console.log(`=== DEBUG: Filtering Complete ===`)
-    console.log(`Initial: ${initialCount} questions`)
-    console.log(`After filters: ${filtered.length} questions`)
-    console.log(`Active filters:`, {
-      searchTerm: searchTerm || 'none',
-      selectedExam: selectedExam || 'none',
-      selectedDifficulty: selectedDifficulty || 'none',
-      selectedCategory: selectedCategory || 'none',
-      pointsRange: `${minPoints}-${maxPoints}`,
-    })
-
-    if (initialCount > 0 && filtered.length === 0) {
-      console.warn('⚠️ All questions were filtered out! Check filter settings.')
-    }
-
-    setFilteredQuestions(filtered)
-    calculateStats(filtered)
-  }, [questions, searchTerm, selectedExam, selectedDifficulty, selectedCategory, minPoints, maxPoints, bypassFilters])
+  }, [showAddForm])
 
   const handleDelete = async (questionId: string) => {
     const supabase = createClient()
@@ -508,12 +263,13 @@ export default function QuestionBankPage() {
       toast.error('Error deleting question: ' + error.message)
     } else {
       toast.success('Question deleted')
-      setQuestions(questions.filter((q) => q.id !== questionId))
       setSelectedQuestions((prev) => {
         const next = new Set(prev)
         next.delete(questionId)
         return next
       })
+      void loadQuestionsPage()
+      void refreshStats()
     }
   }
 
@@ -528,8 +284,9 @@ export default function QuestionBankPage() {
     if (error) {
       alert('Error deleting questions: ' + error.message)
     } else {
-      setQuestions(questions.filter((q) => !selectedQuestions.has(q.id)))
       setSelectedQuestions(new Set())
+      void loadQuestionsPage()
+      void refreshStats()
     }
   }
 
@@ -580,54 +337,35 @@ export default function QuestionBankPage() {
     })
   }
 
-  const handleSelectAll = () => {
-    if (selectedQuestions.size === filteredQuestions.length) {
-      setSelectedQuestions(new Set())
-    } else {
-      setSelectedQuestions(new Set(filteredQuestions.map((q) => q.id)))
-    }
-  }
-
-  const categories = Array.from(new Set(questions.map((q) => q.category).filter(Boolean) as string[]))
-
-  const bankTextToId = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const q of questions) {
-      if (q.exam_id != null) continue
-      const n = normalizeQuestionTextForDedupe(q.question_text)
-      if (n.length > 5) m.set(n, q.id)
-    }
-    return m
+  const handleSelectAll = useCallback(() => {
+    setSelectedQuestions((prev) => {
+      const pageIds = questions.map((q) => q.id)
+      const allPageSelected = pageIds.length > 0 && pageIds.every((id) => prev.has(id))
+      const next = new Set(prev)
+      if (allPageSelected) {
+        pageIds.forEach((id) => next.delete(id))
+      } else {
+        pageIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
   }, [questions])
 
-  const sortedFiltered = useMemo(() => {
-    const arr = [...filteredQuestions]
-    const dir = sortDir === 'asc' ? 1 : -1
-    arr.sort((a, b) => {
-      if (sortBy === 'points') return ((a.points ?? 0) - (b.points ?? 0)) * dir
-      if (sortBy === 'difficulty') {
-        const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 }
-        const da = order[a.difficulty_level || 'medium'] ?? 1
-        const db = order[b.difficulty_level || 'medium'] ?? 1
-        return (da - db) * dir
-      }
-      const ta = a.created_at ? new Date(a.created_at).getTime() : 0
-      const tb = b.created_at ? new Date(b.created_at).getTime() : 0
-      return (ta - tb) * dir
-    })
-    return arr
-  }, [filteredQuestions, sortBy, sortDir])
+  const categories = useMemo(
+    () =>
+      stats.questionsByCategory
+        .map((c) => c.category)
+        .filter((c): c is string => Boolean(c)),
+    [stats.questionsByCategory]
+  )
 
-  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / pageSize))
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize))
   const safePage = Math.min(page, totalPages)
-  const pagedQuestions = useMemo(() => {
-    const start = (safePage - 1) * pageSize
-    return sortedFiltered.slice(start, start + pageSize)
-  }, [sortedFiltered, safePage, pageSize])
+  const pagedQuestions = questions
 
   const exportRows = useMemo(
     () =>
-      sortedFiltered.map((q) => ({
+      pagedQuestions.map((q) => ({
         'Question Text': q.question_text,
         'Option A': q.option_a,
         'Option B': q.option_b,
@@ -641,8 +379,11 @@ export default function QuestionBankPage() {
         'Exam Title': q.exam?.title || 'Unassigned',
         Explanation: q.explanation || '',
       })),
-    [sortedFiltered]
+    [pagedQuestions]
   )
+
+  const allVisibleSelected =
+    questions.length > 0 && questions.every((q) => selectedQuestions.has(q.id))
 
   useEffect(() => {
     setPage(1)
@@ -652,7 +393,7 @@ export default function QuestionBankPage() {
     setPage((p) => Math.min(p, totalPages))
   }, [totalPages])
 
-  if (loading) {
+  if (loading && !hasLoadedOnce) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C0392B]"></div>
@@ -700,7 +441,8 @@ export default function QuestionBankPage() {
                 <div><strong>Direct Query Count:</strong> {debugInfo.directQueryCount} questions in DB</div>
                 <div><strong>Raw Query (No Join):</strong> {debugInfo.rawQueryCount} questions</div>
                 <div><strong>Questions with Join:</strong> {debugInfo.questionsCount} questions</div>
-                <div><strong>Filtered Questions:</strong> {filteredQuestions.length} questions</div>
+                <div><strong>Matching (filtered) count:</strong> {totalFilteredCount} questions</div>
+                <div><strong>On this page:</strong> {questions.length} questions</div>
                 <div><strong>Has Error:</strong> {debugInfo.hasError ? 'Yes' : 'No'}</div>
                 
                 {debugInfo.directQueryCount > 0 && debugInfo.questionsCount === 0 && (
@@ -715,9 +457,9 @@ export default function QuestionBankPage() {
                   </div>
                 )}
                 
-                {debugInfo.questionsCount > 0 && filteredQuestions.length === 0 && (
+                {debugInfo.questionsCount > 0 && totalFilteredCount === 0 && questions.length === 0 && (
                   <div className="mt-2 p-2 bg-red-100 rounded text-red-800">
-                    ⚠️ Questions loaded but filters removed all. Check filter settings.
+                    ⚠️ Questions exist but current filters returned none. Check filter settings.
                   </div>
                 )}
 
@@ -838,7 +580,12 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
         questionsByCategory={stats.questionsByCategory}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 relative">
+        {loading && hasLoadedOnce && (
+          <div className="absolute inset-0 z-10 bg-white/40 flex items-start justify-center pt-8 pointer-events-none">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#C0392B]" />
+          </div>
+        )}
         <div className="xl:col-span-2">
           <QuestionBankCharts
             questionsByDifficulty={stats.questionsByDifficulty}
@@ -871,11 +618,11 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={selectedQuestions.size === filteredQuestions.length && filteredQuestions.length > 0}
+                checked={allVisibleSelected}
                 onChange={handleSelectAll}
                 className="w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
               />
-              <span className="text-sm text-gray-600">Select All</span>
+              <span className="text-sm text-gray-600">Select page</span>
             </div>
           </div>
         </div>
@@ -920,9 +667,9 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
           {exportRows.length > 0 && (
             <ExportButton
               data={exportRows}
-              filename={`questions-filtered-${new Date().toISOString().split('T')[0]}`}
+              filename={`questions-page-${safePage}-${new Date().toISOString().split('T')[0]}`}
               exportType="both"
-              pdfTitle="Question bank export (filtered)"
+              pdfTitle="Question bank export (current page)"
               size="sm"
             />
           )}
@@ -949,11 +696,12 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
         onSuccess={() => {
           setShowAddForm(false)
           setEditingQuestion(null)
-          fetchData()
+          void loadQuestionsPage()
+          void refreshStats()
         }}
       />
 
-      {filteredQuestions.length === 0 ? (
+      {totalFilteredCount === 0 && !loading ? (
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 flex flex-col items-center justify-center text-center min-h-[400px]">
           <svg
             className="w-16 h-16 text-gray-400 mx-auto mb-4"
@@ -994,10 +742,10 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
             onDelete={handleDelete}
             onPreview={setPreviewQuestion}
           />
-          {totalPages > 1 && (
+          {(totalPages > 1 || totalFilteredCount > 0) && (
             <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-3 text-sm text-gray-600">
               <span>
-                Page {safePage} of {totalPages} · {sortedFiltered.length} questions
+                Page {safePage} of {totalPages} · {totalFilteredCount} matching
               </span>
               <div className="flex gap-2">
                 <Button

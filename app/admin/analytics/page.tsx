@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Chart } from '@/components/admin/Chart'
+
+const Chart = dynamic(() => import('@/components/admin/Chart').then((m) => m.Chart), { ssr: false })
 import { StatsCard } from '@/components/admin/StatsCard'
 import { format, subDays } from 'date-fns'
 

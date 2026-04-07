@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { QUESTION_BANK_SELECT } from '@/lib/questions/bank-queries'
+
+const QUESTION_SET_LIST_SELECT =
+  'id, name, description, total_questions, created_by, created_at, updated_at'
 
 // GET: Get question set with all questions
 export async function GET(
@@ -37,7 +41,7 @@ export async function GET(
     // Fetch question set
     const { data: questionSet, error: setError } = await supabase
       .from('question_sets')
-      .select('*')
+      .select(QUESTION_SET_LIST_SELECT)
       .eq('id', setId)
       .single()
 
@@ -56,12 +60,9 @@ export async function GET(
     // First, try the relationship query
     const { data: setQuestionsData, error: questionsErrorData } = await supabase
       .from('question_set_questions')
-      .select(`
-        id,
-        order_index,
-        question_id,
-        question:questions(*)
-      `)
+      .select(
+        `id, order_index, question_id, question:questions(${QUESTION_BANK_SELECT})`
+      )
       .eq('question_set_id', setId)
       .order('order_index', { ascending: true })
 
@@ -80,7 +81,7 @@ export async function GET(
         const questionIds = setQuestionIds.map((sq: any) => sq.question_id)
         const { data: questionsData, error: qError } = await supabase
           .from('questions')
-          .select('*')
+          .select(QUESTION_BANK_SELECT)
           .in('id', questionIds)
 
         if (!qError && questionsData) {
@@ -206,7 +207,7 @@ export async function PUT(
     // Fetch updated set
     const { data: updatedSet } = await supabase
       .from('question_sets')
-      .select('*')
+      .select(QUESTION_SET_LIST_SELECT)
       .eq('id', setId)
       .single()
 

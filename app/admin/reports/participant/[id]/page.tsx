@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
+import dynamic from 'next/dynamic'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ExportButton } from '@/components/admin/ExportButton'
-import { Chart } from '@/components/admin/Chart'
+
+const Chart = dynamic(() => import('@/components/admin/Chart').then((m) => m.Chart), { ssr: false })
 import { format } from 'date-fns'
 
 interface Participant {

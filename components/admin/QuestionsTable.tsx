@@ -33,8 +33,9 @@ export function QuestionsTable({
     return text.substring(0, maxLength) + '...'
   }
 
-  const allSelected = questions.length > 0 && selectedQuestions.size === questions.length
-  const someSelected = selectedQuestions.size > 0 && selectedQuestions.size < questions.length
+  const visibleSelectedCount = questions.filter((q) => selectedQuestions.has(q.id)).length
+  const allSelected = questions.length > 0 && visibleSelectedCount === questions.length
+  const someSelected = visibleSelectedCount > 0 && !allSelected
   const checkboxRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {

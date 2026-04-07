@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { READONLY_PRIVATE_CACHE } from '@/lib/http/cache-headers'
 
 export async function GET() {
   try {
@@ -22,26 +23,33 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Fetch statistics
-    const [exams, participants, teams, attempts] = await Promise.all([
-      supabase.from('exams').select('*', { count: 'exact', head: true }),
-      supabase.from('participants').select('*', { count: 'exact', head: true }),
-      supabase.from('teams').select('*', { count: 'exact', head: true }),
-      supabase.from('exam_attempts').select('score, status', { count: 'exact' }),
+    const cacheHeaders = { 'Cache-Control': READONLY_PRIVATE_CACHE }
+
+    const [exams, participants, teams, attempts, avgRes] = await Promise.all([
+      supabase.from('exams').select('id', { count: 'exact', head: true }),
+      supabase.from('participants').select('id', { count: 'exact', head: true }),
+      supabase.from('teams').select('id', { count: 'exact', head: true }),
+      supabase.from('exam_attempts').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('exam_attempts')
+        .select('avg:score.avg()')
+        .eq('status', 'submitted')
+        .maybeSingle(),
     ])
 
-    const submittedAttempts = attempts.data?.filter(a => a.status === 'submitted') || []
-    const averageScore = submittedAttempts.length > 0
-      ? Math.round(submittedAttempts.reduce((sum, a) => sum + (a.score || 0), 0) / submittedAttempts.length)
-      : 0
+    const avg = (avgRes.data as { avg: number | null } | null)?.avg
+    const averageScore = avg != null && !Number.isNaN(Number(avg)) ? Math.round(Number(avg)) : 0
 
-    return NextResponse.json({
-      totalExams: exams.count || 0,
-      totalParticipants: participants.count || 0,
-      totalTeams: teams.count || 0,
-      totalAttempts: attempts.count || 0,
-      averageScore,
-    })
+    return NextResponse.json(
+      {
+        totalExams: exams.count || 0,
+        totalParticipants: participants.count || 0,
+        totalTeams: teams.count || 0,
+        totalAttempts: attempts.count || 0,
+        averageScore,
+      },
+      { headers: cacheHeaders }
+    )
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
