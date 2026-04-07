@@ -1,108 +1,76 @@
-'use client'
-
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { unstable_cache } from 'next/cache'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
+
+export const dynamic = 'force-dynamic'
 import { StatsCard } from '@/components/admin/StatsCard'
 import { RecentExamSessions } from '@/components/admin/RecentExamSessions'
 import { QuickLinkCard } from '@/components/admin/QuickLinkCard'
 import { Button } from '@/components/ui/Button'
 
-export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalQuestions: 0,
-    totalSessions: 0,
-    activeSessions: 0,
-    averageScore: 0,
-    totalParticipants: 0,
-    totalTeams: 0,
-    teamsRegistrationComplete: 0,
-    teamsRegistrationPending: 0,
-  })
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+type DashboardStats = {
+  totalQuestions: number
+  totalSessions: number
+  activeSessions: number
+  averageScore: number
+  totalParticipants: number
+  totalTeams: number
+  teamsRegistrationComplete: number
+  teamsRegistrationPending: number
+}
 
-  const fetchDashboardData = async () => {
-    const supabase = createClient()
+const getDashboardData = unstable_cache(
+  async (): Promise<DashboardStats> => {
+    const supabase = createAdminClient()
+    const [
+      { count: totalQuestions },
+      { count: totalSessions },
+      { count: activeSessions },
+      { data: scoreAggregate },
+      { count: totalParticipants },
+      { count: totalTeams },
+      { count: teamsRegistrationPending },
+    ] = await Promise.all([
+      supabase.from('questions').select('*', { count: 'exact', head: true }),
+      supabase.from('exam_attempts').select('*', { count: 'exact', head: true }),
+      supabase
+        .from('exam_attempts')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'in_progress'),
+      supabase
+        .from('admin_dashboard_score_avg')
+        .select('average_score')
+        .single(),
+      supabase.from('participants').select('*', { count: 'exact', head: true }),
+      supabase.from('teams').select('*', { count: 'exact', head: true }),
+      supabase
+        .from('teams')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending_p2'),
+    ])
 
-    // Fetch total questions count
-    const { count: totalQuestions } = await supabase
-      .from('questions')
-      .select('*', { count: 'exact', head: true })
-
-    // Fetch total sessions count (all exam attempts)
-    const { count: totalSessions } = await supabase
-      .from('exam_attempts')
-      .select('*', { count: 'exact', head: true })
-
-    // Fetch active sessions count (status = 'in_progress')
-    const { count: activeSessions } = await supabase
-      .from('exam_attempts')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'in_progress')
-
-    // Fetch average score from submitted attempts
-    const { data: submittedAttempts } = await supabase
-      .from('exam_attempts')
-      .select('score')
-      .eq('status', 'submitted')
-
-    const averageScore = submittedAttempts && submittedAttempts.length > 0
-      ? Math.round(
-          submittedAttempts.reduce((sum, attempt) => sum + (attempt.score || 0), 0) /
-          submittedAttempts.length
-        )
-      : 0
-
-    const { count: totalParticipants } = await supabase
-      .from('participants')
-      .select('*', { count: 'exact', head: true })
-
-    const { count: totalTeams } = await supabase
-      .from('teams')
-      .select('*', { count: 'exact', head: true })
-
-    const { count: teamsRegistrationPending } = await supabase
-      .from('teams')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending_p2')
+    const averageScore = scoreAggregate?.average_score ?? 0
 
     const teamsTotal = totalTeams ?? 0
     const teamsPending = teamsRegistrationPending ?? 0
-    const teamsRegistrationComplete = Math.max(0, teamsTotal - teamsPending)
 
-    setStats({
-      totalQuestions: totalQuestions || 0,
-      totalSessions: totalSessions || 0,
-      activeSessions: activeSessions || 0,
+    return {
+      totalQuestions: totalQuestions ?? 0,
+      totalSessions: totalSessions ?? 0,
+      activeSessions: activeSessions ?? 0,
       averageScore,
-      totalParticipants: totalParticipants || 0,
+      totalParticipants: totalParticipants ?? 0,
       totalTeams: teamsTotal,
-      teamsRegistrationComplete,
+      teamsRegistrationComplete: Math.max(0, teamsTotal - teamsPending),
       teamsRegistrationPending: teamsPending,
-    })
-    setLoading(false)
-    setRefreshing(false)
-  }
+    }
+  },
+  ['admin-dashboard-stats'],
+  { revalidate: 60 }
+)
 
-  useEffect(() => {
-    // Initial dashboard load
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchDashboardData()
-  }, [])
-
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchDashboardData()
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C0392B]"></div>
-      </div>
-    )
-  }
+export default async function AdminDashboard() {
+  const stats = await getDashboardData()
 
   return (
     <div className="space-y-6">
@@ -113,18 +81,14 @@ export default function AdminDashboard() {
           <p className="text-gray-600 mt-1 text-xs sm:text-sm lg:text-base">Overview of your exam system.</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={handleRefresh}
-            isLoading={refreshing}
-            className="text-xs sm:text-sm"
-          >
-            <svg className="w-4 h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
+          <Link href="/admin" className="flex-shrink-0">
+            <Button variant="outline" size="md" className="text-xs sm:text-sm">
+              <svg className="w-4 h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </Link>
           <Link href="/admin/exams/new" className="flex-shrink-0">
             <Button variant="primary" size="md" className="bg-teal-600 hover:bg-teal-700 focus:ring-teal-500 text-xs sm:text-sm">
               <svg className="w-4 h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

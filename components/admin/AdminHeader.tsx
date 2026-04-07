@@ -1,67 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from './NotificationBell'
 import { ProfileDropdown } from './ProfileDropdown'
 
 interface AdminHeaderProps {
+  userName: string
+  userEmail: string
+  userRole: string
   onMenuClick?: () => void
 }
 
-export function AdminHeader({ onMenuClick }: AdminHeaderProps) {
-  const pathname = usePathname()
-  const [userName, setUserName] = useState('Admin')
-  const [userEmail, setUserEmail] = useState('')
-  const [userRole, setUserRole] = useState('admin')
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (user) {
-        setUserEmail(user.email || '')
-
-        // Try to get name from user_profiles first
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('name, role')
-          .eq('user_id', user.id)
-          .single()
-
-        if (profile?.name) {
-          setUserName(profile.name)
-        } else {
-          // Try participants table as fallback
-          const { data: participant } = await supabase
-            .from('participants')
-            .select('name')
-            .eq('user_id', user.id)
-            .single()
-
-          if (participant?.name) {
-            setUserName(participant.name)
-          } else {
-            // Final fallback to email prefix
-            setUserName(user.email?.split('@')[0] || 'Admin')
-          }
-        }
-
-        if (profile?.role) {
-          setUserRole(profile.role)
-        } else {
-          setUserRole('admin') // Default for admin layout
-        }
-      }
-    }
-
-    fetchUserData()
-  }, [])
-
-
+export function AdminHeader({ userName, userEmail, userRole, onMenuClick }: AdminHeaderProps) {
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm max-w-full">
       <div className="px-4 sm:px-6 lg:px-8 max-w-full">
