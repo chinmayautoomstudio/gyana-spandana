@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
-import type { AdminUser } from '@/types/admin'
+import type { AdminUser, HostUser } from '@/types/admin'
 
 /**
  * Verify if the current user is an admin
@@ -395,6 +395,298 @@ export async function removeAdmin(userId: string): Promise<{ success: boolean; e
     return { success: true, error: null }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to remove admin' }
+  }
+}
+
+/**
+ * Host Management (quiz hosts — role `host` in user_profiles)
+ */
+
+function escapeIlikePattern(raw: string): string {
+  return raw.replace(/[%_\\]/g, '\\$&')
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * List users with role host (for Host Management page).
+ */
+export async function getAllHosts(): Promise<{ data: HostUser[] | null; error: string | null }> {
+  try {
+    await requireAdmin()
+    const adminClient = createAdminClient()
+
+    const { data: profiles, error: profileError } = await adminClient
+      .from('user_profiles')
+      .select('user_id, name, created_at')
+      .eq('role', 'host')
+      .order('created_at', { ascending: false })
+
+    if (profileError) {
+      return { data: null, error: profileError.message }
+    }
+
+    if (!profiles || profiles.length === 0) {
+      return { data: [], error: null }
+    }
+
+    const combined = await Promise.all(
+      profiles.map(async (profile) => {
+        const { data, error } = await adminClient.auth.admin.getUserById(profile.user_id)
+        if (error || !data?.user) return null
+        const user = data.user
+        return {
+          id: user.id,
+          email: user.email || '',
+          name: profile.name || user.user_metadata?.name || null,
+          created_at: profile.created_at || user.created_at,
+          last_sign_in_at: user.last_sign_in_at || null,
+        } satisfies HostUser
+      }),
+    )
+
+    const hosts = combined.filter((h): h is HostUser => h !== null)
+    return { data: hosts, error: null }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch hosts'
+    return { data: null, error: message }
+  }
+}
+
+async function hostCandidateFromProfile(
+  adminClient: ReturnType<typeof createAdminClient>,
+  userId: string,
+  profileName: string | null,
+  profileCreatedAt: string | null,
+): Promise<HostUser | null> {
+  const { data, error } = await adminClient.auth.admin.getUserById(userId)
+  if (error || !data?.user) return null
+  const user = data.user
+  return {
+    id: user.id,
+    email: user.email || '',
+    name: profileName || user.user_metadata?.name || null,
+    created_at: profileCreatedAt || user.created_at,
+    last_sign_in_at: user.last_sign_in_at || null,
+  }
+}
+
+/**
+ * Search users who can be promoted to host (not admin, not host).
+ * Matches profile name (ilike), exact user_id (UUID), or exact email (paginated auth list, best-effort).
+ */
+export async function searchUsersForHostPromotion(
+  query: string,
+): Promise<{ data: HostUser[] | null; error: string | null }> {
+  try {
+    await requireAdmin()
+    const q = query.trim()
+    if (q.length < 2 && !UUID_RE.test(q)) {
+      return { data: [], error: null }
+    }
+
+    const adminClient = createAdminClient()
+    const seen = new Set<string>()
+    const results: HostUser[] = []
+
+    const pushCandidate = async (
+      userId: string,
+      profileName: string | null,
+      profileCreatedAt: string | null,
+    ) => {
+      if (seen.has(userId)) return
+      const { data: row } = await adminClient
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle()
+      const role = row?.role
+      if (role === 'admin' || role === 'host') return
+      const candidate = await hostCandidateFromProfile(adminClient, userId, profileName, profileCreatedAt)
+      if (!candidate) return
+      seen.add(userId)
+      results.push(candidate)
+    }
+
+    if (UUID_RE.test(q)) {
+      const { data: prof } = await adminClient
+        .from('user_profiles')
+        .select('user_id, name, created_at, role')
+        .eq('user_id', q)
+        .maybeSingle()
+      if (prof && prof.role !== 'admin' && prof.role !== 'host') {
+        await pushCandidate(prof.user_id, prof.name, prof.created_at)
+      } else if (!prof) {
+        await pushCandidate(q, null, null)
+      }
+      return { data: results, error: null }
+    }
+
+    if (q.includes('@')) {
+      const normalized = q.toLowerCase()
+      let page = 1
+      const perPage = 200
+      for (let i = 0; i < 15; i++) {
+        const { data: pageData, error: listError } = await adminClient.auth.admin.listUsers({
+          page,
+          perPage,
+        })
+        if (listError) {
+          return { data: null, error: listError.message }
+        }
+        const users = pageData?.users ?? []
+        const match = users.find((u) => u.email?.toLowerCase() === normalized)
+        if (match) {
+          const { data: prof } = await adminClient
+            .from('user_profiles')
+            .select('name, created_at, role')
+            .eq('user_id', match.id)
+            .maybeSingle()
+          if (prof?.role === 'admin' || prof?.role === 'host') {
+            return { data: [], error: null }
+          }
+          await pushCandidate(match.id, prof?.name ?? null, prof?.created_at ?? null)
+          break
+        }
+        if (users.length < perPage) break
+        page += 1
+      }
+      return { data: results, error: null }
+    }
+
+    const { data: profiles, error: profileError } = await adminClient
+      .from('user_profiles')
+      .select('user_id, name, created_at, role')
+      .ilike('name', `%${escapeIlikePattern(q)}%`)
+      .limit(40)
+
+    if (profileError) {
+      return { data: null, error: profileError.message }
+    }
+
+    for (const p of profiles || []) {
+      if (p.role === 'admin' || p.role === 'host') continue
+      await pushCandidate(p.user_id, p.name, p.created_at)
+      if (results.length >= 25) break
+    }
+
+    return { data: results, error: null }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Search failed'
+    return { data: null, error: message }
+  }
+}
+
+/**
+ * Promote a user to host (updates user_profiles + auth user_metadata).
+ */
+export async function promoteToHost(userId: string): Promise<{ success: boolean; error: string | null }> {
+  try {
+    await requireAdmin()
+    if (!userId || !UUID_RE.test(userId)) {
+      return { success: false, error: 'Invalid user id' }
+    }
+
+    const adminClient = createAdminClient()
+    const { data: profile } = await adminClient
+      .from('user_profiles')
+      .select('role, name')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (profile?.role === 'admin') {
+      return {
+        success: false,
+        error: 'User is an admin. Demote from admin first if they should only be a host.',
+      }
+    }
+    if (profile?.role === 'host') {
+      return { success: true, error: null }
+    }
+
+    const { data: authData, error: authError } = await adminClient.auth.admin.getUserById(userId)
+    if (authError || !authData?.user) {
+      return { success: false, error: authError?.message || 'User not found' }
+    }
+
+    const name =
+      profile?.name ??
+      (authData.user.user_metadata?.name as string | undefined) ??
+      authData.user.email?.split('@')[0] ??
+      'User'
+
+    const { error: upsertError } = await adminClient.from('user_profiles').upsert(
+      {
+        user_id: userId,
+        role: 'host',
+        name,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    )
+
+    if (upsertError) {
+      return { success: false, error: upsertError.message }
+    }
+
+    const { error: metaError } = await adminClient.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        ...authData.user.user_metadata,
+        role: 'host',
+        name,
+      },
+    })
+
+    if (metaError) {
+      return {
+        success: false,
+        error: `Profile updated but auth metadata sync failed: ${metaError.message}`,
+      }
+    }
+
+    return { success: true, error: null }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to promote user'
+    return { success: false, error: message }
+  }
+}
+
+/**
+ * Remove host role (user becomes participant).
+ */
+export async function removeHost(userId: string): Promise<{ success: boolean; error: string | null }> {
+  try {
+    await requireAdmin()
+
+    const adminClient = createAdminClient()
+
+    const { data: updatedRows, error: profileError } = await adminClient
+      .from('user_profiles')
+      .update({ role: 'participant', updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('role', 'host')
+      .select('user_id')
+
+    if (profileError) {
+      return { success: false, error: profileError.message }
+    }
+    if (!updatedRows?.length) {
+      return { success: false, error: 'User is not a host' }
+    }
+
+    const { data: authData } = await adminClient.auth.admin.getUserById(userId)
+    await adminClient.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        ...authData?.user?.user_metadata,
+        role: 'participant',
+      },
+    })
+
+    return { success: true, error: null }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to remove host'
+    return { success: false, error: message }
   }
 }
 

@@ -10,3 +10,6 @@ export interface AdminUser {
   last_sign_in_at: string | null
 }
 
+/** Same shape as admin listing; used for quiz hosts. */
+export type HostUser = AdminUser
+

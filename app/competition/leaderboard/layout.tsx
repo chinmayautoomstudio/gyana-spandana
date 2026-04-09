@@ -11,5 +11,9 @@ export default function CompetitionLeaderboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return (
+    <div className="min-h-screen bg-white pb-8 pt-20 text-gray-900">
+      {children}
+    </div>
+  )
 }
