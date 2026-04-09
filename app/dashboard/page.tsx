@@ -24,24 +24,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   await updateExamStatuses(supabase)
 
   const { data: participantRaw } = await supabase
-    .from('participants')
-    .select(PARTICIPANT_WITH_TEAM_SELECT)
+            .from('participants')
+            .select(PARTICIPANT_WITH_TEAM_SELECT)
     .eq('user_id', user.id)
     .maybeSingle()
 
-  const participant = participantRaw as DashboardParticipantRow | null
-  if (!participant) {
+        const participant = participantRaw as DashboardParticipantRow | null
+        if (!participant) {
     return null
-  }
+        }
 
-  const teammatePromise =
-    participant.team_id != null
-      ? supabase
-          .from('participants')
-          .select('name, email, school_name, is_participant1')
-          .eq('team_id', participant.team_id)
+        const teammatePromise =
+          participant.team_id != null
+            ? supabase
+                .from('participants')
+                .select('name, email, school_name, is_participant1')
+                .eq('team_id', participant.team_id)
           .neq('user_id', user.id)
-          .maybeSingle()
+                .maybeSingle()
       : Promise.resolve({
           data: null as {
             name: string

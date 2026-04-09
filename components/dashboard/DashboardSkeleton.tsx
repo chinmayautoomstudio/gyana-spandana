@@ -1,7 +1,12 @@
 /** Skeleton layout while dashboard data loads (sidebar + content placeholders) */
 export function DashboardSkeleton() {
   return (
-    <div className="min-h-screen bg-[#ECF0F1] flex animate-pulse">
+    <div
+      className="min-h-screen bg-[#ECF0F1] flex animate-pulse"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading dashboard"
+    >
       <aside className="hidden lg:block w-64 bg-white/50 border-r border-white/20" />
       <div className="flex-1">
         <header className="h-16 bg-white/50 border-b border-white/20" />

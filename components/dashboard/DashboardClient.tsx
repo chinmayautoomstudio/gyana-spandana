@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -17,6 +17,7 @@ import {
   type DashboardParticipantRow,
   type DashboardTeammateRow,
 } from '@/lib/dashboard/dashboard-types'
+import { DashboardLottieLoader } from '@/components/loading/DashboardLottieLoader'
 
 /** Single browser Supabase client per tab (avoids repeated client construction) */
 let browserSupabase: ReturnType<typeof createClient> | null = null
@@ -57,6 +58,20 @@ export function DashboardClient({
   const [authorityError, setAuthorityError] = useState<string | null>(null)
   const [authorityFieldErrors, setAuthorityFieldErrors] = useState<{ email?: string; phone?: string }>({})
   const [showInvitationBanner, setShowInvitationBanner] = useState(initialShowInvitationBanner)
+  const [showBootOverlay, setShowBootOverlay] = useState(true)
+
+  useLayoutEffect(() => {
+    let innerRaf = 0
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(() => {
+        setShowBootOverlay(false)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(outerRaf)
+      if (innerRaf) cancelAnimationFrame(innerRaf)
+    }
+  }, [])
 
   useEffect(() => {
     if (!showInvitationBanner) return
@@ -222,7 +237,13 @@ export function DashboardClient({
   }
 
   return (
-    <div className="min-h-screen bg-[#ECF0F1]">
+    <>
+      {showBootOverlay && <DashboardLottieLoader />}
+      <div className="min-h-screen min-h-[100dvh] w-full bg-[#ECF0F1]">
+        <div
+          className={`${showBootOverlay ? '' : ' dashboard-content-enter'}${showBootOverlay ? ' pointer-events-none select-none' : ''}`}
+          aria-hidden={showBootOverlay}
+        >
       {/* Profile Completion Modal */}
       {showProfileModal && (
         <ProfileCompletionModal
@@ -781,6 +802,8 @@ export function DashboardClient({
           </main>
         </div>
       </div>
-    </div>
+        </div>
+      </div>
+    </>
   )
 }
