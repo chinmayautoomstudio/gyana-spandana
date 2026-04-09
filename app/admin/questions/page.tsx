@@ -43,15 +43,6 @@ export default function QuestionBankPage() {
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null)
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<{
-    userRole: string | null
-    userId: string | null
-    questionsCount: number
-    directQueryCount: number
-    rawQueryCount: number
-    hasError: boolean
-    rawQuestionsSample: any[] | null
-  } | null>(null)
   const [bypassFilters, setBypassFilters] = useState(false)
   const [importBatches, setImportBatches] = useState<ImportBatchRow[]>([])
   const [sortBy, setSortBy] = useState<'created_at' | 'points' | 'difficulty'>('created_at')
@@ -136,18 +127,7 @@ export default function QuestionBankPage() {
   const loadInitialMeta = useCallback(async () => {
     const supabase = createClient()
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      let userRole: string | null = null
-      if (user) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle()
-        userRole = profile?.role || user.user_metadata?.role || 'participant'
-      }
-      const [{ count: directCount }, examsRes, statsRes] = await Promise.all([
-        supabase.from('questions').select('id', { count: 'exact', head: true }),
+      const [examsRes, statsRes] = await Promise.all([
         supabase.from('exams').select('id, title').order('title'),
         fetchQuestionBankStats(supabase),
       ])
@@ -156,15 +136,6 @@ export default function QuestionBankPage() {
       if (!statsRes.error && statsRes.rows) {
         calculateStats(mapStatsRowsToQuestions(statsRes.rows))
       }
-      setDebugInfo({
-        userRole,
-        userId: user?.id || null,
-        questionsCount: 0,
-        directQueryCount: directCount || 0,
-        rawQueryCount: 0,
-        hasError: !!statsRes.error,
-        rawQuestionsSample: null,
-      })
       const { data: batchData, error: batchError } = await supabase
         .from('import_batches')
         .select('id, created_at, filename, source, row_count, inserted_count, skipped_count, status')
@@ -206,7 +177,6 @@ export default function QuestionBankPage() {
       })) as Question[]
       setQuestions(normalized)
       setTotalFilteredCount(count ?? 0)
-      setDebugInfo((d) => (d ? { ...d, questionsCount: count ?? 0, hasError: false } : d))
     } catch (err: any) {
       setError(err?.message || 'Error fetching questions')
     } finally {
@@ -426,57 +396,6 @@ export default function QuestionBankPage() {
         </div>
       </div>
 
-      {/* Debug Info Panel (Development) */}
-      {debugInfo && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div className="flex-1">
-              <h3 className="text-sm font-medium text-blue-800 mb-2">Debug Information</h3>
-              <div className="text-xs text-blue-700 space-y-1 font-mono">
-                <div><strong>User ID:</strong> {debugInfo.userId || 'Not authenticated'}</div>
-                <div><strong>User Role:</strong> {debugInfo.userRole || 'Unknown'}</div>
-                <div><strong>Direct Query Count:</strong> {debugInfo.directQueryCount} questions in DB</div>
-                <div><strong>Raw Query (No Join):</strong> {debugInfo.rawQueryCount} questions</div>
-                <div><strong>Questions with Join:</strong> {debugInfo.questionsCount} questions</div>
-                <div><strong>Matching (filtered) count:</strong> {totalFilteredCount} questions</div>
-                <div><strong>On this page:</strong> {questions.length} questions</div>
-                <div><strong>Has Error:</strong> {debugInfo.hasError ? 'Yes' : 'No'}</div>
-                
-                {debugInfo.directQueryCount > 0 && debugInfo.questionsCount === 0 && (
-                  <div className="mt-2 p-2 bg-yellow-100 rounded text-yellow-800">
-                    ⚠️ Questions exist in DB but join query returned empty. The join might be failing or RLS is blocking.
-                  </div>
-                )}
-                
-                {debugInfo.rawQueryCount > 0 && debugInfo.questionsCount === 0 && (
-                  <div className="mt-2 p-2 bg-orange-100 rounded text-orange-800">
-                    ⚠️ Raw query works but join query fails. The exam join is likely the issue.
-                  </div>
-                )}
-                
-                {debugInfo.questionsCount > 0 && totalFilteredCount === 0 && questions.length === 0 && (
-                  <div className="mt-2 p-2 bg-red-100 rounded text-red-800">
-                    ⚠️ Questions exist but current filters returned none. Check filter settings.
-                  </div>
-                )}
-
-                {debugInfo.rawQuestionsSample && debugInfo.rawQuestionsSample.length > 0 && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer font-semibold text-blue-800">Raw Questions Sample (First 3)</summary>
-                    <pre className="mt-2 p-2 bg-blue-100 rounded text-xs overflow-auto max-h-40">
-                      {JSON.stringify(debugInfo.rawQuestionsSample, null, 2)}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -487,22 +406,7 @@ export default function QuestionBankPage() {
             <div className="flex-1">
               <h3 className="text-sm font-medium text-red-800 mb-1">Error Loading Questions</h3>
               <p className="text-sm text-red-700 mb-2">{error}</p>
-              
-              {debugInfo && (
-                <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800 font-mono">
-                  <div><strong>Debug Details:</strong></div>
-                  <div>Role: {debugInfo.userRole || 'Unknown'}</div>
-                  <div>Direct DB Count: {debugInfo.directQueryCount}</div>
-                  <div>Raw Query Count: {debugInfo.rawQueryCount}</div>
-                  <div>Query Result: {debugInfo.questionsCount}</div>
-                  {debugInfo.directQueryCount > 0 && debugInfo.questionsCount === 0 && (
-                    <div className="mt-1 font-semibold">
-                      ⚠️ RLS Policy Issue: Questions exist but are blocked by security policies
-                    </div>
-                  )}
-                </div>
-              )}
-              
+
               {/* RLS Diagnostic Section for 500 Errors */}
               {error && (error.includes('500') || error.includes('HTTP 500')) && (
                 <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -532,8 +436,8 @@ WHERE tablename = 'questions';`}
                       <div className="mb-3">
                         <strong className="text-yellow-900">3. Test the function with your user ID:</strong>
                         <pre className="mt-1 text-yellow-800 whitespace-pre-wrap">
-{`-- Replace with your actual user ID from debug info above
-SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
+{`-- Replace with your actual user ID (e.g. from Supabase Auth)
+SELECT is_admin_user('your-user-id-here');`}
                         </pre>
                       </div>
                       <div className="mb-3">
@@ -551,12 +455,12 @@ SELECT is_admin_user('${debugInfo?.userId || 'your-user-id-here'}');`}
               <div className="mt-3 text-sm text-red-600">
                 <p className="font-medium mb-1">Possible solutions:</p>
                 <ul className="list-disc list-inside space-y-1">
-                  <li>Verify you are logged in as an admin user (check debug info above)</li>
-                  <li>Check that your user has role='admin' in the user_profiles table</li>
+                  <li>Verify you are logged in as an admin user</li>
+                  <li>Check that your user has role=&apos;admin&apos; in the user_profiles table</li>
                   <li>Run the migration script: docs/sql/fix-questions-rls-policy.sql</li>
                   <li>Ensure the questions table exists and has data</li>
                   <li>Check browser console (F12) for detailed error messages</li>
-                  <li>If direct query count &gt; 0 but questions loaded = 0, RLS policy needs fixing</li>
+                  <li>If questions exist in the database but none load, review RLS policies on the questions table</li>
                 </ul>
               </div>
             </div>
