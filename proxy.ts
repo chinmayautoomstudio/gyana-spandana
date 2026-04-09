@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import type { User } from '@supabase/supabase-js'
 import { parseSafeInternalRedirectPath } from '@/lib/auth/safe-redirect-path'
+import { getUserRoleFromAuthUser } from '@/lib/auth/user-role'
 
 export default async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -34,22 +34,6 @@ export default async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Prefer JWT user_metadata to avoid a DB round-trip; fall back to user_profiles when missing
-  const getUserRole = async (authUser: User): Promise<string> => {
-    const metaRole = authUser.user_metadata?.role
-    if (typeof metaRole === 'string' && metaRole.length > 0) {
-      return metaRole
-    }
-
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('user_id', authUser.id)
-      .single()
-
-    return profile?.role ?? 'participant'
-  }
-
   // Protect dashboard routes
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
     if (!user) {
@@ -60,7 +44,7 @@ export default async function proxy(request: NextRequest) {
     }
 
     // Check user role FIRST - admins should go to admin dashboard, not participant dashboard
-    const role = await getUserRole(user)
+    const role = await getUserRoleFromAuthUser(supabase, user)
     if (role === 'admin') {
       const url = request.nextUrl.clone()
       url.pathname = '/admin'
@@ -73,7 +57,7 @@ export default async function proxy(request: NextRequest) {
 
   // Protect admin routes - only admins can access
   if (request.nextUrl.pathname.startsWith('/admin') && user) {
-    const role = await getUserRole(user)
+    const role = await getUserRoleFromAuthUser(supabase, user)
     if (role !== 'admin') {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
@@ -106,7 +90,7 @@ export default async function proxy(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    const role = await getUserRole(user)
+    const role = await getUserRoleFromAuthUser(supabase, user)
     if (role !== 'admin' && role !== 'host') {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
@@ -131,7 +115,7 @@ export default async function proxy(request: NextRequest) {
     (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') &&
     user
   ) {
-    const role = await getUserRole(user)
+    const role = await getUserRoleFromAuthUser(supabase, user)
 
     // If admin, redirect to admin dashboard (or safe redirectedFrom under /admin)
     if (role === 'admin') {
@@ -143,6 +127,17 @@ export default async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL(from, request.nextUrl.origin))
       }
       return NextResponse.redirect(new URL('/admin', request.nextUrl.origin))
+    }
+
+    if (role === 'host') {
+      const from = parseSafeInternalRedirectPath(
+        request.nextUrl.searchParams.get('redirectedFrom')
+      )
+      const fromPath = from?.split('?')[0] ?? ''
+      if (from && fromPath.startsWith('/host')) {
+        return NextResponse.redirect(new URL(from, request.nextUrl.origin))
+      }
+      return NextResponse.redirect(new URL('/host', request.nextUrl.origin))
     }
 
     // For regular users, check if they have a participant record

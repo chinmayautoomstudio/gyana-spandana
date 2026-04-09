@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getInvitationByToken, checkPendingInvitationForEmail } from '@/app/actions/team'
+import { getUserRoleFromAuthUser } from '@/lib/auth/user-role'
 
-const ALLOWED_NEXT_PATHS = ['/auth/reset-password', '/dashboard', '/team/create'] as const
+const ALLOWED_NEXT_PATHS = ['/auth/reset-password', '/dashboard', '/team/create', '/admin', '/host'] as const
 
 function isAllowedNext(next: string | null): next is (typeof ALLOWED_NEXT_PATHS)[number] {
   return next !== null && ALLOWED_NEXT_PATHS.includes(next as (typeof ALLOWED_NEXT_PATHS)[number])
@@ -79,6 +80,20 @@ export async function GET(request: NextRequest) {
       }
       const res = NextResponse.redirect(`${invitePageUrl}?google=1`)
       return clearInviteCookie(res)
+    }
+
+    const role = await getUserRoleFromAuthUser(supabase, user)
+    if (role === 'admin') {
+      if (nextPath === '/admin' && isAllowedNext(nextPath)) {
+        return NextResponse.redirect(`${baseUrl}/admin`)
+      }
+      return NextResponse.redirect(`${baseUrl}/admin`)
+    }
+    if (role === 'host') {
+      if (nextPath === '/host' && isAllowedNext(nextPath)) {
+        return NextResponse.redirect(`${baseUrl}/host`)
+      }
+      return NextResponse.redirect(`${baseUrl}/host`)
     }
 
     // Check if user has a participant record (completed registration)

@@ -31,6 +31,10 @@ export function resolvePostLoginRedirectPath(options: {
     if (safe && safePath.startsWith('/admin')) return safe
     return '/admin'
   }
+  if (role === 'host') {
+    if (safe && safePath.startsWith('/host')) return safe
+    return '/host'
+  }
   if (safe) return safe
   return '/dashboard'
 }

@@ -146,6 +146,10 @@ export default function DashboardPage() {
           router.push('/admin')
           return
         }
+        if (role === 'host') {
+          router.replace('/host')
+          return
+        }
 
         if (!participant) {
           router.replace('/team/create')

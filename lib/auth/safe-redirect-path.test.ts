@@ -58,7 +58,25 @@ describe('resolvePostLoginRedirectPath', () => {
       })
     ).toBe('/exams/1')
     expect(
-      resolvePostLoginRedirectPath({ role: 'host', redirectedFromParam: null })
+      resolvePostLoginRedirectPath({ role: 'participant', redirectedFromParam: null })
     ).toBe('/dashboard')
+  })
+
+  it('host uses /host defaults and safe host redirectedFrom', () => {
+    expect(
+      resolvePostLoginRedirectPath({ role: 'host', redirectedFromParam: null })
+    ).toBe('/host')
+    expect(
+      resolvePostLoginRedirectPath({
+        role: 'host',
+        redirectedFromParam: '/host/session/123',
+      })
+    ).toBe('/host/session/123')
+    expect(
+      resolvePostLoginRedirectPath({
+        role: 'host',
+        redirectedFromParam: '/dashboard',
+      })
+    ).toBe('/host')
   })
 })
