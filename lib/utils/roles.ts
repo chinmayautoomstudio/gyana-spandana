@@ -3,11 +3,12 @@
  * Uses user_profiles table as primary source, with user_metadata as fallback
  */
 
-export type UserRole = 'admin' | 'participant' | string
+export type UserRole = 'admin' | 'host' | 'participant' | string
 
 // Common roles - extensible for future user types
 export const ROLES = {
   ADMIN: 'admin',
+  HOST: 'host',
   PARTICIPANT: 'participant',
 } as const
 
@@ -30,7 +31,7 @@ export async function getUserProfile(
     }
 
     return { role: data.role, name: data.name }
-  } catch (error) {
+  } catch {
     return null
   }
 }
@@ -51,7 +52,7 @@ export async function getUserRole(userId: string, supabase: any): Promise<UserRo
     if (user?.user_metadata?.role) {
       return user.user_metadata.role as UserRole
     }
-  } catch (error) {
+  } catch {
     // Ignore errors, return default
   }
 

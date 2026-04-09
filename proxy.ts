@@ -16,9 +16,7 @@ export default async function proxy(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value)
-          )
+          cookiesToSet.forEach((cookie) => request.cookies.set(cookie.name, cookie.value))
           supabaseResponse = NextResponse.next({
             request,
           })
@@ -92,6 +90,35 @@ export default async function proxy(request: NextRequest) {
 
   // Protect exam routes - require authentication
   if (request.nextUrl.pathname.startsWith('/exams') && !user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('redirectedFrom', request.nextUrl.pathname)
+    return NextResponse.redirect(url)
+  }
+
+  // Protect host routes - admin or host only
+  if (request.nextUrl.pathname.startsWith('/host')) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('redirectedFrom', request.nextUrl.pathname)
+      return NextResponse.redirect(url)
+    }
+
+    const role = await getUserRole(user)
+    if (role !== 'admin' && role !== 'host') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // Protect participant quiz play routes; allow public display route
+  if (
+    request.nextUrl.pathname.startsWith('/quiz') &&
+    !request.nextUrl.pathname.endsWith('/display') &&
+    !user
+  ) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirectedFrom', request.nextUrl.pathname)

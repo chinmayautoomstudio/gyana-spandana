@@ -1,0 +1,98 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { subscribeToSession } from '@/lib/services/quizSessionService'
+import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
+import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
+import type { TeamLabel } from '@/lib/utils/teamColors'
+
+interface SessionState {
+  session: any
+  rounds: any[]
+  activeRound: any | null
+  currentQuestionEvent: any | null
+  currentQuestion: any | null
+  scores: Record<TeamLabel, number>
+}
+
+export default function DisplayBoardPage() {
+  const params = useParams<{ id: string }>()
+  const sessionId = params?.id
+
+  const [state, setState] = useState<SessionState | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchState = useCallback(async () => {
+    if (!sessionId) return
+    const res = await fetch(`/api/quiz/session/${sessionId}`)
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data?.error || 'Failed to load session')
+    setState(data)
+  }, [sessionId])
+
+  useEffect(() => {
+    let unsub = () => {}
+    void (async () => {
+      try {
+        await fetchState()
+      } catch (e: any) {
+        setError(e.message)
+      }
+    })()
+    if (sessionId) {
+      unsub = subscribeToSession(sessionId, {
+        onRoundStarted: () => void fetchState(),
+        onQuestionRevealed: () => void fetchState(),
+        onOptionsRevealed: () => void fetchState(),
+        onAnswerResult: () => void fetchState(),
+        onScoresUpdated: () => void fetchState(),
+        onRoundEnded: () => void fetchState(),
+      })
+    }
+    return () => unsub()
+  }, [sessionId, fetchState])
+
+  const teamNames = useMemo(() => {
+    const slots = state?.session?.team_slots || {}
+    return {
+      A: `Team ${slots.A ? slots.A.slice(0, 8) : 'A'}`,
+      B: `Team ${slots.B ? slots.B.slice(0, 8) : 'B'}`,
+      C: `Team ${slots.C ? slots.C.slice(0, 8) : 'C'}`,
+      D: `Team ${slots.D ? slots.D.slice(0, 8) : 'D'}`,
+    } as Record<TeamLabel, string>
+  }, [state?.session?.team_slots])
+
+  if (error) {
+    return <div className="p-6 text-red-300">{error}</div>
+  }
+
+  if (!state) {
+    return <div className="p-6 text-gray-200">Loading display board...</div>
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-4 lg:p-8">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl lg:text-3xl font-bold">GYANA SPARDHA</h1>
+        <p className="text-sm lg:text-base text-gray-200">
+          {state.activeRound ? state.activeRound.title || state.activeRound.round_type : 'Waiting for round'}
+        </p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        <div className="rounded-2xl bg-white/10 p-3">
+          <ScoreSidebar teams={teamNames} scores={state.scores} />
+        </div>
+        <div className="rounded-2xl bg-white/10 p-4">
+          <QuestionDisplay
+            question={state.currentQuestion}
+            showOptions={state.currentQuestionEvent?.status === 'options_revealed'}
+            readOnly
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+

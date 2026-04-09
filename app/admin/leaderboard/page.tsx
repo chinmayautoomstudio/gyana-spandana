@@ -25,29 +25,57 @@ interface Exam {
   title: string
 }
 
+interface QuizLiveSession {
+  id: string
+  title: string
+}
+
+interface LiveScoreRow {
+  id: string
+  team_label: 'A' | 'B' | 'C' | 'D'
+  total_score: number
+  questions_correct: number
+}
+
 export default function LeaderboardPage() {
+  const [activeTab, setActiveTab] = useState<'exam' | 'live'>('exam')
   const [exams, setExams] = useState<Exam[]>([])
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null)
   const [teamScores, setTeamScores] = useState<TeamScore[]>([])
+
+  const [liveSessions, setLiveSessions] = useState<QuizLiveSession[]>([])
+  const [selectedLiveSessionId, setSelectedLiveSessionId] = useState<string | null>(null)
+  const [liveScores, setLiveScores] = useState<LiveScoreRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchExams = async () => {
+    const bootstrap = async () => {
       const supabase = createClient()
-      const { data } = await supabase
-        .from('exams')
-        .select('id, title')
-        .in('status', ['active', 'completed'])
-        .order('created_at', { ascending: false })
+      const [{ data: examRows }, { data: liveRows }] = await Promise.all([
+        supabase
+          .from('exams')
+          .select('id, title')
+          .in('status', ['active', 'completed'])
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('quiz_live_sessions')
+          .select('id,title')
+          .in('status', ['active', 'completed'])
+          .order('created_at', { ascending: false }),
+      ])
 
-      setExams(data || [])
-      if (data && data.length > 0) {
-        setSelectedExamId(data[0].id)
+      setExams(examRows || [])
+      if (examRows && examRows.length > 0) {
+        setSelectedExamId(examRows[0].id)
+      }
+      setLiveSessions(liveRows || [])
+      if (liveRows && liveRows.length > 0) {
+        setSelectedLiveSessionId(liveRows[0].id)
       }
       setLoading(false)
     }
 
-    fetchExams()
+    bootstrap()
   }, [])
 
   useEffect(() => {
@@ -94,6 +122,48 @@ export default function LeaderboardPage() {
     }
   }, [selectedExamId])
 
+  useEffect(() => {
+    if (!selectedLiveSessionId) return
+
+    const fetchLiveLeaderboard = async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('quiz_session_scores')
+        .select('id,team_label,total_score,questions_correct')
+        .eq('session_id', selectedLiveSessionId)
+        .order('total_score', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching live leaderboard:', error)
+      } else {
+        setLiveScores((data || []) as LiveScoreRow[])
+      }
+    }
+
+    fetchLiveLeaderboard()
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel('live-leaderboard-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'quiz_session_scores',
+          filter: `session_id=eq.${selectedLiveSessionId}`,
+        },
+        () => {
+          fetchLiveLeaderboard()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedLiveSessionId])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -102,7 +172,7 @@ export default function LeaderboardPage() {
     )
   }
 
-  const exportData = teamScores.map((ts, index) => ({
+  const examExportData = teamScores.map((ts, index) => ({
     'Rank': ts.rank || index + 1,
     'Team Name': ts.teams?.team_name || 'N/A',
     'Participant 1 Score': ts.participant1_score,
@@ -110,14 +180,21 @@ export default function LeaderboardPage() {
     'Total Score': ts.total_team_score,
   }))
 
+  const liveExportData = liveScores.map((row, index) => ({
+    Rank: index + 1,
+    Team: row.team_label,
+    'Total Score': row.total_score,
+    'Questions Correct': row.questions_correct,
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Leaderboard</h1>
         <div className="flex items-center gap-3">
-          {selectedExamId && teamScores.length > 0 && (
+          {activeTab === 'exam' && selectedExamId && teamScores.length > 0 && (
             <ExportButton
-              data={exportData}
+              data={examExportData}
               filename={`leaderboard-${selectedExamId}`}
               exportType="both"
               pdfTitle={`Leaderboard - ${exams.find(e => e.id === selectedExamId)?.title || 'Exam'}`}
@@ -130,24 +207,76 @@ export default function LeaderboardPage() {
               ]}
             />
           )}
-          <div className="w-64">
+          {activeTab === 'live' && selectedLiveSessionId && liveScores.length > 0 && (
+            <ExportButton
+              data={liveExportData}
+              filename={`live-leaderboard-${selectedLiveSessionId}`}
+              exportType="both"
+              pdfTitle={`Live Leaderboard - ${liveSessions.find((s) => s.id === selectedLiveSessionId)?.title || 'Session'}`}
+              columns={[
+                { header: 'Rank', dataKey: 'Rank' },
+                { header: 'Team', dataKey: 'Team' },
+                { header: 'Total Score', dataKey: 'Total Score' },
+                { header: 'Questions Correct', dataKey: 'Questions Correct' },
+              ]}
+            />
+          )}
+          <div className="w-72">
             <select
-              value={selectedExamId || ''}
-              onChange={(e) => setSelectedExamId(e.target.value)}
+              value={activeTab === 'exam' ? selectedExamId || '' : selectedLiveSessionId || ''}
+              onChange={(e) =>
+                activeTab === 'exam'
+                  ? setSelectedExamId(e.target.value)
+                  : setSelectedLiveSessionId(e.target.value)
+              }
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
             >
-              <option value="">Select an exam</option>
-              {exams.map((exam) => (
-                <option key={exam.id} value={exam.id}>
-                  {exam.title}
-                </option>
-              ))}
+              {activeTab === 'exam' ? (
+                <>
+                  <option value="">Select an exam</option>
+                  {exams.map((exam) => (
+                    <option key={exam.id} value={exam.id}>
+                      {exam.title}
+                    </option>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <option value="">Select a live session</option>
+                  {liveSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.title}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
         </div>
       </div>
 
-      {selectedExamId && teamScores.length === 0 ? (
+      <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('exam')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+            activeTab === 'exam' ? 'bg-[#C0392B] text-white' : 'text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          Exam Leaderboard
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('live')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+            activeTab === 'live' ? 'bg-[#C0392B] text-white' : 'text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          Live Sessions
+        </button>
+      </div>
+
+      {activeTab === 'exam' && selectedExamId && teamScores.length === 0 ? (
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 text-center">
           <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -155,7 +284,7 @@ export default function LeaderboardPage() {
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No scores yet</h3>
           <p className="text-gray-500">Scores will appear here once participants submit their exams</p>
         </div>
-      ) : selectedExamId ? (
+      ) : activeTab === 'exam' && selectedExamId ? (
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -212,9 +341,36 @@ export default function LeaderboardPage() {
             </table>
           </div>
         </div>
+      ) : activeTab === 'live' && selectedLiveSessionId ? (
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50/50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Score</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Questions Correct</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {liveScores.map((row, index) => (
+                  <tr key={row.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">{index + 1}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Team {row.team_label}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-lg font-bold text-[#C0392B]">{row.total_score}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{row.questions_correct}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 text-center">
-          <p className="text-gray-600">Please select an exam to view the leaderboard</p>
+          <p className="text-gray-600">
+            Please select {activeTab === 'exam' ? 'an exam' : 'a live session'} to view the leaderboard
+          </p>
         </div>
       )}
     </div>
