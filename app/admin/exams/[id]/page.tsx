@@ -21,6 +21,7 @@ interface Exam {
   scheduled_end: string | null
   status: string
   created_at: string
+  public_leaderboard_visible?: boolean
 }
 
 export default function ExamDetailsPage() {
@@ -166,6 +167,36 @@ export default function ExamDetailsPage() {
       alert('Error updating status: ' + error.message)
     } else {
       setExam(exam ? { ...exam, status: newStatus } : null)
+    }
+  }
+
+  const togglePublicLeaderboard = async () => {
+    if (!examId || !exam) return
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+    const role = profile?.role || user.user_metadata?.role || 'participant'
+    if (role !== 'admin') {
+      alert('Unauthorized')
+      return
+    }
+    const next = !exam.public_leaderboard_visible
+    const { error } = await supabase
+      .from('exams')
+      .update({ public_leaderboard_visible: next })
+      .eq('id', examId)
+    if (error) {
+      alert('Error updating public leaderboard: ' + error.message)
+    } else {
+      setExam({ ...exam, public_leaderboard_visible: next })
     }
   }
 
@@ -405,6 +436,32 @@ export default function ExamDetailsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Public competition leaderboard</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          When enabled, team names and scores for this exam appear on the public page{' '}
+          <span className="font-mono text-gray-800">/competition/leaderboard</span> (active or
+          completed exams only). Anyone can view; scores update in real time.
+        </p>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-gray-300 text-[#C0392B] focus:ring-[#C0392B]"
+            checked={Boolean(exam.public_leaderboard_visible)}
+            onChange={() => void togglePublicLeaderboard()}
+            disabled={exam.status !== 'active' && exam.status !== 'completed'}
+          />
+          <span className="text-sm text-gray-800">
+            <span className="font-medium">Show on public leaderboard</span>
+            {exam.status !== 'active' && exam.status !== 'completed' && (
+              <span className="block text-amber-700 mt-1">
+                Activate or complete this exam first to enable public visibility.
+              </span>
+            )}
+          </span>
+        </label>
       </div>
 
       {/* Exam Invitation Modal */}

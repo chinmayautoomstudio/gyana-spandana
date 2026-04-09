@@ -1,10 +1,14 @@
 'use client'
 
+import Link from 'next/link'
+
 interface Feature {
   icon: React.ReactNode
   title: string
   description: string
   gradient: string
+  ctaHref?: string
+  ctaLabel?: string
 }
 
 interface FeaturesProps {
@@ -33,6 +37,16 @@ export function Features({ features }: FeaturesProps) {
               <div className="mb-6 text-5xl">{feature.icon}</div>
               <h3 className="text-2xl font-bold text-gray-900 mb-3">{feature.title}</h3>
               <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+              {feature.ctaHref ? (
+                <p className="mt-4">
+                  <Link
+                    href={feature.ctaHref}
+                    className="text-sm font-semibold text-[#C0392B] underline-offset-2 hover:underline"
+                  >
+                    {feature.ctaLabel ?? 'Open'}
+                  </Link>
+                </p>
+              ) : null}
             </div>
           ))}
         </div>

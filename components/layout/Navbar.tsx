@@ -75,6 +75,7 @@ export function Navbar() {
     { href: '/', label: 'Home' },
     { href: '/#features', label: 'Features' },
     { href: '/#how-it-works', label: 'How It Works' },
+    { href: '/competition/leaderboard', label: 'Leaderboard' },
     { href: '/#faq', label: 'FAQ' },
   ]
 

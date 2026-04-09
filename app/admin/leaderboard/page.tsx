@@ -1,8 +1,17 @@
+/*
+ * Supabase: enable Realtime on `team_scores` and `quiz_session_scores`; ensure
+ * admin-authenticated users can SELECT via RLS for postgres_changes. See
+ * `lib/hooks/usePostgresLeaderboardRealtime.ts` for dashboard checklist.
+ */
+
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { ExportButton } from '@/components/admin/ExportButton'
+import { usePostgresLeaderboardRealtime } from '@/lib/hooks/usePostgresLeaderboardRealtime'
+import { LiveLeaderboardMeta } from '@/components/leaderboard/LiveLeaderboardMeta'
 
 interface TeamScore {
   id: string
@@ -38,19 +47,25 @@ interface LiveScoreRow {
 }
 
 export default function LeaderboardPage() {
+  const supabase = useMemo(() => createClient(), [])
+
   const [activeTab, setActiveTab] = useState<'exam' | 'live'>('exam')
   const [exams, setExams] = useState<Exam[]>([])
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null)
   const [teamScores, setTeamScores] = useState<TeamScore[]>([])
 
   const [liveSessions, setLiveSessions] = useState<QuizLiveSession[]>([])
-  const [selectedLiveSessionId, setSelectedLiveSessionId] = useState<string | null>(null)
+  const [selectedLiveSessionId, setSelectedLiveSessionId] = useState<
+    string | null
+  >(null)
   const [liveScores, setLiveScores] = useState<LiveScoreRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const [lastExamUpdatedAt, setLastExamUpdatedAt] = useState<Date | null>(null)
+  const [lastLiveUpdatedAt, setLastLiveUpdatedAt] = useState<Date | null>(null)
+
   useEffect(() => {
     const bootstrap = async () => {
-      const supabase = createClient()
       const [{ data: examRows }, { data: liveRows }] = await Promise.all([
         supabase
           .from('exams')
@@ -75,105 +90,124 @@ export default function LeaderboardPage() {
       setLoading(false)
     }
 
-    bootstrap()
-  }, [])
+    void bootstrap()
+  }, [supabase])
+
+  const fetchExamLeaderboard = useCallback(async () => {
+    if (!selectedExamId) return
+    const { data, error } = await supabase
+      .from('team_scores')
+      .select('*, teams(team_name), exams(title)')
+      .eq('exam_id', selectedExamId)
+      .order('total_team_score', { ascending: false })
+      .order('rank', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching leaderboard:', error)
+    } else {
+      setTeamScores(data || [])
+    }
+    setLastExamUpdatedAt(new Date())
+  }, [selectedExamId, supabase])
+
+  const fetchLiveLeaderboard = useCallback(async () => {
+    if (!selectedLiveSessionId) return
+    const { data, error } = await supabase
+      .from('quiz_session_scores')
+      .select('id,team_label,total_score,questions_correct')
+      .eq('session_id', selectedLiveSessionId)
+      .order('total_score', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching live leaderboard:', error)
+    } else {
+      setLiveScores((data || []) as LiveScoreRow[])
+    }
+    setLastLiveUpdatedAt(new Date())
+  }, [selectedLiveSessionId, supabase])
 
   useEffect(() => {
     if (!selectedExamId) return
-
-    const fetchLeaderboard = async () => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('team_scores')
-        .select('*, teams(team_name), exams(title)')
-        .eq('exam_id', selectedExamId)
-        .order('total_team_score', { ascending: false })
-        .order('rank', { ascending: true })
-
-      if (error) {
-        console.error('Error fetching leaderboard:', error)
-      } else {
-        setTeamScores(data || [])
-      }
-    }
-
-    fetchLeaderboard()
-
-    // Set up real-time subscription
-    const supabase = createClient()
-    const channel = supabase
-      .channel('leaderboard-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'team_scores',
-          filter: `exam_id=eq.${selectedExamId}`,
-        },
-        () => {
-          fetchLeaderboard()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [selectedExamId])
+    void fetchExamLeaderboard()
+  }, [selectedExamId, fetchExamLeaderboard])
 
   useEffect(() => {
     if (!selectedLiveSessionId) return
+    void fetchLiveLeaderboard()
+  }, [selectedLiveSessionId, fetchLiveLeaderboard])
 
-    const fetchLiveLeaderboard = async () => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('quiz_session_scores')
-        .select('id,team_label,total_score,questions_correct')
-        .eq('session_id', selectedLiveSessionId)
-        .order('total_score', { ascending: false })
+  const { status: examRealtimeStatus, usePollFallback: examPollFallback } =
+    usePostgresLeaderboardRealtime({
+      supabase,
+      enabled: activeTab === 'exam' && Boolean(selectedExamId),
+      channelName: `admin-team-scores-${selectedExamId ?? 'none'}`,
+      table: 'team_scores',
+      filter: `exam_id=eq.${selectedExamId}`,
+      onDataStale: fetchExamLeaderboard,
+    })
 
-      if (error) {
-        console.error('Error fetching live leaderboard:', error)
-      } else {
-        setLiveScores((data || []) as LiveScoreRow[])
-      }
+  const { status: liveRealtimeStatus, usePollFallback: livePollFallback } =
+    usePostgresLeaderboardRealtime({
+      supabase,
+      enabled: activeTab === 'live' && Boolean(selectedLiveSessionId),
+      channelName: `admin-quiz-session-scores-${selectedLiveSessionId ?? 'none'}`,
+      table: 'quiz_session_scores',
+      filter: `session_id=eq.${selectedLiveSessionId}`,
+      onDataStale: fetchLiveLeaderboard,
+    })
+
+  const prevExamPollFallback = useRef(false)
+  useEffect(() => {
+    if (activeTab !== 'exam') {
+      prevExamPollFallback.current = examPollFallback
+      return
     }
-
-    fetchLiveLeaderboard()
-
-    const supabase = createClient()
-    const channel = supabase
-      .channel('live-leaderboard-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'quiz_session_scores',
-          filter: `session_id=eq.${selectedLiveSessionId}`,
-        },
-        () => {
-          fetchLiveLeaderboard()
-        },
+    if (examPollFallback && !prevExamPollFallback.current) {
+      toast.warning(
+        'Exam leaderboard: Supabase Realtime is unavailable. Scores will refresh every 5 seconds.',
+        { id: 'admin-leaderboard-exam-poll', duration: 10_000 },
       )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
+    } else if (!examPollFallback && prevExamPollFallback.current) {
+      toast.success('Exam leaderboard: live updates restored.', {
+        id: 'admin-leaderboard-exam-ok',
+        duration: 4000,
+      })
+      toast.dismiss('admin-leaderboard-exam-poll')
     }
-  }, [selectedLiveSessionId])
+    prevExamPollFallback.current = examPollFallback
+  }, [activeTab, examPollFallback])
+
+  const prevLivePollFallback = useRef(false)
+  useEffect(() => {
+    if (activeTab !== 'live') {
+      prevLivePollFallback.current = livePollFallback
+      return
+    }
+    if (livePollFallback && !prevLivePollFallback.current) {
+      toast.warning(
+        'Live session leaderboard: Supabase Realtime is unavailable. Scores will refresh every 5 seconds.',
+        { id: 'admin-leaderboard-live-poll', duration: 10_000 },
+      )
+    } else if (!livePollFallback && prevLivePollFallback.current) {
+      toast.success('Live session leaderboard: live updates restored.', {
+        id: 'admin-leaderboard-live-ok',
+        duration: 4000,
+      })
+      toast.dismiss('admin-leaderboard-live-poll')
+    }
+    prevLivePollFallback.current = livePollFallback
+  }, [activeTab, livePollFallback])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C0392B]"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[#C0392B]" />
       </div>
     )
   }
 
   const examExportData = teamScores.map((ts, index) => ({
-    'Rank': ts.rank || index + 1,
+    Rank: ts.rank || index + 1,
     'Team Name': ts.teams?.team_name || 'N/A',
     'Participant 1 Score': ts.participant1_score,
     'Participant 2 Score': ts.participant2_score,
@@ -197,7 +231,7 @@ export default function LeaderboardPage() {
               data={examExportData}
               filename={`leaderboard-${selectedExamId}`}
               exportType="both"
-              pdfTitle={`Leaderboard - ${exams.find(e => e.id === selectedExamId)?.title || 'Exam'}`}
+              pdfTitle={`Leaderboard - ${exams.find((e) => e.id === selectedExamId)?.title || 'Exam'}`}
               columns={[
                 { header: 'Rank', dataKey: 'Rank' },
                 { header: 'Team Name', dataKey: 'Team Name' },
@@ -207,29 +241,38 @@ export default function LeaderboardPage() {
               ]}
             />
           )}
-          {activeTab === 'live' && selectedLiveSessionId && liveScores.length > 0 && (
-            <ExportButton
-              data={liveExportData}
-              filename={`live-leaderboard-${selectedLiveSessionId}`}
-              exportType="both"
-              pdfTitle={`Live Leaderboard - ${liveSessions.find((s) => s.id === selectedLiveSessionId)?.title || 'Session'}`}
-              columns={[
-                { header: 'Rank', dataKey: 'Rank' },
-                { header: 'Team', dataKey: 'Team' },
-                { header: 'Total Score', dataKey: 'Total Score' },
-                { header: 'Questions Correct', dataKey: 'Questions Correct' },
-              ]}
-            />
-          )}
+          {activeTab === 'live' &&
+            selectedLiveSessionId &&
+            liveScores.length > 0 && (
+              <ExportButton
+                data={liveExportData}
+                filename={`live-leaderboard-${selectedLiveSessionId}`}
+                exportType="both"
+                pdfTitle={`Live Leaderboard - ${liveSessions.find((s) => s.id === selectedLiveSessionId)?.title || 'Session'}`}
+                columns={[
+                  { header: 'Rank', dataKey: 'Rank' },
+                  { header: 'Team', dataKey: 'Team' },
+                  { header: 'Total Score', dataKey: 'Total Score' },
+                  {
+                    header: 'Questions Correct',
+                    dataKey: 'Questions Correct',
+                  },
+                ]}
+              />
+            )}
           <div className="w-72">
             <select
-              value={activeTab === 'exam' ? selectedExamId || '' : selectedLiveSessionId || ''}
+              value={
+                activeTab === 'exam'
+                  ? selectedExamId || ''
+                  : selectedLiveSessionId || ''
+              }
               onChange={(e) =>
                 activeTab === 'exam'
                   ? setSelectedExamId(e.target.value)
                   : setSelectedLiveSessionId(e.target.value)
               }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#C0392B]"
             >
               {activeTab === 'exam' ? (
                 <>
@@ -260,7 +303,9 @@ export default function LeaderboardPage() {
           type="button"
           onClick={() => setActiveTab('exam')}
           className={`rounded-lg px-4 py-2 text-sm font-medium ${
-            activeTab === 'exam' ? 'bg-[#C0392B] text-white' : 'text-gray-700 hover:bg-gray-100'
+            activeTab === 'exam'
+              ? 'bg-[#C0392B] text-white'
+              : 'text-gray-700 hover:bg-gray-100'
           }`}
         >
           Exam Leaderboard
@@ -269,7 +314,9 @@ export default function LeaderboardPage() {
           type="button"
           onClick={() => setActiveTab('live')}
           className={`rounded-lg px-4 py-2 text-sm font-medium ${
-            activeTab === 'live' ? 'bg-[#C0392B] text-white' : 'text-gray-700 hover:bg-gray-100'
+            activeTab === 'live'
+              ? 'bg-[#C0392B] text-white'
+              : 'text-gray-700 hover:bg-gray-100'
           }`}
         >
           Live Sessions
@@ -277,30 +324,61 @@ export default function LeaderboardPage() {
       </div>
 
       {activeTab === 'exam' && selectedExamId && teamScores.length === 0 ? (
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 text-center">
-          <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        <div className="rounded-2xl border border-white/20 bg-white/70 p-12 text-center shadow-lg backdrop-blur-xl">
+          <svg
+            className="mx-auto mb-4 h-16 w-16 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+            />
           </svg>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No scores yet</h3>
-          <p className="text-gray-500">Scores will appear here once participants submit their exams</p>
+          <h3 className="mb-2 text-xl font-semibold text-gray-900">
+            No scores yet
+          </h3>
+          <p className="text-gray-500">
+            Scores will appear here once participants submit their exams
+          </p>
         </div>
       ) : activeTab === 'exam' && selectedExamId ? (
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden">
+        <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/70 shadow-lg backdrop-blur-xl">
+          <div className="flex justify-end border-b border-gray-100 px-4 py-3">
+            <LiveLeaderboardMeta
+              lastUpdatedAt={lastExamUpdatedAt}
+              status={examRealtimeStatus}
+              usePollFallback={examPollFallback}
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50/50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Participant 1</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Participant 2</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Score</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Rank
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Team Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Participant 1
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Participant 2
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Total Score
+                  </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200 bg-white">
                 {teamScores.map((teamScore, index) => (
                   <tr key={teamScore.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4">
                       <div className="flex items-center gap-3">
                         {teamScore.rank === 1 && (
                           <span className="text-2xl">🥇</span>
@@ -311,26 +389,31 @@ export default function LeaderboardPage() {
                         {teamScore.rank === 3 && (
                           <span className="text-2xl">🥉</span>
                         )}
-                        <span className={`text-lg font-bold ${
-                          teamScore.rank === 1 ? 'text-yellow-600' :
-                          teamScore.rank === 2 ? 'text-gray-400' :
-                          teamScore.rank === 3 ? 'text-orange-600' :
-                          'text-gray-600'
-                        }`}>
+                        <span
+                          className={`text-lg font-bold ${
+                            teamScore.rank === 1
+                              ? 'text-yellow-600'
+                              : teamScore.rank === 2
+                                ? 'text-gray-400'
+                                : teamScore.rank === 3
+                                  ? 'text-orange-600'
+                                  : 'text-gray-600'
+                          }`}
+                        >
                           {teamScore.rank || index + 1}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
                       {teamScore.teams?.team_name || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
                       {teamScore.participant1_score}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
                       {teamScore.participant2_score}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4">
                       <span className="text-lg font-bold text-[#C0392B]">
                         {teamScore.total_team_score}
                       </span>
@@ -342,24 +425,47 @@ export default function LeaderboardPage() {
           </div>
         </div>
       ) : activeTab === 'live' && selectedLiveSessionId ? (
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg overflow-hidden">
+        <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/70 shadow-lg backdrop-blur-xl">
+          <div className="flex justify-end border-b border-gray-100 px-4 py-3">
+            <LiveLeaderboardMeta
+              lastUpdatedAt={lastLiveUpdatedAt}
+              status={liveRealtimeStatus}
+              usePollFallback={livePollFallback}
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50/50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Score</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Questions Correct</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Rank
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Team
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Total Score
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Questions Correct
+                  </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200 bg-white">
                 {liveScores.map((row, index) => (
                   <tr key={row.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">{index + 1}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Team {row.team_label}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-lg font-bold text-[#C0392B]">{row.total_score}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{row.questions_correct}</td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-700">
+                      {index + 1}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                      Team {row.team_label}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-lg font-bold text-[#C0392B]">
+                      {row.total_score}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                      {row.questions_correct}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -367,13 +473,14 @@ export default function LeaderboardPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-12 text-center">
+        <div className="rounded-2xl border border-white/20 bg-white/70 p-12 text-center shadow-lg backdrop-blur-xl">
           <p className="text-gray-600">
-            Please select {activeTab === 'exam' ? 'an exam' : 'a live session'} to view the leaderboard
+            Please select{' '}
+            {activeTab === 'exam' ? 'an exam' : 'a live session'} to view the
+            leaderboard
           </p>
         </div>
       )}
     </div>
   )
 }
-

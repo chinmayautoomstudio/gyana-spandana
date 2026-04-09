@@ -144,6 +144,8 @@ const features = [
     description:
       "Track your team's progress with a live leaderboard. See rankings update in real-time as participants complete quizzes.",
     gradient: "hover:from-[#F39C12]/10 hover:to-[#E67E22]/10",
+    ctaHref: "/competition/leaderboard",
+    ctaLabel: "View competition leaderboard",
   },
   {
     icon: (
