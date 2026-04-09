@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { User } from '@supabase/supabase-js'
+import { parseSafeInternalRedirectPath } from '@/lib/auth/safe-redirect-path'
 
 export default async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -132,25 +133,33 @@ export default async function proxy(request: NextRequest) {
   ) {
     const role = await getUserRole(user)
 
-    // If admin, redirect to admin dashboard
+    // If admin, redirect to admin dashboard (or safe redirectedFrom under /admin)
     if (role === 'admin') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/admin'
-      return NextResponse.redirect(url)
+      const from = parseSafeInternalRedirectPath(
+        request.nextUrl.searchParams.get('redirectedFrom')
+      )
+      const fromPath = from?.split('?')[0] ?? ''
+      if (from && fromPath.startsWith('/admin')) {
+        return NextResponse.redirect(new URL(from, request.nextUrl.origin))
+      }
+      return NextResponse.redirect(new URL('/admin', request.nextUrl.origin))
     }
-    
+
     // For regular users, check if they have a participant record
     const { data: participant } = await supabase
       .from('participants')
       .select('id')
       .eq('user_id', user.id)
       .single()
-    
+
     if (participant) {
-      // User has completed registration, redirect to dashboard
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
+      const from = parseSafeInternalRedirectPath(
+        request.nextUrl.searchParams.get('redirectedFrom')
+      )
+      if (from) {
+        return NextResponse.redirect(new URL(from, request.nextUrl.origin))
+      }
+      return NextResponse.redirect(new URL('/dashboard', request.nextUrl.origin))
     }
     // No participant record: redirect to team creation to complete registration
     const url = request.nextUrl.clone()

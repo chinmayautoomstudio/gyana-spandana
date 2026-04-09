@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { loginSchema, type LoginFormData } from '@/lib/validations'
+import { resolvePostLoginRedirectPath } from '@/lib/auth/safe-redirect-path'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -102,13 +103,23 @@ export default function LoginForm() {
         // Fallback to user_metadata if profile doesn't exist
         const role = profile?.role || authData.user.user_metadata?.role || 'participant'
 
+        const redirectedFrom =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('redirectedFrom')
+            : null
+        const target = resolvePostLoginRedirectPath({
+          role,
+          redirectedFromParam: redirectedFrom,
+        })
+
         setLoginSuccess(true)
-        setIsSubmitting(false)
-        if (role === 'admin') {
-          router.push('/admin')
-        } else {
-          router.push('/dashboard')
-        }
+        await router.refresh()
+        router.replace(target)
+        window.setTimeout(() => {
+          if (window.location.pathname === '/login') {
+            window.location.assign(target)
+          }
+        }, 250)
       }
     } catch (error: any) {
       // Handle connection errors specifically
