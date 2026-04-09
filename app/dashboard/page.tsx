@@ -10,6 +10,73 @@ import { Input } from '@/components/ui/Input'
 import { resendInvitation, updateTeamAuthority } from '@/app/actions/team'
 import { ProfileCompletionModal } from '@/components/ui/ProfileCompletionModal'
 import { NotificationBell } from '@/components/admin/NotificationBell'
+import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton'
+import { updateExamStatuses } from '@/lib/utils/examScheduler'
+
+/** Single browser Supabase client per tab (avoids repeated client construction) */
+let browserSupabase: ReturnType<typeof createClient> | null = null
+function getSupabase() {
+  if (!browserSupabase) browserSupabase = createClient()
+  return browserSupabase
+}
+
+const EXAM_STATUS_SYNC_KEY = 'exam_statuses_synced_session'
+
+const PARTICIPANT_WITH_TEAM_SELECT = [
+  'id',
+  'user_id',
+  'name',
+  'email',
+  'phone',
+  'school_name',
+  'is_participant1',
+  'profile_completed',
+  'profile_photo_url',
+  'gender',
+  'date_of_birth',
+  'address',
+  'school_address',
+  'class',
+  'aadhar',
+  'created_at',
+  'team_id',
+  'email_verified',
+  'phone_verified',
+  'teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)',
+].join(', ')
+
+/** Row shape for participants select (explicit columns); avoids GenericStringError from dynamic select typing */
+type DashboardParticipantRow = {
+  id: string
+  user_id: string
+  name: string
+  email: string
+  phone: string
+  school_name: string
+  is_participant1: boolean
+  profile_completed: boolean
+  profile_photo_url: string | null
+  gender: string | null
+  date_of_birth: string | null
+  address: string | null
+  school_address: string | null
+  class: string | null
+  aadhar: string | null
+  created_at: string
+  team_id: string | null
+  email_verified?: boolean | null
+  phone_verified?: boolean | null
+  teams: {
+    team_name: string
+    team_code: string
+    created_at: string
+    status: string
+    p2_invited_email: string | null
+    authority_name: string | null
+    authority_email: string | null
+    authority_phone: string | null
+  } | null
+}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -49,7 +116,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const supabase = createClient()
+      const supabase = getSupabase()
 
       try {
         const {
@@ -63,26 +130,22 @@ export default function DashboardPage() {
 
         setUser(currentUser)
 
-        const [profileResult, participantResult] = await Promise.all([
-          supabase.from('user_profiles').select('role').eq('user_id', currentUser.id).single(),
+        const [{ data: profile }, { data: participantRaw }] = await Promise.all([
+          supabase.from('user_profiles').select('role').eq('user_id', currentUser.id).maybeSingle(),
           supabase
             .from('participants')
-            .select(
-              '*, teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)'
-            )
+            .select(PARTICIPANT_WITH_TEAM_SELECT)
             .eq('user_id', currentUser.id)
-            .single(),
+            .maybeSingle(),
         ])
+        const participant = participantRaw as DashboardParticipantRow | null
 
-        const role =
-          profileResult.data?.role || currentUser.user_metadata?.role || 'participant'
+        const role = profile?.role || currentUser.user_metadata?.role || 'participant'
 
         if (role === 'admin') {
           router.push('/admin')
           return
         }
-
-        const participant = participantResult.data
 
         if (!participant) {
           router.replace('/team/create')
@@ -91,48 +154,50 @@ export default function DashboardPage() {
 
         setParticipantData(participant)
 
-        if (!participant.profile_completed) {
-          if (typeof window !== 'undefined') {
-            const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
-            const hasModalBeenShown = localStorage.getItem(modalDismissedKey) === 'true'
-
-            if (!hasModalBeenShown) {
-              setShowProfileModal(true)
-            }
-          } else {
-            setShowProfileModal(true)
-          }
+        if (!participant.profile_completed && typeof window !== 'undefined') {
+          const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
+          const hasModalBeenShown = localStorage.getItem(modalDismissedKey) === 'true'
+          if (!hasModalBeenShown) setShowProfileModal(true)
         }
 
-        const teammatePromise = participant.team_id
-          ? supabase
-              .from('participants')
-              .select('name, email, school_name, is_participant1')
-              .eq('team_id', participant.team_id)
-              .neq('user_id', currentUser.id)
-              .single()
-          : Promise.resolve({ data: null as null })
+        const teammatePromise =
+          participant.team_id != null
+            ? supabase
+                .from('participants')
+                .select('name, email, school_name, is_participant1')
+                .eq('team_id', participant.team_id)
+                .neq('user_id', currentUser.id)
+                .maybeSingle()
+            : Promise.resolve({ data: null as { name: string; email: string; school_name: string; is_participant1: boolean } | null })
 
-        const examsPromise = (async () => {
-          try {
-            const { getAvailableExams } = await import('@/app/actions/exam')
-            return await getAvailableExams(participant.id)
-          } catch (error) {
-            console.error('Error fetching available exams count:', error)
-            return []
+        const examSyncPromise = (async () => {
+          if (typeof window !== 'undefined' && !sessionStorage.getItem(EXAM_STATUS_SYNC_KEY)) {
+            await updateExamStatuses(supabase)
+            sessionStorage.setItem(EXAM_STATUS_SYNC_KEY, '1')
           }
         })()
 
-        const [teammateRes, availableExams] = await Promise.all([teammatePromise, examsPromise])
+        const examsCountPromise = (async () => {
+          try {
+            const { getAvailableExams } = await import('@/app/actions/exam')
+            const availableExams = await getAvailableExams(participant.id)
+            return availableExams.length
+          } catch (e) {
+            console.error('Error fetching available exams count:', e)
+            return 0
+          }
+        })()
 
-        setTeammateData(teammateRes.data ?? null)
-        setAvailableExamsCount(availableExams.length)
+        const [{ data: teammate }, , count] = await Promise.all([teammatePromise, examSyncPromise, examsCountPromise])
+
+        setTeammateData(teammate ?? null)
+        setAvailableExamsCount(count)
       } finally {
         setLoading(false)
       }
     }
 
-    const timeoutId = setTimeout(() => setLoading(false), 12000)
+    const timeoutId = setTimeout(() => setLoading(false), 5000)
 
     fetchUser()
 
@@ -140,33 +205,31 @@ export default function DashboardPage() {
   }, [router])
 
   const handleLogout = async () => {
-    const supabase = createClient()
+    const supabase = getSupabase()
+    if (typeof window !== 'undefined') sessionStorage.removeItem(EXAM_STATUS_SYNC_KEY)
     await supabase.auth.signOut()
     router.push('/login')
   }
 
   const handleProfileComplete = async () => {
-    // Refresh participant data
-    const supabase = createClient()
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const supabase = getSupabase()
+    const uid = user?.id
+    if (!uid) return
 
-    if (currentUser) {
-      const { data: participant } = await supabase
-        .from('participants')
-        .select('*, teams(*)')
-        .eq('user_id', currentUser.id)
-        .single()
+    const { data: participant } = await supabase
+      .from('participants')
+      .select(PARTICIPANT_WITH_TEAM_SELECT)
+      .eq('user_id', uid)
+      .single()
 
-      if (participant) {
-        setParticipantData(participant)
-        setShowProfileModal(false)
-        setHasSkippedProfile(false)
+    if (participant) {
+      setParticipantData(participant)
+      setShowProfileModal(false)
+      setHasSkippedProfile(false)
 
-        // Save to localStorage so modal doesn't show again (profile is now completed)
-        if (typeof window !== 'undefined') {
-          const modalDismissedKey = `profile_modal_dismissed_${currentUser.id}`
-          localStorage.setItem(modalDismissedKey, 'true')
-        }
+      if (typeof window !== 'undefined') {
+        const modalDismissedKey = `profile_modal_dismissed_${uid}`
+        localStorage.setItem(modalDismissedKey, 'true')
       }
     }
   }
@@ -220,16 +283,15 @@ export default function DashboardPage() {
       return
     }
     setShowAuthorityForm(false)
-    const supabase = createClient()
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
-    if (currentUser) {
-      const { data: participant } = await supabase
-        .from('participants')
-        .select('*, teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)')
-        .eq('user_id', currentUser.id)
-        .single()
-      if (participant) setParticipantData(participant)
-    }
+    const supabase = getSupabase()
+    const uid = user?.id
+    if (!uid) return
+    const { data: participant } = await supabase
+      .from('participants')
+      .select(PARTICIPANT_WITH_TEAM_SELECT)
+      .eq('user_id', uid)
+      .single()
+    if (participant) setParticipantData(participant)
   }
 
   const handleResendInvitation = async () => {
@@ -279,14 +341,7 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#ECF0F1]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#C0392B] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your dashboard...</p>
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   return (
@@ -414,6 +469,7 @@ export default function DashboardPage() {
                         alt={participantData?.name || 'Profile'}
                         width={40}
                         height={40}
+                        unoptimized
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-white shadow-lg flex-shrink-0"
                       />
                     ) : (
@@ -504,6 +560,7 @@ export default function DashboardPage() {
                       alt={participantData?.name || 'Profile'}
                       width={128}
                       height={128}
+                      unoptimized
                       className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
                     />
                   </div>

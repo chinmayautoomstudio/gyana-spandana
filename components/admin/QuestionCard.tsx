@@ -5,7 +5,7 @@ import Link from 'next/link'
 
 export interface Question {
   id: string
-  exam_id: string
+  exam_id: string | null
   question_text: string
   option_a: string
   option_b: string

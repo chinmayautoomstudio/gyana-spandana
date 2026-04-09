@@ -195,6 +195,7 @@ export async function getParticipantPerformance(participantId: string): Promise<
     .select('*, exams(title), participants(name)')
     .eq('participant_id', participantId)
     .order('started_at', { ascending: false })
+    .limit(50)
 
   if (error) {
     throw new Error(`Failed to get participant performance: ${error.message}`)
@@ -296,7 +297,7 @@ export async function getTeamStats(teamId?: string): Promise<TeamStats[]> {
 
   let queryBuilder = supabase
     .from('team_scores')
-    .select('*, teams(team_name, team_code), exams(id)')
+    .select('team_id, total_team_score, rank, teams(team_name, team_code), exams(id)')
     .order('total_team_score', { ascending: false })
 
   if (teamId) {
@@ -309,15 +310,36 @@ export async function getTeamStats(teamId?: string): Promise<TeamStats[]> {
     throw new Error(`Failed to get team stats: ${error.message}`)
   }
 
-  // Get participant names for each team
-  const teamStatsPromises = (scores || []).map(async (score: any) => {
-    const { data: participants } = await supabase
-      .from('participants')
-      .select('name, is_participant1')
-      .eq('team_id', score.team_id)
+  const list = scores || []
+  const teamIds = [...new Set(list.map((s: any) => s.team_id).filter(Boolean))]
 
-    const p1 = participants?.find((p: any) => p.is_participant1)
-    const p2 = participants?.find((p: any) => !p.is_participant1)
+  let participantsByTeam = new Map<string, { name: string; is_participant1: boolean }[]>()
+  if (teamIds.length > 0) {
+    const { data: allParticipants, error: pErr } = await supabase
+      .from('participants')
+      .select('team_id, name, is_participant1')
+      .in('team_id', teamIds)
+
+    if (pErr) {
+      throw new Error(`Failed to load team participants: ${pErr.message}`)
+    }
+
+    for (const row of allParticipants || []) {
+      const tid = (row as any).team_id as string
+      if (!tid) continue
+      const arr = participantsByTeam.get(tid) || []
+      arr.push({
+        name: (row as any).name,
+        is_participant1: !!(row as any).is_participant1,
+      })
+      participantsByTeam.set(tid, arr)
+    }
+  }
+
+  return list.map((score: any) => {
+    const parts = participantsByTeam.get(score.team_id) || []
+    const p1 = parts.find((p) => p.is_participant1)
+    const p2 = parts.find((p) => !p.is_participant1)
 
     return {
       team_id: score.team_id,
@@ -329,8 +351,6 @@ export async function getTeamStats(teamId?: string): Promise<TeamStats[]> {
       rank: score.rank,
     }
   })
-
-  return Promise.all(teamStatsPromises)
 }
 
 /**

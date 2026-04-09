@@ -1,83 +1,76 @@
-'use client'
-
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { unstable_cache } from 'next/cache'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
+
+export const dynamic = 'force-dynamic'
 import { StatsCard } from '@/components/admin/StatsCard'
 import { RecentExamSessions } from '@/components/admin/RecentExamSessions'
 import { QuickLinkCard } from '@/components/admin/QuickLinkCard'
 import { Button } from '@/components/ui/Button'
 
-export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalQuestions: 0,
-    totalSessions: 0,
-    activeSessions: 0,
-    averageScore: 0,
-  })
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+type DashboardStats = {
+  totalQuestions: number
+  totalSessions: number
+  activeSessions: number
+  averageScore: number
+  totalParticipants: number
+  totalTeams: number
+  teamsRegistrationComplete: number
+  teamsRegistrationPending: number
+}
 
-  const fetchDashboardData = async () => {
-    const supabase = createClient()
+const getDashboardData = unstable_cache(
+  async (): Promise<DashboardStats> => {
+    const supabase = createAdminClient()
+    const [
+      { count: totalQuestions },
+      { count: totalSessions },
+      { count: activeSessions },
+      { data: scoreAggregate },
+      { count: totalParticipants },
+      { count: totalTeams },
+      { count: teamsRegistrationPending },
+    ] = await Promise.all([
+      supabase.from('questions').select('*', { count: 'exact', head: true }),
+      supabase.from('exam_attempts').select('*', { count: 'exact', head: true }),
+      supabase
+        .from('exam_attempts')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'in_progress'),
+      supabase
+        .from('admin_dashboard_score_avg')
+        .select('average_score')
+        .single(),
+      supabase.from('participants').select('*', { count: 'exact', head: true }),
+      supabase.from('teams').select('*', { count: 'exact', head: true }),
+      supabase
+        .from('teams')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending_p2'),
+    ])
 
-    // Fetch total questions count
-    const { count: totalQuestions } = await supabase
-      .from('questions')
-      .select('*', { count: 'exact', head: true })
+    const averageScore = scoreAggregate?.average_score ?? 0
 
-    // Fetch total sessions count (all exam attempts)
-    const { count: totalSessions } = await supabase
-      .from('exam_attempts')
-      .select('*', { count: 'exact', head: true })
+    const teamsTotal = totalTeams ?? 0
+    const teamsPending = teamsRegistrationPending ?? 0
 
-    // Fetch active sessions count (status = 'in_progress')
-    const { count: activeSessions } = await supabase
-      .from('exam_attempts')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'in_progress')
-
-    // Fetch average score from submitted attempts
-    const { data: submittedAttempts } = await supabase
-      .from('exam_attempts')
-      .select('score')
-      .eq('status', 'submitted')
-
-    const averageScore = submittedAttempts && submittedAttempts.length > 0
-      ? Math.round(
-          submittedAttempts.reduce((sum, attempt) => sum + (attempt.score || 0), 0) /
-          submittedAttempts.length
-        )
-      : 0
-
-    setStats({
-      totalQuestions: totalQuestions || 0,
-      totalSessions: totalSessions || 0,
-      activeSessions: activeSessions || 0,
+    return {
+      totalQuestions: totalQuestions ?? 0,
+      totalSessions: totalSessions ?? 0,
+      activeSessions: activeSessions ?? 0,
       averageScore,
-    })
-    setLoading(false)
-    setRefreshing(false)
-  }
+      totalParticipants: totalParticipants ?? 0,
+      totalTeams: teamsTotal,
+      teamsRegistrationComplete: Math.max(0, teamsTotal - teamsPending),
+      teamsRegistrationPending: teamsPending,
+    }
+  },
+  ['admin-dashboard-stats'],
+  { revalidate: 60 }
+)
 
-  useEffect(() => {
-    // Initial dashboard load
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchDashboardData()
-  }, [])
-
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchDashboardData()
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C0392B]"></div>
-      </div>
-    )
-  }
+export default async function AdminDashboard() {
+  const stats = await getDashboardData()
 
   return (
     <div className="space-y-6">
@@ -88,18 +81,14 @@ export default function AdminDashboard() {
           <p className="text-gray-600 mt-1 text-xs sm:text-sm lg:text-base">Overview of your exam system.</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={handleRefresh}
-            isLoading={refreshing}
-            className="text-xs sm:text-sm"
-          >
-            <svg className="w-4 h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
+          <Link href="/admin" className="flex-shrink-0">
+            <Button variant="outline" size="md" className="text-xs sm:text-sm">
+              <svg className="w-4 h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </Link>
           <Link href="/admin/exams/new" className="flex-shrink-0">
             <Button variant="primary" size="md" className="bg-teal-600 hover:bg-teal-700 focus:ring-teal-500 text-xs sm:text-sm">
               <svg className="w-4 h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -150,6 +139,40 @@ export default function AdminDashboard() {
         />
       </div>
 
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-900">Registration</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-fr">
+          <StatsCard
+            title="Registered participants"
+            value={stats.totalParticipants}
+            icon="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+            color="indigo"
+            href="/admin/participants"
+          />
+          <StatsCard
+            title="Total teams"
+            value={stats.totalTeams}
+            icon="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+            color="orange"
+            href="/admin/teams"
+          />
+          <StatsCard
+            title="Registration complete"
+            value={stats.teamsRegistrationComplete}
+            icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            color="green"
+            subtitle="Both members registered"
+          />
+          <StatsCard
+            title="Registration incomplete"
+            value={stats.teamsRegistrationPending}
+            icon="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            color="yellow"
+            subtitle="Awaiting participant 2"
+          />
+        </div>
+      </div>
+
       {/* Recent Exam Sessions Table */}
       <RecentExamSessions />
 
@@ -159,7 +182,7 @@ export default function AdminDashboard() {
           icon="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
           title="Question Bank"
           description="Manage your question database and create new questions."
-          href="/admin/exams"
+          href="/admin/questions"
           linkText="Manage Questions"
         />
         <QuickLinkCard

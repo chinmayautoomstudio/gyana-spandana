@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Chart } from '@/components/admin/Chart'
+import dynamic from 'next/dynamic'
+
+const Chart = dynamic(() => import('@/components/admin/Chart').then((m) => m.Chart), { ssr: false })
 
 interface QuestionStats {
   question_id: string

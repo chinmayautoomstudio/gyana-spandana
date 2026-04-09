@@ -1,7 +1,4 @@
-'use client'
-
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { format } from 'date-fns'
 
@@ -16,51 +13,51 @@ interface ExamSession {
   exam_id: string
 }
 
-export function RecentExamSessions() {
-  const [sessions, setSessions] = useState<ExamSession[]>([])
-  const [loading, setLoading] = useState(true)
+export async function RecentExamSessions() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  useEffect(() => {
-    const fetchRecentSessions = async () => {
-      const supabase = createClient()
-      
-      const { data, error } = await supabase
-        .from('exam_attempts')
-        .select(`
-          id,
-          status,
-          score,
-          started_at,
-          exam_id,
-          participant:participants(name, email),
-          exam:exams(title)
-        `)
-        .order('started_at', { ascending: false })
-        .limit(10)
+  // No session (e.g. prerender/build): avoid querying under anon — matches /api/admin/stats pattern.
+  if (!user) {
+    return (
+      <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-4 sm:p-6">
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-sm">No exam sessions yet</p>
+        </div>
+      </div>
+    )
+  }
 
-      if (error) {
-        console.error('Error fetching recent sessions:', error)
-        setLoading(false)
-        return
-      }
+  const { data, error } = await supabase
+    .from('exam_attempts')
+    .select(`
+      id,
+      status,
+      score,
+      started_at,
+      exam_id,
+      participant:participants(name, email),
+      exam:exams(title)
+    `)
+    .order('started_at', { ascending: false })
+    .limit(10)
 
-      const transformedSessions: ExamSession[] = (data || []).map((attempt: any) => ({
-        id: attempt.id,
-        participant_name: attempt.participant?.name || 'Unknown',
-        participant_email: attempt.participant?.email || '',
-        exam_title: attempt.exam?.title || 'Unknown Exam',
-        status: attempt.status,
-        score: attempt.score,
-        started_at: attempt.started_at,
-        exam_id: attempt.exam_id,
-      }))
+  if (error) {
+    console.error('Error fetching recent sessions:', error)
+  }
 
-      setSessions(transformedSessions)
-      setLoading(false)
-    }
-
-    fetchRecentSessions()
-  }, [])
+  const sessions: ExamSession[] = (data || []).map((attempt: any) => ({
+    id: attempt.id,
+    participant_name: attempt.participant?.name || 'Unknown',
+    participant_email: attempt.participant?.email || '',
+    exam_title: attempt.exam?.title || 'Unknown Exam',
+    status: attempt.status,
+    score: attempt.score,
+    started_at: attempt.started_at,
+    exam_id: attempt.exam_id,
+  }))
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
@@ -74,16 +71,6 @@ export function RecentExamSessions() {
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.className}`}>
         {config.label}
       </span>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg p-6">
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#C0392B]"></div>
-        </div>
-      </div>
     )
   }
 

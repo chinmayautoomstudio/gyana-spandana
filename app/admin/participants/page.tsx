@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { DataTable } from '@/components/admin/DataTable'
 import { FilterBar } from '@/components/admin/FilterBar'
 import { ExportButton } from '@/components/admin/ExportButton'
+import { BulkDeleteParticipantsModal } from '@/components/admin/BulkDeleteParticipantsModal'
 import { Button } from '@/components/ui/Button'
 import { format } from 'date-fns'
 import { deleteParticipant } from '@/app/actions/admin'
@@ -29,7 +30,9 @@ export default function ParticipantsPage() {
   const [teamFilter, setTeamFilter] = useState('')
   const [schoolFilter, setSchoolFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
@@ -64,6 +67,8 @@ export default function ParticipantsPage() {
     return true
   })
 
+  const hasActiveFilters = Boolean(teamFilter || schoolFilter || roleFilter)
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -76,12 +81,29 @@ export default function ParticipantsPage() {
     {
       key: 'name',
       header: 'Name',
-      render: (p: Participant) => p.name,
+      render: (p: Participant) => (
+        <Link
+          href={`/admin/participants/${p.id}`}
+          className="font-medium text-[#C0392B] hover:underline focus:outline-none focus:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {p.name}
+        </Link>
+      ),
+      sortable: true,
+    },
+    {
+      key: 'teams.team_name',
+      header: 'Team name',
+      allowWrap: true,
+      cellMaxWidthClass: 'max-w-[10rem] sm:max-w-[13rem]',
+      render: (p: Participant) => p.teams?.team_name || 'N/A',
       sortable: true,
     },
     {
       key: 'email',
       header: 'Email',
+      allowWrap: true,
       render: (p: Participant) => p.email,
       sortable: true,
     },
@@ -94,13 +116,8 @@ export default function ParticipantsPage() {
     {
       key: 'school_name',
       header: 'School',
+      allowWrap: true,
       render: (p: Participant) => p.school_name,
-      sortable: true,
-    },
-    {
-      key: 'teams.team_name',
-      header: 'Team',
-      render: (p: Participant) => p.teams?.team_name || 'N/A',
       sortable: true,
     },
     {
@@ -126,73 +143,120 @@ export default function ParticipantsPage() {
           : 'No',
       sortable: true,
     },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (p: Participant) => (
-        <div className="flex items-center gap-2">
-          <Link href={`/admin/participants/${p.id}`}>
-            <Button variant="outline" size="sm">
-              View
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-red-600 border-red-200 hover:bg-red-50"
-            onClick={() => handleDeleteParticipant(p)}
-            disabled={deletingId === p.id}
-            isLoading={deletingId === p.id}
-          >
-            Delete
-          </Button>
-        </div>
-      ),
-      sortable: false,
-    },
   ]
 
-  const handleDeleteParticipant = async (p: Participant) => {
-    if (!window.confirm(`Delete participant "${p.name}" (${p.email})? This will remove their exam attempts and assignments. This cannot be undone.`)) return
-    setDeletingId(p.id)
+  const openBulkDeleteModal = () => {
+    if (selectedIds.size === 0 || bulkDeleting) return
+    setBulkDeleteModalOpen(true)
+  }
+
+  const executeBulkDelete = async () => {
+    const selected = participants.filter((p) => selectedIds.has(p.id))
+    if (selected.length === 0) {
+      setBulkDeleteModalOpen(false)
+      return
+    }
+
+    setBulkDeleting(true)
     setMessage(null)
-    const result = await deleteParticipant(p.id)
-    setDeletingId(null)
-    if (result.success) {
-      setMessage({ type: 'success', text: 'Participant deleted.' })
-      setParticipants((prev) => prev.filter((x) => x.id !== p.id))
-    } else {
-      setMessage({ type: 'error', text: result.error })
+
+    try {
+      const results = await Promise.all(
+        selected.map(async (p) => {
+          const result = await deleteParticipant(p.id)
+          return { id: p.id, ...result }
+        }),
+      )
+
+      const failed = results.filter((r) => !r.success)
+      const deletedIds = results.filter((r) => r.success).map((r) => r.id)
+
+      if (deletedIds.length > 0) {
+        setParticipants((prev) => prev.filter((p) => !deletedIds.includes(p.id)))
+        setSelectedIds(new Set())
+      }
+
+      if (failed.length > 0) {
+        setMessage({
+          type: 'error',
+          text:
+            failed.length === results.length
+              ? 'Failed to delete the selected participants. Please try again.'
+              : 'Some participants could not be deleted. The list has been updated with the successfully deleted records.',
+        })
+      } else if (deletedIds.length > 0) {
+        setMessage({
+          type: 'success',
+          text:
+            deletedIds.length === 1
+              ? 'Participant deleted successfully.'
+              : `${deletedIds.length} participants deleted successfully.`,
+        })
+      }
+    } finally {
+      setBulkDeleting(false)
+      setBulkDeleteModalOpen(false)
     }
   }
 
   const exportData = filteredParticipants.map(p => ({
     'Name': p.name,
+    'Team name': p.teams?.team_name || 'N/A',
     'Email': p.email,
     'Phone': p.phone,
     'School': p.school_name,
-    'Team': p.teams?.team_name || 'N/A',
     'Role': p.is_participant1 ? 'Participant 1' : 'Participant 2',
   }))
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Participants</h1>
-        <ExportButton
-          data={exportData}
-          filename="participants"
-          exportType="both"
-          pdfTitle="Participants List"
-          columns={[
-            { header: 'Name', dataKey: 'Name' },
-            { header: 'Email', dataKey: 'Email' },
-            { header: 'Phone', dataKey: 'Phone' },
-            { header: 'School', dataKey: 'School' },
-            { header: 'Team', dataKey: 'Team' },
-            { header: 'Role', dataKey: 'Role' },
-          ]}
-        />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Participants</h1>
+          <p className="text-sm text-gray-600 mt-1">
+            <span className="font-medium text-gray-900">{participants.length}</span> registered
+            participant{participants.length !== 1 ? 's' : ''}
+            {hasActiveFilters && (
+              <>
+                {' '}
+                · <span className="font-medium text-gray-900">{filteredParticipants.length}</span>{' '}
+                match current filters
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 justify-end">
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-sm text-gray-600 hidden sm:inline">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={openBulkDeleteModal}
+                disabled={bulkDeleting}
+              >
+                Delete selected
+              </Button>
+            </>
+          )}
+          <ExportButton
+            data={exportData}
+            filename="participants"
+            exportType="both"
+            pdfTitle="Participants List"
+            columns={[
+              { header: 'Name', dataKey: 'Name' },
+              { header: 'Team name', dataKey: 'Team name' },
+              { header: 'Email', dataKey: 'Email' },
+              { header: 'Phone', dataKey: 'Phone' },
+              { header: 'School', dataKey: 'School' },
+              { header: 'Role', dataKey: 'Role' },
+            ]}
+          />
+        </div>
       </div>
 
       {message && (
@@ -243,6 +307,31 @@ export default function ParticipantsPage() {
         columns={columns}
         searchable
         searchPlaceholder="Search by name, email, school, or team..."
+        belowSearch={
+          <p className="text-sm text-gray-600">
+            Total registered participants:{' '}
+            <span className="font-medium text-gray-900">{participants.length}</span>
+          </p>
+        }
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        getRowId={(p: Participant) => p.id}
+      />
+
+      <BulkDeleteParticipantsModal
+        open={bulkDeleteModalOpen}
+        participants={participants
+          .filter((p) => selectedIds.has(p.id))
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            email: p.email,
+            team_name: p.teams?.team_name || 'N/A',
+          }))}
+        isDeleting={bulkDeleting}
+        onCancel={() => !bulkDeleting && setBulkDeleteModalOpen(false)}
+        onConfirm={() => void executeBulkDelete()}
       />
     </div>
   )

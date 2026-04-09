@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { KebabMenu } from '@/components/ui/KebabMenu'
 import { deleteTeam } from '@/app/actions/admin'
 import { format } from 'date-fns'
+import { BulkDeleteTeamsModal } from '@/components/admin/BulkDeleteTeamsModal'
 
 interface TeamRow {
   id: string
@@ -28,6 +29,7 @@ export default function AdminTeamsPage() {
   const [remindingId, setRemindingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
 
   const fetchTeams = async () => {
     const supabase = createClient()
@@ -68,6 +70,12 @@ export default function AdminTeamsPage() {
   useEffect(() => {
     void fetchTeams()
   }, [])
+
+  useEffect(() => {
+    if (message?.type !== 'success') return
+    const timer = window.setTimeout(() => setMessage(null), 2000)
+    return () => window.clearTimeout(timer)
+  }, [message])
 
   const handleSendReminder = async (team: TeamRow) => {
     if (team.status !== 'pending_p2' || !team.p2_invited_email) {
@@ -114,55 +122,58 @@ export default function AdminTeamsPage() {
     }
   }
 
-  const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) return
+  const openBulkDeleteModal = () => {
+    if (selectedIds.size === 0 || bulkDeleting) return
+    setBulkDeleteModalOpen(true)
+  }
+
+  const executeBulkDelete = async () => {
     const selectedTeams = teams.filter((t) => selectedIds.has(t.id))
-    if (selectedTeams.length === 0) return
-
-    const confirmMessage =
-      selectedTeams.length === 1
-        ? `Delete team "${selectedTeams[0].team_name}" (${selectedTeams[0].team_code})? This will also remove its participant(s) and their exam data. This cannot be undone.`
-        : `Delete ${selectedTeams.length} teams? This will also remove their participants and exam data. This cannot be undone.`
-
-    if (!window.confirm(confirmMessage)) return
+    if (selectedTeams.length === 0) {
+      setBulkDeleteModalOpen(false)
+      return
+    }
 
     setBulkDeleting(true)
     setMessage(null)
 
-    const results = await Promise.all(
-      selectedTeams.map(async (team) => {
-        const result = await deleteTeam(team.id)
-        return { id: team.id, ...result }
-      }),
-    )
+    try {
+      const results = await Promise.all(
+        selectedTeams.map(async (team) => {
+          const result = await deleteTeam(team.id)
+          return { id: team.id, ...result }
+        }),
+      )
 
-    const failed = results.filter((r) => !r.success)
-    const deletedIds = results.filter((r) => r.success).map((r) => r.id)
+      const failed = results.filter((r) => !r.success)
+      const deletedIds = results.filter((r) => r.success).map((r) => r.id)
 
-    if (deletedIds.length > 0) {
-      setTeams((prev) => prev.filter((t) => !deletedIds.includes(t.id)))
-      setSelectedIds(new Set())
+      if (deletedIds.length > 0) {
+        setTeams((prev) => prev.filter((t) => !deletedIds.includes(t.id)))
+        setSelectedIds(new Set())
+      }
+
+      if (failed.length > 0) {
+        setMessage({
+          type: 'error',
+          text:
+            failed.length === results.length
+              ? 'Failed to delete the selected teams. Please try again.'
+              : 'Some teams could not be deleted. The list has been updated with the successfully deleted teams.',
+        })
+      } else if (deletedIds.length > 0) {
+        setMessage({
+          type: 'success',
+          text:
+            deletedIds.length === 1
+              ? 'Team deleted successfully.'
+              : `${deletedIds.length} teams deleted successfully.`,
+        })
+      }
+    } finally {
+      setBulkDeleting(false)
+      setBulkDeleteModalOpen(false)
     }
-
-    if (failed.length > 0) {
-      setMessage({
-        type: 'error',
-        text:
-          failed.length === results.length
-            ? 'Failed to delete the selected teams. Please try again.'
-            : 'Some teams could not be deleted. The list has been updated with the successfully deleted teams.',
-      })
-    } else if (deletedIds.length > 0) {
-      setMessage({
-        type: 'success',
-        text:
-          deletedIds.length === 1
-            ? 'Team deleted successfully.'
-            : `${deletedIds.length} teams deleted successfully.`,
-      })
-    }
-
-    setBulkDeleting(false)
   }
 
   if (loading) {
@@ -189,6 +200,8 @@ export default function AdminTeamsPage() {
     {
       key: 'status',
       header: 'Status',
+      getSearchText: (t: TeamRow) =>
+        `${t.status} ${t.status === 'complete' ? 'Complete' : 'Pending P2'}`,
       render: (t: TeamRow) => (
         <span
           className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -209,6 +222,7 @@ export default function AdminTeamsPage() {
     {
       key: 'p2_invited_email',
       header: 'Participant 2 email',
+      getSearchText: (t: TeamRow) => t.p2_invited_email || '',
       render: (t: TeamRow) =>
         t.status === 'pending_p2' && t.p2_invited_email ? (
           <span className="text-sm text-gray-800">{t.p2_invited_email}</span>
@@ -220,6 +234,8 @@ export default function AdminTeamsPage() {
     {
       key: 'created_at',
       header: 'Created',
+      getSearchText: (t: TeamRow) =>
+        `${format(new Date(t.created_at), 'MMM d, yyyy')} ${t.created_at}`,
       render: (t: TeamRow) => format(new Date(t.created_at), 'MMM d, yyyy'),
       sortable: true,
     },
@@ -267,9 +283,8 @@ export default function AdminTeamsPage() {
               variant="outline"
               size="sm"
               className="text-red-600 border-red-200 hover:bg-red-50"
-              onClick={handleBulkDelete}
+              onClick={openBulkDeleteModal}
               disabled={bulkDeleting}
-              isLoading={bulkDeleting}
             >
               Delete selected
             </Button>
@@ -293,11 +308,25 @@ export default function AdminTeamsPage() {
         data={teams}
         columns={columns}
         searchable
-        searchPlaceholder="Search by team name or code..."
+        searchPlaceholder="Search by team name, code, status, email, or date..."
+        belowSearch={
+          <p className="text-sm text-gray-600">
+            Total teams registered:{' '}
+            <span className="font-medium text-gray-900">{teams.length}</span>
+          </p>
+        }
         selectable
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         getRowId={(team: TeamRow) => team.id}
+      />
+
+      <BulkDeleteTeamsModal
+        open={bulkDeleteModalOpen}
+        teams={teams.filter((t) => selectedIds.has(t.id))}
+        isDeleting={bulkDeleting}
+        onCancel={() => !bulkDeleting && setBulkDeleteModalOpen(false)}
+        onConfirm={() => void executeBulkDelete()}
       />
     </div>
   )
