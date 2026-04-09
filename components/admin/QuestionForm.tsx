@@ -29,11 +29,14 @@ export function QuestionForm({
 }: QuestionFormProps) {
   const [formData, setFormData] = useState({
     question_text: question?.question_text || '',
+    question_type: (question?.question_type || 'mcq') as 'mcq' | 'true_false' | 'visual_image' | 'visual_video',
+    media_url: question?.media_url || '',
     option_a: question?.option_a || '',
     option_b: question?.option_b || '',
     option_c: question?.option_c || '',
     option_d: question?.option_d || '',
     correct_answer: (question?.correct_answer || 'A') as 'A' | 'B' | 'C' | 'D',
+    correct_answer_tf: (question?.correct_answer_tf || 'TRUE') as 'TRUE' | 'FALSE',
     points: question?.points || 1,
     explanation: question?.explanation || '',
     category: question?.category || '',
@@ -86,11 +89,14 @@ export function QuestionForm({
 
       const questionData: any = {
         question_text: formData.question_text,
-        option_a: formData.option_a,
-        option_b: formData.option_b,
-        option_c: formData.option_c,
-        option_d: formData.option_d,
-        correct_answer: formData.correct_answer,
+        question_type: formData.question_type,
+        media_url: formData.media_url || null,
+        option_a: formData.question_type === 'true_false' ? null : formData.option_a,
+        option_b: formData.question_type === 'true_false' ? null : formData.option_b,
+        option_c: formData.question_type === 'true_false' ? null : formData.option_c,
+        option_d: formData.question_type === 'true_false' ? null : formData.option_d,
+        correct_answer: formData.question_type === 'true_false' ? 'A' : formData.correct_answer,
+        correct_answer_tf: formData.question_type === 'true_false' ? formData.correct_answer_tf : null,
         points: formData.points,
         explanation: formData.explanation || null,
         category: formData.category || null,
@@ -178,6 +184,48 @@ export function QuestionForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Question Type *</label>
+            <select
+              value={formData.question_type}
+              onChange={(e) => {
+                markTouched()
+                const nextType = e.target.value as 'mcq' | 'true_false' | 'visual_image' | 'visual_video'
+                setFormData({
+                  ...formData,
+                  question_type: nextType,
+                  option_a: nextType === 'true_false' ? '' : formData.option_a,
+                  option_b: nextType === 'true_false' ? '' : formData.option_b,
+                  option_c: nextType === 'true_false' ? '' : formData.option_c,
+                  option_d: nextType === 'true_false' ? '' : formData.option_d,
+                })
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+              required
+            >
+              <option value="mcq">MCQ</option>
+              <option value="true_false">True/False</option>
+              <option value="visual_image">Visual (Image)</option>
+              <option value="visual_video">Visual (Video)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Media URL (optional)</label>
+            <input
+              type="url"
+              value={formData.media_url}
+              onChange={(e) => {
+                markTouched()
+                setFormData({ ...formData, media_url: e.target.value })
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+              placeholder="https://..."
+            />
+          </div>
+        </div>
+
+        {formData.question_type !== 'true_false' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Option A *</label>
             <input
               type="text"
@@ -229,25 +277,41 @@ export function QuestionForm({
               required
             />
           </div>
-        </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer *</label>
-            <select
-              value={formData.correct_answer}
-              onChange={(e) => {
-                markTouched()
-                setFormData({ ...formData, correct_answer: e.target.value as 'A' | 'B' | 'C' | 'D' })
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
-              required
-            >
-              <option value="A">Option A</option>
-              <option value="B">Option B</option>
-              <option value="C">Option C</option>
-              <option value="D">Option D</option>
-            </select>
+            {formData.question_type === 'true_false' ? (
+              <select
+                value={formData.correct_answer_tf}
+                onChange={(e) => {
+                  markTouched()
+                  setFormData({ ...formData, correct_answer_tf: e.target.value as 'TRUE' | 'FALSE' })
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                required
+              >
+                <option value="TRUE">TRUE</option>
+                <option value="FALSE">FALSE</option>
+              </select>
+            ) : (
+              <select
+                value={formData.correct_answer}
+                onChange={(e) => {
+                  markTouched()
+                  setFormData({ ...formData, correct_answer: e.target.value as 'A' | 'B' | 'C' | 'D' })
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                required
+              >
+                <option value="A">Option A</option>
+                <option value="B">Option B</option>
+                <option value="C">Option C</option>
+                <option value="D">Option D</option>
+              </select>
+            )}
           </div>
           <div>
             <Input

@@ -11,7 +11,10 @@ export interface Question {
   option_b: string
   option_c: string
   option_d: string
-  correct_answer: 'A' | 'B' | 'C' | 'D'
+  correct_answer: 'A' | 'B' | 'C' | 'D' | string
+  question_type?: 'mcq' | 'true_false' | 'visual_image' | 'visual_video' | null
+  media_url?: string | null
+  correct_answer_tf?: 'TRUE' | 'FALSE' | null
   points: number
   explanation: string | null
   order_index: number | null
@@ -179,30 +182,41 @@ export function QuestionCard({
         </div>
       </div>
 
-      <div className={`grid grid-cols-1 ${compact ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-3 mb-4`}>
-        {['A', 'B', 'C', 'D'].map((option) => {
-          const optionKey = `option_${option.toLowerCase()}` as keyof Question
-          const optionText = question[optionKey] as string
-          const isCorrect = question.correct_answer === option
+      {question.question_type === 'true_false' ? (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          Type: True/False
+          {question.correct_answer_tf && (
+            <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+              Correct: {question.correct_answer_tf}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className={`grid grid-cols-1 ${compact ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-3 mb-4`}>
+          {['A', 'B', 'C', 'D'].map((option) => {
+            const optionKey = `option_${option.toLowerCase()}` as keyof Question
+            const optionText = question[optionKey] as string
+            const isCorrect = question.correct_answer === option
 
-          return (
-            <div
-              key={option}
-              className={`p-3 rounded-lg border ${
-                isCorrect ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-gray-700">{option}.</span>
-                {isCorrect && (
-                  <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">Correct</span>
-                )}
+            return (
+              <div
+                key={option}
+                className={`p-3 rounded-lg border ${
+                  isCorrect ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium text-gray-700">{option}.</span>
+                  {isCorrect && (
+                    <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">Correct</span>
+                  )}
+                </div>
+                <p className={`text-gray-900 ${compact ? 'text-sm' : ''}`}>{optionText}</p>
               </div>
-              <p className={`text-gray-900 ${compact ? 'text-sm' : ''}`}>{optionText}</p>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-4 text-sm text-gray-600">

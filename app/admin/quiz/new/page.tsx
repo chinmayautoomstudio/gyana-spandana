@@ -25,9 +25,10 @@ interface QuestionSet {
 }
 
 interface RoundConfig {
-  round_type: 'direct_question'
+  round_type: 'direct_question' | 'true_or_false'
   title: string
   question_set_id: string
+  true_false_mode?: 'directed' | 'buzzer'
 }
 
 export default function NewQuizSessionPage() {
@@ -251,6 +252,27 @@ export default function NewQuizSessionPage() {
                 onChange={(e) => updateRound(index, { title: e.target.value })}
                 required
               />
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">Round type</label>
+                <select
+                  value={round.round_type}
+                  onChange={(e) => {
+                    const nextType = e.target.value as RoundConfig['round_type']
+                    updateRound(index, {
+                      round_type: nextType,
+                      title:
+                        nextType === 'true_or_false'
+                          ? round.title || `True/False Round ${index + 1}`
+                          : round.title || `Direct Question Round ${index + 1}`,
+                      true_false_mode: nextType === 'true_or_false' ? 'directed' : undefined,
+                    })
+                  }}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900"
+                >
+                  <option value="direct_question">Direct Question</option>
+                  <option value="true_or_false">True/False (Directed)</option>
+                </select>
+              </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">Question set</label>
                 <select

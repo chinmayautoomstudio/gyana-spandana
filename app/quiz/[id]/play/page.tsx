@@ -26,6 +26,7 @@ export default function ParticipantPlayPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [myTeamLabel, setMyTeamLabel] = useState<TeamLabel | null>(null)
+  const [selectedTrueFalse, setSelectedTrueFalse] = useState<'TRUE' | 'FALSE' | null>(null)
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
@@ -88,6 +89,10 @@ export default function ParticipantPlayPage() {
     } as Record<TeamLabel, string>
   }, [state?.session?.team_slots])
 
+  useEffect(() => {
+    setSelectedTrueFalse(null)
+  }, [state?.currentQuestionEvent?.id])
+
   if (loading) {
     return <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-600">Loading session...</div>
   }
@@ -125,7 +130,13 @@ export default function ParticipantPlayPage() {
           )}
         </div>
 
-        <QuestionDisplay question={state.currentQuestion} showOptions={showOptions} readOnly={!isMyTurn} />
+        <QuestionDisplay
+          question={state.currentQuestion}
+          showOptions={showOptions}
+          readOnly={!isMyTurn}
+          selectedTrueFalse={selectedTrueFalse}
+          onTrueFalseSelect={setSelectedTrueFalse}
+        />
       </div>
     </div>
   )
