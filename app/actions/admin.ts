@@ -355,6 +355,203 @@ export async function inviteAdmin(
 }
 
 /**
+ * Create host account directly
+ */
+export async function createHostDirect(
+  email: string,
+  name: string,
+  password: string
+): Promise<{ success: boolean; error: string | null; userId?: string }> {
+  try {
+    await requireAdmin()
+
+    if (!email || !email.includes('@')) {
+      return { success: false, error: 'Invalid email address' }
+    }
+    if (!name || name.trim().length < 2) {
+      return { success: false, error: 'Name must be at least 2 characters' }
+    }
+    if (!password || password.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters' }
+    }
+
+    const adminClient = createAdminClient()
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find((u) => u.email === email)
+
+    if (existingUser) {
+      const { data: existingProfile } = await adminClient
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', existingUser.id)
+        .maybeSingle()
+
+      if (existingProfile?.role === 'admin') {
+        return {
+          success: false,
+          error: 'User is an admin. Demote from admin first if they should only be a host.',
+        }
+      }
+
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
+        user_metadata: {
+          name,
+          role: 'host',
+        },
+      })
+
+      if (updateError) {
+        return { success: false, error: updateError.message }
+      }
+
+      const { error: profileError } = await adminClient
+        .from('user_profiles')
+        .upsert(
+          {
+            user_id: existingUser.id,
+            role: 'host',
+            name,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        )
+
+      if (profileError) {
+        return { success: false, error: `User updated but profile update failed: ${profileError.message}` }
+      }
+
+      return { success: true, error: null, userId: existingUser.id }
+    }
+
+    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name,
+        role: 'host',
+      },
+    })
+
+    if (createError) {
+      return { success: false, error: createError.message }
+    }
+
+    if (!newUser.user) {
+      return { success: false, error: 'User creation failed: No user data returned' }
+    }
+
+    const { error: profileError } = await adminClient.from('user_profiles').insert({
+      user_id: newUser.user.id,
+      role: 'host',
+      name,
+    })
+
+    if (profileError) {
+      return { success: false, error: `User created but profile creation failed: ${profileError.message}` }
+    }
+
+    return { success: true, error: null, userId: newUser.user.id }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to create host' }
+  }
+}
+
+/**
+ * Invite host via email
+ */
+export async function inviteHost(
+  email: string,
+  name: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    await requireAdmin()
+
+    if (!email || !email.includes('@')) {
+      return { success: false, error: 'Invalid email address' }
+    }
+    if (!name || name.trim().length < 2) {
+      return { success: false, error: 'Name must be at least 2 characters' }
+    }
+
+    const adminClient = createAdminClient()
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find((u) => u.email === email)
+
+    if (existingUser) {
+      const { data: existingProfile } = await adminClient
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', existingUser.id)
+        .maybeSingle()
+
+      if (existingProfile?.role === 'admin') {
+        return {
+          success: false,
+          error: 'User is an admin. Demote from admin first if they should only be a host.',
+        }
+      }
+
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
+        user_metadata: {
+          name,
+          role: 'host',
+        },
+      })
+
+      if (updateError) {
+        return { success: false, error: updateError.message }
+      }
+
+      const { error: profileError } = await adminClient
+        .from('user_profiles')
+        .upsert(
+          {
+            user_id: existingUser.id,
+            role: 'host',
+            name,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        )
+
+      if (profileError) {
+        return { success: false, error: `User updated but profile update failed: ${profileError.message}` }
+      }
+
+      return { success: true, error: null }
+    }
+
+    const { data: invitedUser, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: {
+        name,
+        role: 'host',
+      },
+    })
+
+    if (inviteError) {
+      return { success: false, error: inviteError.message }
+    }
+
+    if (invitedUser?.user?.id) {
+      await adminClient.from('user_profiles').upsert(
+        {
+          user_id: invitedUser.user.id,
+          role: 'host',
+          name,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      )
+    }
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to invite host' }
+  }
+}
+
+/**
  * Remove admin role (convert to participant)
  */
 export async function removeAdmin(userId: string): Promise<{ success: boolean; error: string | null }> {
