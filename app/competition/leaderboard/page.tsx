@@ -58,7 +58,7 @@ function CompetitionLeaderboardInner() {
   )
 
   return (
-    <div className="p-4 lg:p-8">
+    <div className="p-4 lg:p-8" style={{ marginTop: '80px' }}>
       <PublicExamLeaderboard
         selectedExamId={selectedExamId}
         exams={exams}
