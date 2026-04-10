@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
+import { usePostgresLeaderboardRealtime } from '@/lib/hooks/usePostgresLeaderboardRealtime'
 
 type HostSession = {
   id: string
@@ -13,18 +14,58 @@ type HostSession = {
   created_at: string
 }
 
+type HostViewer = {
+  id: string
+  role: 'admin' | 'host'
+}
+
+async function fetchSessionsForViewer(
+  client: ReturnType<typeof createClient>,
+  viewer: HostViewer,
+): Promise<{ rows: HostSession[]; errorMessage: string | null }> {
+  let query = client
+    .from('quiz_live_sessions')
+    .select('id, title, status, created_at')
+    .order('created_at', { ascending: false })
+
+  if (viewer.role === 'host') {
+    query = query.eq('assigned_host_id', viewer.id)
+  }
+
+  const { data, error } = await query
+  if (error) {
+    return { rows: [], errorMessage: error.message }
+  }
+  return { rows: (data ?? []) as HostSession[], errorMessage: null }
+}
+
 export default function HostDashboardPage() {
   const router = useRouter()
+  const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
   const [sessions, setSessions] = useState<HostSession[]>([])
   const [error, setError] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<'admin' | 'host' | null>(null)
+  const [viewer, setViewer] = useState<HostViewer | null>(null)
+
+  const fetchSessions = useCallback(async () => {
+    if (!viewer) return
+    const result = await fetchSessionsForViewer(supabase, viewer)
+    if (result.errorMessage) {
+      setError(result.errorMessage)
+      setSessions([])
+    } else {
+      setError(null)
+      setSessions(result.rows)
+    }
+  }, [supabase, viewer])
 
   useEffect(() => {
+    let cancelled = false
+
     const load = async () => {
       setLoading(true)
       setError(null)
-      const supabase = createClient()
 
       const {
         data: { user },
@@ -47,29 +88,44 @@ export default function HostDashboardPage() {
         return
       }
 
-      setUserRole(role === 'admin' ? 'admin' : 'host')
+      const nextRole = role === 'admin' ? 'admin' : 'host'
+      const v: HostViewer = { id: user.id, role: nextRole }
 
-      let query = supabase
-        .from('quiz_live_sessions')
-        .select('id, title, status, created_at')
-        .order('created_at', { ascending: false })
+      const result = await fetchSessionsForViewer(supabase, v)
+      if (cancelled) return
 
-      if (role === 'host') {
-        query = query.eq('assigned_host_id', user.id)
-      }
-
-      const { data, error: sessionsError } = await query
-
-      if (sessionsError) {
-        setError(sessionsError.message)
+      setViewer(v)
+      setUserRole(nextRole)
+      if (result.errorMessage) {
+        setError(result.errorMessage)
+        setSessions([])
       } else {
-        setSessions((data ?? []) as HostSession[])
+        setError(null)
+        setSessions(result.rows)
       }
       setLoading(false)
     }
 
     void load()
-  }, [router])
+    return () => {
+      cancelled = true
+    }
+  }, [router, supabase])
+
+  const realtimeEnabled =
+    !!viewer && (viewer.role === 'admin' || viewer.role === 'host')
+
+  usePostgresLeaderboardRealtime({
+    supabase,
+    enabled: realtimeEnabled,
+    channelName: viewer ? `host-quiz-sessions-${viewer.id}` : 'host-quiz-sessions-none',
+    table: 'quiz_live_sessions',
+    filter:
+      viewer?.role === 'host' && viewer.id
+        ? `assigned_host_id=eq.${viewer.id}`
+        : undefined,
+    onDataStale: fetchSessions,
+  })
 
   if (loading) {
     return (
