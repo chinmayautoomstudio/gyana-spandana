@@ -27,6 +27,8 @@ export default function AdminTeamsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [remindingId, setRemindingId] = useState<string | null>(null)
+  const [notifyingP1Id, setNotifyingP1Id] = useState<string | null>(null)
+  const [sendingBulkP1Notifications, setSendingBulkP1Notifications] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
@@ -96,10 +98,78 @@ export default function AdminTeamsPage() {
       } else {
         setMessage({ type: 'success', text: `Reminder email sent to ${team.p2_invited_email}.` })
       }
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to send reminder. Please try again.' })
     } finally {
       setRemindingId(null)
+    }
+  }
+
+  const handleNotifyP1 = async (team: TeamRow) => {
+    if (team.status !== 'pending_p2' || !team.p2_invited_email) {
+      return
+    }
+    setNotifyingP1Id(team.id)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/notify-p1-pending-partner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: team.id }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) {
+        const errorText = body.error || 'Failed to notify Participant 1.'
+        setMessage({ type: 'error', text: errorText })
+      } else {
+        const to = typeof body.sentTo === 'string' ? body.sentTo : 'Participant 1'
+        setMessage({ type: 'success', text: `Notification sent to P1 at ${to}.` })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to notify Participant 1. Please try again.' })
+    } finally {
+      setNotifyingP1Id(null)
+    }
+  }
+
+  const handleNotifyAllP1Pending = async () => {
+    const pendingCount = teams.filter((t) => t.status === 'pending_p2' && t.p2_invited_email).length
+    if (pendingCount === 0) {
+      setMessage({ type: 'error', text: 'No pending teams with a Participant 2 invite email.' })
+      return
+    }
+    if (
+      !window.confirm(
+        `Send “pending partner” emails to Participant 1 for all ${pendingCount} team(s) waiting on P2? Each team’s registration link will be refreshed.`,
+      )
+    ) {
+      return
+    }
+    setSendingBulkP1Notifications(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/notify-p1-pending-partners-bulk', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) {
+        setMessage({ type: 'error', text: body.error || 'Bulk notify failed.' })
+      } else {
+        const { sent = 0, failed = 0, total = 0, errors = [] } = body as {
+          sent?: number
+          failed?: number
+          total?: number
+          errors?: string[]
+        }
+        const errSample =
+          Array.isArray(errors) && errors.length > 0 ? ` Errors: ${errors.slice(0, 3).join(' ')}` : ''
+        setMessage({
+          type: failed > 0 && sent === 0 ? 'error' : 'success',
+          text: `P1 notifications: ${sent} sent, ${failed} failed (of ${total} teams).${errSample}`,
+        })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Bulk notify failed. Please try again.' })
+    } finally {
+      setSendingBulkP1Notifications(false)
     }
   }
 
@@ -271,6 +341,15 @@ export default function AdminTeamsPage() {
               label: 'View',
               onClick: () => router.push(`/admin/teams/${t.id}`),
             },
+            ...(t.status === 'pending_p2' && t.p2_invited_email
+              ? [
+                  {
+                    label: 'Notify Participant 1',
+                    onClick: () => void handleNotifyP1(t),
+                    disabled: notifyingP1Id === t.id,
+                  },
+                ]
+              : []),
             {
               label: 'Delete',
               onClick: () => handleDelete(t),
@@ -287,22 +366,35 @@ export default function AdminTeamsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-3xl font-bold text-gray-900">Teams</h1>
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 hidden sm:inline">
-              {selectedIds.size} team{selectedIds.size > 1 ? 's' : ''} selected
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 border-red-200 hover:bg-red-50"
-              onClick={openBulkDeleteModal}
-              disabled={bulkDeleting}
-            >
-              Delete selected
-            </Button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-[#C0392B] border-[#F2C94C] hover:bg-amber-50 whitespace-nowrap"
+            onClick={() => void handleNotifyAllP1Pending()}
+            isLoading={sendingBulkP1Notifications}
+            loadingText="Sending…"
+          >
+            Notify all Participant 1s (pending teams)
+          </Button>
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-sm text-gray-600 hidden sm:inline">
+                {selectedIds.size} team{selectedIds.size > 1 ? 's' : ''} selected
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={openBulkDeleteModal}
+                disabled={bulkDeleting}
+              >
+                Delete selected
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {message && (
