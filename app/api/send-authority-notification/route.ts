@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 
 interface EmailNotificationPayload {
   authorityEmail: string
@@ -154,12 +155,18 @@ Best regards,
 GYANA SPARDHA Team
     `.trim()
 
-    const result = await sendEmail({
-      to: authorityEmail,
-      subject: emailSubject,
-      html: emailHtml,
-      text: emailText,
-    })
+    const result = await sendEmail(
+      {
+        to: authorityEmail,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText,
+      },
+      {
+        emailType: SENT_EMAIL_TYPES.AUTHORITY_NOTIFICATION,
+        metadata: { team_code: teamCode, team_name: teamName },
+      }
+    )
 
     if (!result.success) {
       console.error('SendGrid error:', result.error)

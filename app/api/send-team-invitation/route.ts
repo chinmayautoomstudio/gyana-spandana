@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 import { buildTeamInvitationEmail } from '@/lib/email/templates/team-invitation'
 
 interface TeamInvitationPayload {
@@ -40,7 +41,13 @@ export async function POST(request: NextRequest) {
       expiresAt,
     })
 
-    const result = await sendEmail({ to: p2Email, subject, html, text })
+    const result = await sendEmail(
+      { to: p2Email, subject, html, text },
+      {
+        emailType: SENT_EMAIL_TYPES.TEAM_INVITATION,
+        metadata: { team_name: teamName, p2_email: p2Email },
+      }
+    )
 
     if (!result.success) {
       return NextResponse.json(

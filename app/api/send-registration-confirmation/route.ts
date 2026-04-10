@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 import { buildRegistrationConfirmationEmail } from '@/lib/email/templates/registration-confirmation'
 
 interface RegistrationConfirmationPayload {
@@ -72,12 +73,22 @@ export async function POST(request: NextRequest) {
       loginUrl,
     })
 
-    const result = await sendEmail({
-      to: participantEmail,
-      subject: emailSubject,
-      html: emailHtml,
-      text: emailText,
-    })
+    const result = await sendEmail(
+      {
+        to: participantEmail,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText,
+      },
+      {
+        emailType: SENT_EMAIL_TYPES.REGISTRATION_CONFIRMATION,
+        metadata: {
+          participant_id: participantId ?? null,
+          team_name: teamName,
+          team_code: teamCode,
+        },
+      }
+    )
 
     if (!result.success) {
       console.error('SendGrid error:', result.error)
