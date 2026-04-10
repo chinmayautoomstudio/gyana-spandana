@@ -11,6 +11,7 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const hideNavFooter = 
     ['/login', '/signup', '/register'].includes(pathname) ||
     pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/host') ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/profile/edit') ||
     pathname.startsWith('/exams') ||  // Hide navbar/footer for all exam pages (including /exams list)

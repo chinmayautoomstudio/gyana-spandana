@@ -18,6 +18,7 @@ export default function HostDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [sessions, setSessions] = useState<HostSession[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<'admin' | 'host' | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -46,10 +47,18 @@ export default function HostDashboardPage() {
         return
       }
 
-      const { data, error: sessionsError } = await supabase
+      setUserRole(role === 'admin' ? 'admin' : 'host')
+
+      let query = supabase
         .from('quiz_live_sessions')
         .select('id, title, status, created_at')
         .order('created_at', { ascending: false })
+
+      if (role === 'host') {
+        query = query.eq('assigned_host_id', user.id)
+      }
+
+      const { data, error: sessionsError } = await query
 
       if (sessionsError) {
         setError(sessionsError.message)
@@ -77,12 +86,32 @@ export default function HostDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Host Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Live quiz sessions</h1>
       </div>
 
       {sessions.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-600">
-          No quiz sessions assigned yet.
+        <div className="rounded-2xl border border-gray-200 bg-white/70 backdrop-blur-xl p-6 sm:p-8 shadow-lg space-y-4 max-w-2xl">
+          <h2 className="text-lg font-semibold text-gray-900">No sessions assigned to you yet</h2>
+          <p className="text-gray-600 text-sm sm:text-base leading-relaxed">
+            Live quiz sessions are created and managed under <strong>Quiz Sessions</strong> in the admin area.
+            You will only see sessions where you are selected as the <strong>assigned host</strong>.
+          </p>
+          <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+            <li>An administrator creates a session and picks a host.</li>
+            <li>Once you are assigned, the session will appear in this list.</li>
+            <li>Open a session to run rounds from the host control panel.</li>
+          </ul>
+          {userRole === 'admin' ? (
+            <div className="pt-2">
+              <Link href="/admin/quiz">
+                <Button variant="primary">Open Quiz Sessions</Button>
+              </Link>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 pt-1">
+              Ask an administrator to create a quiz session and assign you as the host.
+            </p>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
@@ -107,7 +136,7 @@ export default function HostDashboardPage() {
               {sessions.map((session) => (
                 <tr key={session.id} className="border-t border-gray-100">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{session.title}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{session.status}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700 capitalize">{session.status}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {new Date(session.created_at).toLocaleString()}
                   </td>
