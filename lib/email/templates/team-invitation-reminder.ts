@@ -5,7 +5,7 @@ import type { TeamInvitationTemplateData } from './team-invitation'
  * Uses the same data contract as the initial invitation template.
  */
 export function buildTeamInvitationReminderEmail(data: TeamInvitationTemplateData) {
-  const { p2Email, p1Name, teamName, schoolName, invitationLink, expiresAt } = data
+  const { p2Email, p1Name, teamName, schoolName, invitationLink, expiresAt, updateP2EmailLink } = data
 
   const subject = `Reminder: Complete your registration for ${teamName} on GYANA SPARDHA`
 
@@ -55,6 +55,24 @@ export function buildTeamInvitationReminderEmail(data: TeamInvitationTemplateDat
       This reminder link is valid until <strong>${expiresAt}</strong>. If you are no longer able to participate or did not expect this email, you can safely ignore it.
     </p>
 
+    ${
+      updateP2EmailLink
+        ? `
+    <div style="background: #fff8f0; padding: 18px; border-radius: 8px; margin: 24px 0; border: 1px solid #f0d9c2;">
+      <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">Wrong email address?</p>
+      <p style="margin: 0 0 14px 0; font-size: 14px; color: #555;">
+        If this message reached the wrong inbox, <strong>Participant 1</strong> (the teammate who created the team) can sign in and update your email so the invitation goes to the correct address.
+      </p>
+      <div style="text-align: center;">
+        <a href="${updateP2EmailLink}" style="display: inline-block; color: #C0392B; font-weight: bold; font-size: 15px;">
+          Update Participant 2’s email
+        </a>
+      </div>
+    </div>
+    `
+        : ''
+    }
+
     <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">
     <p style="font-size: 12px; color: #666; text-align: center; margin: 0;">
       GYANA SPARDHA – Odisha Quiz Competition. This is an automated message.
@@ -81,7 +99,14 @@ Team details:
 Complete your registration and join the team: ${invitationLink}
 
 This reminder link is valid until ${expiresAt}. If you are no longer able to participate or did not expect this email, you can ignore this message.
+${
+  updateP2EmailLink
+    ? `
 
+Wrong email? Participant 1 can update Participant 2's invited email here: ${updateP2EmailLink}
+`
+    : ''
+}
 ---
 GYANA SPARDHA – Odisha Quiz Competition. This is an automated message.
   `.trim()

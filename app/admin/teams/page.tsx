@@ -30,6 +30,7 @@ export default function AdminTeamsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
+  const [sendingAllReminders, setSendingAllReminders] = useState(false)
 
   const fetchTeams = async () => {
     const supabase = createClient()
@@ -100,6 +101,52 @@ export default function AdminTeamsPage() {
       setMessage({ type: 'error', text: 'Failed to send reminder. Please try again.' })
     } finally {
       setRemindingId(null)
+    }
+  }
+
+  const handleSendAllReminders = async () => {
+    const pendingCount = teams.filter((t) => t.status === 'pending_p2' && t.p2_invited_email).length
+    if (pendingCount === 0) {
+      setMessage({ type: 'error', text: 'No teams with pending Participant 2 registration.' })
+      return
+    }
+    if (
+      !window.confirm(
+        `Send reminder emails to ${pendingCount} team(s) with incomplete registration? Each email includes a registration link and a link for Participant 1 to update Participant 2’s email if needed.`,
+      )
+    ) {
+      return
+    }
+    setSendingAllReminders(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/send-p2-reminders-bulk', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) {
+        setMessage({ type: 'error', text: body.error || 'Failed to send bulk reminders.' })
+        return
+      }
+      const { sent = 0, failed = 0, total = 0 } = body as {
+        sent?: number
+        failed?: number
+        total?: number
+      }
+      if (failed > 0) {
+        setMessage({
+          type: 'error',
+          text: `Reminders: ${sent} sent, ${failed} failed (of ${total}). Check server logs for details.`,
+        })
+      } else {
+        setMessage({
+          type: 'success',
+          text: `Reminder emails sent to ${sent} team(s).`,
+        })
+      }
+      void fetchTeams()
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to send bulk reminders. Please try again.' })
+    } finally {
+      setSendingAllReminders(false)
     }
   }
 
@@ -273,7 +320,18 @@ export default function AdminTeamsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-3xl font-bold text-gray-900">Teams</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <h1 className="text-3xl font-bold text-gray-900">Teams</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleSendAllReminders()}
+            isLoading={sendingAllReminders}
+            loadingText="Sending..."
+          >
+            Send reminders to all pending teams
+          </Button>
+        </div>
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600 hidden sm:inline">
