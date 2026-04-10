@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 import { findParticipantsNotAssignedToExam } from '@/lib/utils/examInvitationEligibility'
 
 export async function POST(
@@ -267,12 +268,23 @@ GYANA SPARDHA Team
 This is an automated email. Please do not reply to this message.
         `.trim()
 
-        const result = await sendEmail({
-          to: participant.email,
-          subject: emailSubject,
-          html: emailHtml,
-          text: emailText,
-        })
+        const result = await sendEmail(
+          {
+            to: participant.email,
+            subject: emailSubject,
+            html: emailHtml,
+            text: emailText,
+          },
+          {
+            emailType: SENT_EMAIL_TYPES.EXAM_INVITATION,
+            metadata: {
+              exam_id: examId,
+              participant_id: participant.id,
+              exam_title: exam.title,
+              triggered_by_user_id: user.id,
+            },
+          }
+        )
 
         if (!result.success) {
           throw new Error(`Failed to send to ${participant.email}: ${result.error}`)

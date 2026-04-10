@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 import { buildP1PendingPartnerReminderEmail } from '@/lib/email/templates/p1-pending-partner-reminder'
 
 const INVITATION_EXPIRY_DAYS = 7
@@ -124,12 +125,22 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAtFormatted,
     })
 
-    const result = await sendEmail({
-      to: p1Email,
-      subject,
-      html,
-      text,
-    })
+    const result = await sendEmail(
+      {
+        to: p1Email,
+        subject,
+        html,
+        text,
+      },
+      {
+        emailType: SENT_EMAIL_TYPES.P1_PENDING_PARTNER_REMINDER,
+        metadata: {
+          team_id: teamId,
+          team_name: team.team_name,
+          triggered_by_user_id: user.id,
+        },
+      }
+    )
 
     if (!result.success) {
       return NextResponse.json(

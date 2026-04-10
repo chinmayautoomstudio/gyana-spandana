@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 
 /**
  * POST /api/test-email
@@ -26,16 +27,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await sendEmail({
-      to,
-      subject: 'GYANA SPARDHA – Test Email',
-      html: `
+    const result = await sendEmail(
+      {
+        to,
+        subject: 'GYANA SPARDHA – Test Email',
+        html: `
         <p>This is a test email from GYANA SPARDHA.</p>
         <p>If you received this, SendGrid is configured correctly.</p>
         <p>Sent at: ${new Date().toISOString()}</p>
       `,
-      text: `This is a test email from GYANA SPARDHA. If you received this, SendGrid is configured correctly. Sent at: ${new Date().toISOString()}`,
-    })
+        text: `This is a test email from GYANA SPARDHA. If you received this, SendGrid is configured correctly. Sent at: ${new Date().toISOString()}`,
+      },
+      { emailType: SENT_EMAIL_TYPES.TEST }
+    )
 
     if (!result.success) {
       return NextResponse.json(
