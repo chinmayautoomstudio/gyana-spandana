@@ -12,6 +12,11 @@ import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { carouselSlides } from '@/lib/constants/carousel'
+import {
+  getSafeInternalPath,
+  isAllowedPostLoginPath,
+  resolvePostLoginPath,
+} from '@/lib/auth/safe-redirect-path'
 
 const Carousel = dynamic(
   () => import('@/components/ui/Carousel').then((m) => ({ default: m.Carousel })),
@@ -38,6 +43,7 @@ export default function LoginForm() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loginSuccess, setLoginSuccess] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [redirectFromQuery, setRedirectFromQuery] = useState<string | null>(null)
 
   const {
     register,
@@ -55,6 +61,7 @@ export default function LoginForm() {
       const messageParam = searchParams.get('message')
       setRegistered(registeredParam)
       setSuccessMessage(messageParam)
+      setRedirectFromQuery(searchParams.get('redirectedFrom'))
 
       // Clear success message after 5 seconds
       if (registeredParam || messageParam) {
@@ -101,18 +108,16 @@ export default function LoginForm() {
 
         // Fallback to user_metadata if profile doesn't exist
         const role = profile?.role || authData.user.user_metadata?.role || 'participant'
+        const fromUrl =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('redirectedFrom')
+            : null
+        const target = resolvePostLoginPath(fromUrl ?? redirectFromQuery, role)
 
-        // Show success message before redirecting
         setLoginSuccess(true)
-        
-        // Delay redirect to show success message
-        setTimeout(() => {
-          if (role === 'admin') {
-            router.push('/admin')
-          } else {
-            router.push('/dashboard')
-          }
-        }, 1500)
+        await new Promise((r) => setTimeout(r, 200))
+        await router.refresh()
+        router.replace(target)
       }
     } catch (error: any) {
       // Handle connection errors specifically
@@ -148,7 +153,13 @@ export default function LoginForm() {
     setLoginError(null)
     try {
       const supabase = createClient()
-      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : ''
+      const origin = window.location.origin
+      const fromParam =
+        new URLSearchParams(window.location.search).get('redirectedFrom') ?? redirectFromQuery
+      const safe = getSafeInternalPath(fromParam)
+      const nextQuery =
+        safe && isAllowedPostLoginPath(safe) ? `?next=${encodeURIComponent(safe)}` : ''
+      const redirectTo = `${origin}/auth/callback${nextQuery}`
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo },
