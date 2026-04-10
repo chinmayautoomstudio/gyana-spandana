@@ -141,11 +141,11 @@ export default function SignupPage() {
                   <div className="flex justify-center mb-4">
                     <Image src="/images/logo.webp" alt="GYANA SPARDHA" width={56} height={56} className="object-contain rounded-lg" />
                   </div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">Confirm your email</h1>
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">Complete your registration</h1>
                   <p className="text-gray-600 text-sm leading-relaxed">
-                    We sent a confirmation link to{' '}
-                    <strong className="text-gray-900">{confirmationEmailSentTo}</strong>. Open that email and click the
-                    link to verify your address. You will then continue to team registration.
+                    We sent a link to complete your registration to{' '}
+                    <strong className="text-gray-900">{confirmationEmailSentTo}</strong>. Open that email and use the link
+                    to finish signing up. You will then continue to team registration.
                   </p>
                   <p className="text-gray-500 text-sm mt-4">
                     Did not receive it? Check your spam folder, or wait a minute and try again from sign up.
@@ -153,12 +153,12 @@ export default function SignupPage() {
                 </div>
                 <div className="rounded-lg bg-green-50 border border-green-200 p-4 mb-6">
                   <p className="text-green-900 text-sm">
-                    After you confirm, you will be signed in and taken to create your team.
+                    After you complete registration, you will be signed in and taken to create your team.
                   </p>
                 </div>
                 <Link href="/login" className="block">
                   <Button variant="outline" size="lg" className="w-full">
-                    Already confirmed? Sign in
+                    Already completed registration? Sign in
                   </Button>
                 </Link>
               </>
