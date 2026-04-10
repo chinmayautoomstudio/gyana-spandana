@@ -232,6 +232,28 @@ export default function AdminTeamsPage() {
       sortable: false,
     },
     {
+      key: 'p2_reminder',
+      header: 'P2 reminder',
+      getSearchText: () => '',
+      render: (t: TeamRow) =>
+        t.status === 'pending_p2' && t.p2_invited_email ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-[#C0392B] border-[#F2C94C] hover:bg-amber-50 whitespace-nowrap"
+            onClick={() => void handleSendReminder(t)}
+            isLoading={remindingId === t.id}
+            loadingText="Sending..."
+          >
+            Send reminder
+          </Button>
+        ) : (
+          <span className="text-xs text-gray-400 italic">—</span>
+        ),
+      sortable: false,
+    },
+    {
       key: 'created_at',
       header: 'Created',
       getSearchText: (t: TeamRow) =>
@@ -249,15 +271,6 @@ export default function AdminTeamsPage() {
               label: 'View',
               onClick: () => router.push(`/admin/teams/${t.id}`),
             },
-            ...(t.status === 'pending_p2' && t.p2_invited_email
-              ? [
-                  {
-                    label: 'Send reminder',
-                    onClick: () => handleSendReminder(t),
-                    disabled: remindingId === t.id,
-                  } as const,
-                ]
-              : []),
             {
               label: 'Delete',
               onClick: () => handleDelete(t),

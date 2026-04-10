@@ -8,7 +8,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { loginSchema, type LoginFormData } from '@/lib/validations'
-import { resolvePostLoginRedirectPath } from '@/lib/auth/safe-redirect-path'
+import {
+  getSafeInternalPath,
+  isAllowedPostLoginPath,
+  resolvePostLoginRedirectPath,
+} from '@/lib/auth/safe-redirect-path'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -39,6 +43,7 @@ export default function LoginForm() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loginSuccess, setLoginSuccess] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [redirectFromQuery, setRedirectFromQuery] = useState<string | null>(null)
 
   const {
     register,
@@ -56,6 +61,7 @@ export default function LoginForm() {
       const messageParam = searchParams.get('message')
       setRegistered(registeredParam)
       setSuccessMessage(messageParam)
+      setRedirectFromQuery(searchParams.get('redirectedFrom'))
 
       // Clear success message after 5 seconds
       if (registeredParam || messageParam) {
@@ -102,17 +108,17 @@ export default function LoginForm() {
 
         // Fallback to user_metadata if profile doesn't exist
         const role = profile?.role || authData.user.user_metadata?.role || 'participant'
-
         const redirectedFrom =
           typeof window !== 'undefined'
             ? new URLSearchParams(window.location.search).get('redirectedFrom')
             : null
         const target = resolvePostLoginRedirectPath({
           role,
-          redirectedFromParam: redirectedFrom,
+          redirectedFromParam: redirectedFrom ?? redirectFromQuery,
         })
 
         setLoginSuccess(true)
+        await new Promise((r) => setTimeout(r, 200))
         await router.refresh()
         router.replace(target)
         window.setTimeout(() => {
@@ -155,7 +161,13 @@ export default function LoginForm() {
     setLoginError(null)
     try {
       const supabase = createClient()
-      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : ''
+      const origin = window.location.origin
+      const fromParam =
+        new URLSearchParams(window.location.search).get('redirectedFrom') ?? redirectFromQuery
+      const safe = getSafeInternalPath(fromParam)
+      const nextQuery =
+        safe && isAllowedPostLoginPath(safe) ? `?next=${encodeURIComponent(safe)}` : ''
+      const redirectTo = `${origin}/auth/callback${nextQuery}`
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo },

@@ -32,6 +32,7 @@ export type CreateTeamResult = { success: true } | { success: false; error: stri
 export type TeamNameAvailabilityResult = { available: true } | { available: false; error: string }
 export type CompleteP2Result = { success: true } | { success: false; error: string }
 export type ResendInvitationResult = { success: true } | { success: false; error: string }
+export type UpdateP2EmailResult = { success: true } | { success: false; error: string }
 export type UpdateTeamAuthorityResult = { success: true } | { success: false; error: string }
 export type InvitationDetails = {
   valid: true
@@ -734,6 +735,134 @@ export async function resendInvitation(teamId: string): Promise<ResendInvitation
     console.error('Resend invitation error', e)
     return { success: false, error: 'Failed to send invitation email.' }
   }
+
+  return { success: true }
+}
+
+const P2_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * Participant 1 may change Participant 2's invited email only while the team is still pending P2 registration.
+ * Rotates the invitation token and sends a new invitation to the updated address.
+ */
+export async function updateP2InvitedEmail(newEmail: string): Promise<UpdateP2EmailResult> {
+  const supabaseServer = await createClient()
+  const {
+    data: { user },
+  } = await supabaseServer.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+
+  const trimmed = newEmail?.trim()
+  if (!trimmed) {
+    return { success: false, error: 'Email address is required.' }
+  }
+  if (!P2_EMAIL_REGEX.test(trimmed)) {
+    return { success: false, error: 'Please enter a valid email address.' }
+  }
+
+  const p2EmailLower = trimmed.toLowerCase()
+  const p1EmailRaw = user.email ?? (user.user_metadata?.email as string | undefined)
+  const p1Email = p1EmailRaw?.trim().toLowerCase() ?? ''
+  if (p1Email && p2EmailLower === p1Email) {
+    return { success: false, error: 'Participant 2 must use a different email address than yours.' }
+  }
+
+  const admin = createAdminClient()
+  const { data: p1Participant, error: p1Error } = await admin
+    .from('participants')
+    .select('id, team_id, email')
+    .eq('user_id', user.id)
+    .eq('is_participant1', true)
+    .maybeSingle()
+
+  if (p1Error || !p1Participant?.team_id) {
+    return { success: false, error: 'Only Participant 1 can update the invited email.' }
+  }
+
+  const { data: team, error: teamError } = await admin
+    .from('teams')
+    .select('id, team_name, p2_invited_email, status, invitation_used_at')
+    .eq('id', p1Participant.team_id)
+    .single()
+
+  if (teamError || !team) {
+    return { success: false, error: 'Team not found.' }
+  }
+  if (team.status !== 'pending_p2' || team.invitation_used_at) {
+    return { success: false, error: 'You can only change Participant 2’s email before registration is complete.' }
+  }
+
+  const previousLower = (team.p2_invited_email ?? '').trim().toLowerCase()
+  if (previousLower === p2EmailLower) {
+    return { success: false, error: 'Enter a different email address than the current invite.' }
+  }
+
+  const { data: existingParticipant } = await admin
+    .from('participants')
+    .select('id')
+    .eq('email', p2EmailLower)
+    .maybeSingle()
+  if (existingParticipant) {
+    return {
+      success: false,
+      error: 'This email is already registered for a team. Use a different address.',
+    }
+  }
+
+  const invitationToken = generateInvitationToken()
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + INVITATION_EXPIRY_DAYS)
+
+  const { error: updateError } = await admin
+    .from('teams')
+    .update({
+      p2_invited_email: p2EmailLower,
+      invitation_token: invitationToken,
+      invitation_expires_at: expiresAt.toISOString(),
+    })
+    .eq('id', team.id)
+
+  if (updateError) {
+    return { success: false, error: updateError.message ?? 'Failed to update invited email.' }
+  }
+
+  const { data: p1 } = await admin
+    .from('participants')
+    .select('name, school_name')
+    .eq('team_id', team.id)
+    .eq('is_participant1', true)
+    .single()
+
+  const invitationLink = `${getSiteUrl()}/register/invite/${invitationToken}`
+  const expiresAtFormatted = expiresAt.toLocaleDateString('en-IN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  void fetch(`${getSiteUrl()}/api/send-team-invitation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      p2Email: trimmed,
+      p1Name: p1?.name ?? 'Your teammate',
+      teamName: team.team_name,
+      schoolName: p1?.school_name ?? '',
+      invitationLink,
+      expiresAt: expiresAtFormatted,
+    }),
+  })
+    .then(async (res) => {
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok && !(body as { skipped?: boolean }).skipped) {
+        console.error('Send invitation after P2 email update failed', res.status, body)
+      }
+    })
+    .catch((e) => {
+      console.error('Send invitation after P2 email update error', e)
+    })
 
   return { success: true }
 }

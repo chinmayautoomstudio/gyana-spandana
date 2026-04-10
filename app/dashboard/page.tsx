@@ -520,19 +520,28 @@ export default function DashboardPage() {
               </div>
             )}
             {participantData?.teams?.status === 'pending_p2' && (
-              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <p className="text-amber-800 text-sm">
-                  Waiting for <strong>{participantData.teams.p2_invited_email || 'your teammate'}</strong> to complete registration.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleResendInvitation}
-                  isLoading={resendLoading}
-                  loadingText="Sending..."
-                >
-                  Resend invitation
-                </Button>
+              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <p className="text-amber-800 text-sm">
+                    Waiting for <strong>{participantData.teams.p2_invited_email || 'your teammate'}</strong> to complete registration.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link href="/team/update-p2-email">
+                      <Button variant="outline" size="sm" type="button">
+                        Update P2 email
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResendInvitation}
+                      isLoading={resendLoading}
+                      loadingText="Sending..."
+                    >
+                      Resend invitation
+                    </Button>
+                  </div>
+                </div>
                 {resendMessage === 'success' && <span className="text-green-600 text-sm">Invitation resent.</span>}
                 {resendMessage === 'error' && <span className="text-red-600 text-sm">Failed to resend.</span>}
               </div>
