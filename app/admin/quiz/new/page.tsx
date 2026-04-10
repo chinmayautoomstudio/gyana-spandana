@@ -68,7 +68,7 @@ export default function NewQuizSessionPage() {
             supabase
               .from('user_profiles')
               .select('user_id,name,role')
-              .in('role', ['host', 'admin'])
+              .eq('role', 'host')
               .order('name', { ascending: true }),
             fetch('/api/admin/question-sets'),
           ])

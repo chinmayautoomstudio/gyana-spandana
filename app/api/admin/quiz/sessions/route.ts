@@ -87,6 +87,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const { data: hostProfile, error: hostProfileError } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('user_id', assigned_host_id)
+      .eq('role', 'host')
+      .maybeSingle()
+
+    if (hostProfileError) {
+      return NextResponse.json({ error: hostProfileError.message }, { status: 400 })
+    }
+    if (!hostProfile) {
+      return NextResponse.json(
+        { error: 'assigned_host_id must be a user with role host' },
+        { status: 400 },
+      )
+    }
+
     const { data: session, error: sessionError } = await supabase
       .from('quiz_live_sessions')
       .insert({
