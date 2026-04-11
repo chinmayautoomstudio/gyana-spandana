@@ -34,7 +34,7 @@ export function QuestionDisplay({
 
   if (!showOptions) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-900">
         <FormattedQuestionText text={question.question_text} />
       </div>
     )
@@ -42,7 +42,7 @@ export function QuestionDisplay({
 
   if (question.question_type === 'true_false') {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
+      <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-900 space-y-4">
         <FormattedQuestionText text={question.question_text} />
         <div className="grid grid-cols-2 gap-3">
           <button

@@ -10,14 +10,24 @@ interface QuizSessionRow {
   status: string
   assigned_host_id: string | null
   team_slots: Record<string, string>
+  is_test_session?: boolean
   created_at: string
   rounds?: Array<{ id: string }>
 }
+
+type SessionFilter = 'all' | 'live' | 'test'
 
 export default function AdminQuizSessionsPage() {
   const [sessions, setSessions] = useState<QuizSessionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<SessionFilter>('all')
+
+  const filteredSessions = sessions.filter((s) => {
+    if (filter === 'test') return Boolean(s.is_test_session)
+    if (filter === 'live') return !s.is_test_session
+    return true
+  })
 
   const fetchSessions = async () => {
     setLoading(true)
@@ -51,11 +61,27 @@ export default function AdminQuizSessionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-gray-900">Quiz Sessions</h1>
-        <Link href="/admin/quiz/new">
-          <Button>Create new session</Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex rounded-lg border border-gray-200 bg-white p-0.5 text-sm">
+            {(['all', 'live', 'test'] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFilter(key)}
+                className={`rounded-md px-3 py-1.5 font-medium capitalize ${
+                  filter === key ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {key === 'all' ? 'All' : key === 'live' ? 'Live' : 'Test'}
+              </button>
+            ))}
+          </div>
+          <Link href="/admin/quiz/new">
+            <Button>Create new session</Button>
+          </Link>
+        </div>
       </div>
 
       {loading ? (
@@ -64,6 +90,10 @@ export default function AdminQuizSessionsPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">{error}</div>
       ) : sessions.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-600">No quiz sessions yet.</div>
+      ) : filteredSessions.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-600">
+          No sessions match this filter.
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
           <table className="w-full min-w-[900px]">
@@ -78,9 +108,18 @@ export default function AdminQuizSessionsPage() {
               </tr>
             </thead>
             <tbody>
-              {sessions.map((session) => (
+              {filteredSessions.map((session) => (
                 <tr key={session.id} className="border-t border-gray-100">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{session.title}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {session.title}
+                      {session.is_test_session ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                          Test
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-700">{session.status}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">{session.assigned_host_id?.slice(0, 8) || '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">

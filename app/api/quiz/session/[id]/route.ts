@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePoints } from '@/lib/services/scoringService'
+import { getOccupiedLabels, nextOccupiedLabel } from '@/lib/quiz/teamSlots'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
@@ -52,6 +53,30 @@ async function getScoreMap(sessionId: string, supabase: any) {
     acc[label] = scores?.find((s: any) => s.team_label === label)?.total_score || 0
     return acc
   }, {} as Record<TeamLabel, number>)
+}
+
+async function getTeamDisplayNames(session: { team_slots?: Record<string, string> | null }, supabase: any) {
+  const slots = (session?.team_slots || {}) as Record<string, string>
+  const ids = [...new Set(TEAM_LABELS.map((l) => slots[l]).filter(Boolean))]
+
+  const nameById = new Map<string, string>()
+  if (ids.length > 0) {
+    const { data: rows } = await supabase.from('teams').select('id, team_name').in('id', ids)
+    for (const row of rows || []) {
+      if (row?.id && row?.team_name != null) nameById.set(row.id, String(row.team_name))
+    }
+  }
+
+  return TEAM_LABELS.reduce((acc, label) => {
+    const id = slots[label]
+    if (!id) {
+      acc[label] = 'Unassigned'
+    } else {
+      const name = nameById.get(id)
+      acc[label] = name ?? `Team ${id.slice(0, 8)}`
+    }
+    return acc
+  }, {} as Record<TeamLabel, string>)
 }
 
 export async function GET(
@@ -107,6 +132,7 @@ export async function GET(
     }
 
     const scores = await getScoreMap(sessionId, supabase)
+    const team_display_names = await getTeamDisplayNames(session, supabase)
 
     return NextResponse.json({
       session,
@@ -115,6 +141,7 @@ export async function GET(
       currentQuestionEvent: latestEvent,
       currentQuestion,
       scores,
+      team_display_names,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -163,8 +190,24 @@ export async function PATCH(
 
     if (action === 'reveal_question') {
       const roundId = body?.roundId as string | undefined
-      const directedTeam = (body?.directedTeam || 'A') as TeamLabel
       if (!roundId) return NextResponse.json({ error: 'roundId is required' }, { status: 400 })
+
+      const { data: sessionReveal } = await supabase
+        .from('quiz_live_sessions')
+        .select('is_test_session, team_slots')
+        .eq('id', sessionId)
+        .single()
+
+      const occupiedReveal = getOccupiedLabels(
+        (sessionReveal?.team_slots || {}) as Record<string, string>,
+      )
+      const rawDir = body?.directedTeam
+      const hasDirected =
+        typeof rawDir === 'string' && TEAM_LABELS.includes(rawDir.trim() as TeamLabel)
+      let directedTeam: TeamLabel = hasDirected ? (rawDir.trim() as TeamLabel) : 'A'
+      if (!hasDirected && sessionReveal?.is_test_session && occupiedReveal.length >= 1) {
+        directedTeam = occupiedReveal[0]
+      }
 
       const { data: round } = await supabase
         .from('quiz_rounds')
@@ -328,6 +371,16 @@ export async function PATCH(
 
       if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
 
+      const { data: sessionPass } = await supabase
+        .from('quiz_live_sessions')
+        .select('is_test_session, team_slots')
+        .eq('id', sessionId)
+        .single()
+
+      const occupied = getOccupiedLabels((sessionPass?.team_slots || {}) as Record<string, string>)
+      const useTestRotation = Boolean(sessionPass?.is_test_session) && occupied.length > 0
+      const passThreshold = useTestRotation ? occupied.length : 4
+
       const attemptNumber = Number(event.attempt_number || 1)
       await supabase.from('quiz_pass_log').insert({
         question_event_id: questionEventId,
@@ -337,7 +390,9 @@ export async function PATCH(
       })
 
       if (attemptNumber === 1) {
-        const newDirectedTeam = nextTeam(teamLabel)
+        const newDirectedTeam = useTestRotation
+          ? nextOccupiedLabel(teamLabel, occupied)
+          : nextTeam(teamLabel)
         const { data: updatedEvent } = await supabase
           .from('quiz_question_events')
           .update({
@@ -358,7 +413,7 @@ export async function PATCH(
         .eq('attempt_number', 2)
 
       const tried = new Set((passRows || []).map((p: any) => p.team_label))
-      if (tried.size >= 4) {
+      if (tried.size >= passThreshold) {
         const { data: updatedEvent } = await supabase
           .from('quiz_question_events')
           .update({ status: 'dropped' })
@@ -368,7 +423,11 @@ export async function PATCH(
         return NextResponse.json({ success: true, state: 'dropped', event: updatedEvent })
       }
 
-      const next = TEAM_LABELS.find((l) => !tried.has(l)) || nextTeam(teamLabel)
+      const order: TeamLabel[] =
+        useTestRotation && occupied.length > 0 ? occupied : [...TEAM_LABELS]
+      const next =
+        order.find((l) => !tried.has(l)) ||
+        (useTestRotation ? nextOccupiedLabel(teamLabel, occupied) : nextTeam(teamLabel))
       const { data: updatedEvent } = await supabase
         .from('quiz_question_events')
         .update({ directed_team: next })

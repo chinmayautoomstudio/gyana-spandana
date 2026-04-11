@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS quiz_live_sessions (
   updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Optional: add after initial table create (see supabase/migrations/20260412100000_quiz_live_sessions_is_test_session.sql)
+-- ALTER TABLE quiz_live_sessions ADD COLUMN IF NOT EXISTS is_test_session BOOLEAN NOT NULL DEFAULT false;
+
 -- quiz_rounds
 CREATE TABLE IF NOT EXISTS quiz_rounds (
   id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

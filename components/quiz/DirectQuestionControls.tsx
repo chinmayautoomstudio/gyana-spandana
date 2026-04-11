@@ -16,6 +16,8 @@ interface DirectQuestionControlsProps {
   onMarkWrongPass: () => void
   onSkip: () => void
   busy?: boolean
+  /** When set (e.g. test sessions with partial slots), only these labels are choosable for the next question. */
+  selectableTeams?: TeamLabel[]
 }
 
 export function DirectQuestionControls({
@@ -31,10 +33,12 @@ export function DirectQuestionControls({
   onMarkWrongPass,
   onSkip,
   busy = false,
+  selectableTeams = ['A', 'B', 'C', 'D'],
 }: DirectQuestionControlsProps) {
   const isIdle = !event || event.status === 'answered' || event.status === 'dropped'
   const showOptions = event?.status === 'options_revealed'
   const directedTeam = (event?.directed_team || selectedTeam) as TeamLabel
+  const teamChoices = selectableTeams.length > 0 ? selectableTeams : (['A', 'B', 'C', 'D'] as TeamLabel[])
 
   return (
     <section className="space-y-4">
@@ -60,8 +64,8 @@ export function DirectQuestionControls({
       {isIdle ? (
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
           <p className="text-sm font-medium text-gray-700">Choose directed team for first attempt</p>
-          <div className="grid grid-cols-4 gap-2">
-            {(['A', 'B', 'C', 'D'] as TeamLabel[]).map((label) => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {teamChoices.map((label) => (
               <button
                 key={label}
                 type="button"

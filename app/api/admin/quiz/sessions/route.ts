@@ -1,7 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-
 type TeamLabel = 'A' | 'B' | 'C' | 'D'
+
+const SLOT_LABELS: TeamLabel[] = ['A', 'B', 'C', 'D']
+
+function normalizeTeamSlots(raw: Record<string, unknown> | null | undefined): Record<TeamLabel, string> {
+  const out = {} as Record<TeamLabel, string>
+  for (const label of SLOT_LABELS) {
+    const v = raw?.[label]
+    out[label] = typeof v === 'string' ? v.trim() : ''
+  }
+  return out
+}
+
+function validateTeamSlots(isTest: boolean, slots: Record<TeamLabel, string>): string | null {
+  const filled = SLOT_LABELS.map((l) => slots[l]).filter((id) => id.length > 0)
+  const unique = new Set(filled)
+  if (isTest) {
+    if (filled.length < 1) return 'Testing session requires at least one team'
+    if (unique.size !== filled.length) return 'Each team slot must be unique'
+    return null
+  }
+  if (filled.length !== 4) return 'Live session requires all 4 team slots'
+  if (unique.size !== 4) return 'Each team slot must be unique'
+  return null
+}
 
 interface RoundConfigInput {
   round_type: 'direct_question' | 'rapid_fire' | 'true_or_false' | 'buzzer' | 'visual'
@@ -9,6 +32,17 @@ interface RoundConfigInput {
   question_set_id?: string
   rapid_fire_duration_seconds?: number
   true_false_mode?: 'directed' | 'buzzer'
+  /** If omitted or empty, all questions from the set are included (ordered by order_index). */
+  question_count?: number | string | null
+}
+
+/** null = use all questions; positive int = cap; -1 = invalid */
+function parseRoundQuestionCount(raw: unknown): number | null | -1 {
+  if (raw === undefined || raw === null) return null
+  if (typeof raw === 'string' && raw.trim() === '') return null
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw).trim(), 10)
+  if (!Number.isFinite(n) || Number.isNaN(n) || !Number.isInteger(n) || n <= 0) return -1
+  return n
 }
 
 async function ensureAdmin(supabase: any) {
@@ -67,24 +101,34 @@ export async function POST(request: NextRequest) {
     const {
       title,
       assigned_host_id,
-      team_slots,
+      team_slots: rawTeamSlots,
       points_full,
       points_half,
       rounds,
+      is_test_session: rawTest,
     } = body as {
       title: string
       assigned_host_id: string
-      team_slots: Record<TeamLabel, string>
+      team_slots: Record<string, string>
       points_full: number
       points_half: number
       rounds: RoundConfigInput[]
+      is_test_session?: boolean
     }
 
-    if (!title || !assigned_host_id || !team_slots || !rounds?.length) {
+    const is_test_session = Boolean(rawTest)
+    const team_slots = normalizeTeamSlots(rawTeamSlots)
+
+    if (!title || !assigned_host_id || !rawTeamSlots || !rounds?.length) {
       return NextResponse.json(
         { error: 'title, assigned_host_id, team_slots and rounds are required' },
         { status: 400 },
       )
+    }
+
+    const slotError = validateTeamSlots(is_test_session, team_slots)
+    if (slotError) {
+      return NextResponse.json({ error: slotError }, { status: 400 })
     }
 
     const { data: hostProfile, error: hostProfileError } = await supabase
@@ -110,6 +154,7 @@ export async function POST(request: NextRequest) {
         title,
         assigned_host_id,
         team_slots,
+        is_test_session,
         points_full: Number(points_full || 10),
         points_half: Number(points_half || 5),
         status: 'setup',
@@ -155,7 +200,19 @@ export async function POST(request: NextRequest) {
         }
 
         if (setQuestions && setQuestions.length > 0) {
-          const questionIds = setQuestions.map((q) => q.question_id)
+          const cap = parseRoundQuestionCount(round.question_count)
+          if (cap === -1) {
+            return NextResponse.json(
+              { error: 'question_count must be a positive integer when provided' },
+              { status: 400 },
+            )
+          }
+          const limited =
+            cap === null
+              ? setQuestions
+              : setQuestions.slice(0, Math.min(cap, setQuestions.length))
+
+          const questionIds = limited.map((q) => q.question_id)
           const { data: sourceQuestions, error: sourceError } = await supabase
             .from('questions')
             .select('*')
@@ -166,8 +223,8 @@ export async function POST(request: NextRequest) {
           }
 
           const sourceById = new Map((sourceQuestions || []).map((q: any) => [q.id, q]))
-          const snapshotRows = setQuestions
-            .map((sq) => {
+          const snapshotRows = limited
+            .map((sq, idx) => {
               const src: any = sourceById.get(sq.question_id)
               if (!src) return null
               return {
@@ -181,7 +238,7 @@ export async function POST(request: NextRequest) {
                 option_d: src.option_d,
                 correct_answer: src.correct_answer_tf || src.correct_answer,
                 media_url: src.media_url,
-                question_order: Number(sq.order_index),
+                question_order: idx + 1,
               }
             })
             .filter(Boolean)

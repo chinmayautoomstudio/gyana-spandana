@@ -27,6 +27,7 @@ export default function PublicSessionLeaderboardPage() {
 
   const [title, setTitle] = useState('Live Leaderboard')
   const [roundName, setRoundName] = useState('Waiting')
+  const [isTestSession, setIsTestSession] = useState(false)
   const [rows, setRows] = useState<ScoreRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +47,7 @@ export default function PublicSessionLeaderboardPage() {
     const sessionData = await sessionRes.json().catch(() => ({}))
     if (sessionRes.ok) {
       setTitle(sessionData?.session?.title || 'Live Leaderboard')
+      setIsTestSession(Boolean(sessionData?.session?.is_test_session))
       setRoundName(
         sessionData?.activeRound?.title ||
           sessionData?.activeRound?.round_type ||
@@ -108,6 +110,11 @@ export default function PublicSessionLeaderboardPage() {
             <p className="mt-1 text-sm text-gray-600">
               Current round: {roundName}
             </p>
+            {isTestSession ? (
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Test session — leaderboard is for rehearsal only.
+              </p>
+            ) : null}
           </div>
           <LiveLeaderboardMeta
             lastUpdatedAt={lastUpdatedAt}

@@ -15,6 +15,7 @@ interface SessionState {
   currentQuestionEvent: any | null
   currentQuestion: any | null
   scores: Record<TeamLabel, number>
+  team_display_names?: Record<TeamLabel, string>
 }
 
 export default function ParticipantPlayPage() {
@@ -80,6 +81,7 @@ export default function ParticipantPlayPage() {
   }, [sessionId, supabase, fetchState])
 
   const teamNames = useMemo(() => {
+    if (state?.team_display_names) return state.team_display_names
     const slots = state?.session?.team_slots || {}
     return {
       A: `Team ${slots.A ? slots.A.slice(0, 8) : 'A'}`,
@@ -87,7 +89,7 @@ export default function ParticipantPlayPage() {
       C: `Team ${slots.C ? slots.C.slice(0, 8) : 'C'}`,
       D: `Team ${slots.D ? slots.D.slice(0, 8) : 'D'}`,
     } as Record<TeamLabel, string>
-  }, [state?.session?.team_slots])
+  }, [state?.team_display_names, state?.session?.team_slots])
 
   useEffect(() => {
     setSelectedTrueFalse(null)
@@ -112,6 +114,11 @@ export default function ParticipantPlayPage() {
       <ScoreSidebar teams={teamNames} scores={state.scores} />
       <div className="space-y-4">
         <div className="rounded-xl border border-gray-200 bg-white p-4">
+          {state.session.is_test_session ? (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Test session — rehearsal run; not a scored competition round.
+            </div>
+          ) : null}
           <p className="text-sm text-gray-500">Session</p>
           <h1 className="text-2xl font-bold text-gray-900">{state.session.title}</h1>
           <p className="text-sm text-gray-600">

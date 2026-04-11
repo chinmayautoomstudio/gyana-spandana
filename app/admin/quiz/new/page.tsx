@@ -29,6 +29,8 @@ interface RoundConfig {
   title: string
   question_set_id: string
   true_false_mode?: 'directed' | 'buzzer'
+  /** Omit or leave unset to snapshot every question in the set (set order). */
+  question_count?: number
 }
 
 export default function NewQuizSessionPage() {
@@ -56,6 +58,7 @@ export default function NewQuizSessionPage() {
   const [rounds, setRounds] = useState<RoundConfig[]>([
     { round_type: 'direct_question', title: 'Direct Question Round', question_set_id: '' },
   ])
+  const [isTestSession, setIsTestSession] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -116,12 +119,25 @@ export default function NewQuizSessionPage() {
 
     try {
       const selectedTeams = Object.values(teamSlots).filter(Boolean)
-      if (selectedTeams.length !== 4) throw new Error('All 4 team slots are required')
-      if (new Set(selectedTeams).size !== 4) throw new Error('Each team slot must be unique')
+      if (isTestSession) {
+        if (selectedTeams.length < 1) throw new Error('Testing session: assign at least one team')
+        if (new Set(selectedTeams).size !== selectedTeams.length) throw new Error('Each team slot must be unique')
+      } else {
+        if (selectedTeams.length !== 4) throw new Error('All 4 team slots are required')
+        if (new Set(selectedTeams).size !== 4) throw new Error('Each team slot must be unique')
+      }
       if (!title.trim()) throw new Error('Session title is required')
       if (!hostId) throw new Error('Please select a host')
       if (rounds.length === 0) throw new Error('At least one round is required')
       if (rounds.some((r) => !r.question_set_id)) throw new Error('Each round needs a question set')
+
+      const roundsPayload = rounds.map((r) => {
+        const { question_count, ...rest } = r
+        if (question_count !== undefined && question_count !== null && question_count > 0) {
+          return { ...rest, question_count }
+        }
+        return rest
+      })
 
       const res = await fetch('/api/admin/quiz/sessions', {
         method: 'POST',
@@ -132,7 +148,8 @@ export default function NewQuizSessionPage() {
           team_slots: teamSlots,
           points_full: pointsFull,
           points_half: pointsHalf,
-          rounds,
+          rounds: roundsPayload,
+          is_test_session: isTestSession,
         }),
       })
 
@@ -177,6 +194,21 @@ export default function NewQuizSessionPage() {
             </select>
           </div>
 
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/80 p-4">
+            <input
+              type="checkbox"
+              checked={isTestSession}
+              onChange={(e) => setIsTestSession(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300"
+            />
+            <span>
+              <span className="font-medium text-gray-900">Testing session</span>
+              <span className="mt-1 block text-sm text-gray-600">
+                Assign one or more teams without filling all four slots. Scores still save to the database; use this to verify host and play flows before a live event.
+              </span>
+            </span>
+          </label>
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Points (full)"
@@ -198,7 +230,9 @@ export default function NewQuizSessionPage() {
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">Team slots</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            Team slots{isTestSession ? ' (at least one)' : ' (all four required)'}
+          </h2>
           <div className="grid grid-cols-2 gap-4">
             {(['A', 'B', 'C', 'D'] as TeamLabel[]).map((label) => (
               <div key={label}>
@@ -207,7 +241,7 @@ export default function NewQuizSessionPage() {
                   value={teamSlots[label]}
                   onChange={(e) => setTeamSlots((prev) => ({ ...prev, [label]: e.target.value }))}
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900"
-                  required
+                  required={!isTestSession}
                 >
                   <option value="">Select team</option>
                   {teams.map((team) => {
@@ -289,6 +323,37 @@ export default function NewQuizSessionPage() {
                   ))}
                 </select>
               </div>
+              <Input
+                label="Questions to include (optional)"
+                type="number"
+                min={1}
+                value={
+                  round.question_count !== undefined && round.question_count !== null
+                    ? String(round.question_count)
+                    : ''
+                }
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === '') {
+                    updateRound(index, { question_count: undefined })
+                    return
+                  }
+                  const n = parseInt(v, 10)
+                  if (!Number.isNaN(n)) {
+                    updateRound(index, { question_count: n })
+                  }
+                }}
+                helperText={
+                  round.question_set_id
+                    ? (() => {
+                        const s = questionSets.find((x) => x.id === round.question_set_id)
+                        return s
+                          ? `Set has ${s.total_questions} question(s). Leave blank to include all, in set order.`
+                          : 'Leave blank to include every question from the set (in set order).'
+                      })()
+                    : 'Select a question set first. Leave blank to include all questions.'
+                }
+              />
             </div>
           ))}
         </div>
