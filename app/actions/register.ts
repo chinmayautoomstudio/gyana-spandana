@@ -97,7 +97,7 @@ export async function registerTeam(
                     team_id: team.id,
                     name: p.name,
                     gender: p.gender,
-                    email: p.email,
+                    email: p.email.trim().toLowerCase(),
                     phone: p.phone,
                     school_name: data.schoolName,
                     aadhar: p.aadhar,

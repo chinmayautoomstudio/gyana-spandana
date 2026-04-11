@@ -96,7 +96,6 @@ export async function POST(request: NextRequest) {
 
     const siteUrl = getSiteUrl()
     const invitationLink = `${siteUrl}/register/invite/${invitationToken}`
-    const updateP2EmailLink = `${siteUrl}/team/update-p2-email`
     const expiresAtFormatted = expiresAt.toLocaleDateString('en-IN', {
       year: 'numeric',
       month: 'long',
@@ -110,7 +109,6 @@ export async function POST(request: NextRequest) {
       schoolName: p1?.school_name ?? '',
       invitationLink,
       expiresAt: expiresAtFormatted,
-      updateP2EmailLink,
     })
 
     const result = await sendEmail(

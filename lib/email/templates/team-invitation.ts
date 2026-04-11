@@ -9,8 +9,6 @@ export interface TeamInvitationTemplateData {
   schoolName: string
   invitationLink: string
   expiresAt: string
-  /** Link for Participant 1 to correct Participant 2's invited email (e.g. reminder emails). */
-  updateP2EmailLink?: string
 }
 
 export function buildTeamInvitationEmail(data: TeamInvitationTemplateData) {

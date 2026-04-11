@@ -1,0 +1,13 @@
+---
+description: Use Supabase MCP for migration checks and DDL on this project
+globs:
+  - supabase/migrations/**/*.sql
+---
+
+When changing the database schema or verifying migrations for this project:
+
+1. **Inspect applied migrations** with MCP server `user-supabase-gyanaspardha`, tool `list_migrations` (no arguments).
+2. **Apply DDL** with MCP `apply_migration` — pass `name` (snake_case) and `query` (SQL). Prefer this over ad-hoc `execute_sql` for CREATE INDEX, ALTER TABLE, etc.
+3. **Diagnostics only** (SELECT, duplicate checks) may use MCP `execute_sql`.
+
+If `apply_migration` fails (e.g. unique index blocked by existing rows), use `execute_sql` to locate conflicting rows, resolve data per product policy, then re-run `apply_migration`.
