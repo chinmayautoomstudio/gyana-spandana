@@ -42,7 +42,7 @@ const PARTICIPANT_WITH_TEAM_SELECT = [
   'team_id',
   'email_verified',
   'phone_verified',
-  'teams(team_name, team_code, created_at, status, p2_invited_email, authority_name, authority_email, authority_phone)',
+  'teams(team_name, team_code, created_at, status, p2_invited_email, team_name_renamed_at, authority_name, authority_email, authority_phone)',
 ].join(', ')
 
 /** Row shape for participants select (explicit columns); avoids GenericStringError from dynamic select typing */
@@ -72,6 +72,7 @@ type DashboardParticipantRow = {
     created_at: string
     status: string
     p2_invited_email: string | null
+    team_name_renamed_at: string | null
     authority_name: string | null
     authority_email: string | null
     authority_phone: string | null
@@ -531,6 +532,14 @@ export default function DashboardPage() {
                         Update P2 email
                       </Button>
                     </Link>
+                    {participantData?.is_participant1 &&
+                      !participantData?.teams?.team_name_renamed_at && (
+                        <Link href="/team/rename-once">
+                          <Button variant="outline" size="sm" type="button">
+                            Rename team (one-time)
+                          </Button>
+                        </Link>
+                      )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -751,8 +760,21 @@ export default function DashboardPage() {
 
                   <div className="space-y-6">
                     <div className="bg-gradient-to-r from-[#C0392B]/10 to-[#E67E22]/10 rounded-xl p-4 border border-[#C0392B]/30 backdrop-blur-sm">
-                      <span className="text-sm font-medium text-gray-500">Team Name</span>
-                      <p className="text-2xl font-bold text-gray-900 mt-1">{participantData.teams.team_name}</p>
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Team Name</span>
+                          <p className="text-2xl font-bold text-gray-900 mt-1">{participantData.teams.team_name}</p>
+                        </div>
+                        {participantData.is_participant1 &&
+                          !participantData.teams.team_name_renamed_at &&
+                          participantData.teams.status === 'complete' && (
+                            <Link href="/team/rename-once">
+                              <Button variant="outline" size="sm" type="button">
+                                Rename team (one-time)
+                              </Button>
+                            </Link>
+                          )}
+                      </div>
                     </div>
 
                     {participantData.teams.team_code && (

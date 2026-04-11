@@ -61,9 +61,9 @@ export function buildP1PendingPartnerReminderEmail(data: P1PendingPartnerReminde
     </p>
 
     <div style="background: #fff8f0; padding: 18px; border-radius: 8px; margin: 24px 0; border: 1px solid #f0d9c2;">
-      <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">Wrong email for your partner?</p>
-      <p style="margin: 0 0 14px 0; font-size: 14px; color: #555;">
-        If you need to change Participant 2’s invited email, sign in and use the link below.
+      <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">Wrong email or wrong teammate address?</p>
+      <p style="margin: 0 0 10px 0; font-size: 14px; color: #555;">
+        If you entered the <strong>wrong email for Participant 2</strong>, or you <strong>mistakenly used your own email</strong> as Participant 2, sign in and update Participant 2’s email. Then ask your partner to <strong>complete registration</strong> using the invitation link above (or the new one we send after you save).
       </p>
       <div style="text-align: center;">
         <a href="${updateP2EmailLink}" style="display: inline-block; color: #C0392B; font-weight: bold; font-size: 15px;">
@@ -101,7 +101,7 @@ ${invitationLink}
 
 This link is valid until ${expiresAt}.
 
-Wrong email for your partner? Update Participant 2's invited email here:
+Wrong email, or you used your own email as Participant 2? Update Participant 2's invited email, then ask them to complete registration:
 ${updateP2EmailLink}
 
 For any issues, contact us at: ${supportEmail}
