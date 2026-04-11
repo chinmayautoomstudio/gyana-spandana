@@ -229,7 +229,7 @@ export async function updateProfile(
     }
 
     // Add optional fields if provided
-    if (data.email) updateData.email = data.email
+    if (data.email) updateData.email = data.email.trim().toLowerCase()
     if (data.phone) updateData.phone = data.phone
     if (data.address !== undefined) updateData.address = data.address || null
     if (data.schoolAddress !== undefined) updateData.school_address = data.schoolAddress || null

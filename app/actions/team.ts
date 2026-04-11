@@ -12,6 +12,13 @@ import { notifyAllAdmins } from '@/app/actions/notification'
 
 const INVITATION_EXPIRY_DAYS = 7
 
+const P2_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Escape `%`, `_`, and `\` for an exact Postgres `ILIKE` match (no wildcards). */
+function escapeForExactIlike(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
 /** Team code: GS- + first 8 chars of UUID (e.g. GS-A7F2K9M4). Unique, no name info, never updated. */
 function generateShortTeamCode(): string {
   return 'GS-' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
@@ -122,6 +129,78 @@ export async function checkPendingInvitationForEmail(
   return { hasPending: false }
 }
 
+export type InvitedP2EmailCheckResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Validates Participant 2 invite email before team creation (step UX + same rules as createTeamAndInviteP2).
+ */
+export async function validateInvitedP2EmailForTeamCreation(
+  p2EmailRaw: string
+): Promise<InvitedP2EmailCheckResult> {
+  const trimmed = p2EmailRaw?.trim() ?? ''
+  if (!trimmed) {
+    return { ok: false, error: 'Participant 2 email is required.' }
+  }
+  if (!P2_EMAIL_REGEX.test(trimmed)) {
+    return { ok: false, error: 'Please enter a valid email address for Participant 2.' }
+  }
+
+  const supabaseServer = await createClient()
+  const {
+    data: { user },
+  } = await supabaseServer.auth.getUser()
+  if (!user) {
+    return { ok: false, error: 'You must be signed in.' }
+  }
+
+  const p1EmailRaw = user.email ?? (user.user_metadata?.email as string | undefined)
+  const p1Email = p1EmailRaw?.trim().toLowerCase() ?? ''
+  const p2Email = trimmed.toLowerCase()
+  if (p1Email && p2Email === p1Email) {
+    return { ok: false, error: 'Participant 2 must use a different email address than yours.' }
+  }
+
+  const admin = createAdminClient()
+
+  const { data: p2Rows, error: p2Err } = await admin
+    .from('participants')
+    .select('id')
+    .ilike('email', escapeForExactIlike(p2Email))
+    .limit(1)
+  if (p2Err) {
+    return { ok: false, error: 'Unable to verify Participant 2 email. Please try again.' }
+  }
+  const p2List = Array.isArray(p2Rows) ? p2Rows : p2Rows ? [p2Rows] : []
+  if (p2List.length > 0) {
+    return {
+      ok: false,
+      error:
+        'This email is already registered on a team. They cannot be invited as Participant 2 on a new team.',
+    }
+  }
+
+  const { data: pendingRows, error: pendErr } = await admin
+    .from('teams')
+    .select('id')
+    .ilike('p2_invited_email', escapeForExactIlike(p2Email))
+    .is('invitation_used_at', null)
+    .eq('status', 'pending_p2')
+    .limit(1)
+  if (pendErr) {
+    return { ok: false, error: 'Unable to verify Participant 2 email. Please try again.' }
+  }
+  const pendList = Array.isArray(pendingRows) ? pendingRows : pendingRows ? [pendingRows] : []
+  if (pendList.length > 0) {
+    return {
+      ok: false,
+      error:
+        'This email already has a pending team invitation. They must complete or decline that invite before being invited again.',
+    }
+  }
+
+  return { ok: true }
+}
+
 export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise<CreateTeamResult> {
   const supabaseServer = await createClient()
   const { data: { user } } = await supabaseServer.auth.getUser()
@@ -157,6 +236,11 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
       success: false,
       error: `Your email already has a pending team invitation for "${pendingInvite.teamName}". Please check your email and use the invitation link to join your team instead.`,
     }
+  }
+
+  const p2InviteCheck = await validateInvitedP2EmailForTeamCreation(data.p2Email)
+  if (!p2InviteCheck.ok) {
+    return { success: false, error: p2InviteCheck.error }
   }
 
   const teamNameTrimmed = data.teamName.trim()
@@ -218,7 +302,7 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
     user_id: user.id,
     team_id: team.id,
     name: data.p1Name,
-    email: user.email,
+    email: p1Email,
     school_name: data.schoolName,
     gender: data.p1Gender ?? null,
     phone: data.p1Phone?.trim() || null,
@@ -326,18 +410,21 @@ export async function completeP2Registration(
     return { success: false, error: 'Participant 2 cannot use the same email address as Participant 1.' }
   }
 
-  // Check if the email is already registered as a participant (e.g. previous attempt)
-  const { data: existingParticipant } = await admin
+  const { data: existingRows, error: existingErr } = await admin
     .from('participants')
     .select('id')
-    .eq('email', emailLower)
-    .single()
-  if (existingParticipant) {
+    .ilike('email', escapeForExactIlike(emailLower))
+    .limit(1)
+  if (existingErr) {
+    return { success: false, error: 'Unable to verify email. Please try again.' }
+  }
+  const existingList = Array.isArray(existingRows) ? existingRows : existingRows ? [existingRows] : []
+  if (existingList.length > 0) {
     return { success: false, error: 'This email is already registered for a team. Please log in or use a different email.' }
   }
 
   const { data: newUser, error: createUserError } = await admin.auth.admin.createUser({
-    email: data.email,
+    email: emailLower,
     password: data.password,
     email_confirm: true,
     user_metadata: { name: data.name },
@@ -378,7 +465,7 @@ export async function completeP2Registration(
     user_id: newUser.user.id,
     team_id: team.id,
     name: data.name,
-    email: data.email,
+    email: emailLower,
     phone: data.phone,
     school_name: schoolName,
     aadhar: data.aadhar,
@@ -430,7 +517,7 @@ export async function completeP2Registration(
 
   // Fire-and-forget: do not block on confirmation emails or admin notifications
   sendConfirmation({
-    participantEmail: data.email,
+    participantEmail: emailLower,
     participantName: data.name,
     participantSchool: schoolName,
     teammateName: p1Name,
@@ -513,12 +600,20 @@ export async function completeP2RegistrationWithGoogle(
     return { success: false, error: 'Participant 2 cannot use the same email address as Participant 1.' }
   }
 
-  const { data: existingParticipant } = await admin
+  const { data: existingGoogleRows, error: existingGoogleErr } = await admin
     .from('participants')
     .select('id')
-    .eq('email', userEmail)
-    .single()
-  if (existingParticipant) {
+    .ilike('email', escapeForExactIlike(userEmail))
+    .limit(1)
+  if (existingGoogleErr) {
+    return { success: false, error: 'Unable to verify email. Please try again.' }
+  }
+  const existingGoogleList = Array.isArray(existingGoogleRows)
+    ? existingGoogleRows
+    : existingGoogleRows
+      ? [existingGoogleRows]
+      : []
+  if (existingGoogleList.length > 0) {
     return { success: false, error: 'This email is already registered for a team. Please log in.' }
   }
 
@@ -540,7 +635,7 @@ export async function completeP2RegistrationWithGoogle(
     user_id: user.id,
     team_id: team.id,
     name: data.name,
-    email: user.email,
+    email: userEmail,
     phone: data.phone,
     school_name: schoolName,
     aadhar: data.aadhar,
@@ -590,7 +685,7 @@ export async function completeP2RegistrationWithGoogle(
     }).catch((err) => { console.error('Registration confirmation email failed', err) })
   }
   sendConfirmation({
-    participantEmail: user.email,
+    participantEmail: userEmail,
     participantName: data.name,
     participantSchool: schoolName,
     teammateName: p1Name,
@@ -739,8 +834,6 @@ export async function resendInvitation(teamId: string): Promise<ResendInvitation
   return { success: true }
 }
 
-const P2_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 /**
  * Participant 1 may change Participant 2's invited email only while the team is still pending P2 registration.
  * Rotates the invitation token and sends a new invitation to the updated address.
@@ -799,15 +892,43 @@ export async function updateP2InvitedEmail(newEmail: string): Promise<UpdateP2Em
     return { success: false, error: 'Enter a different email address than the current invite.' }
   }
 
-  const { data: existingParticipant } = await admin
+  const { data: existingP2Rows, error: existingP2Err } = await admin
     .from('participants')
     .select('id')
-    .eq('email', p2EmailLower)
-    .maybeSingle()
-  if (existingParticipant) {
+    .ilike('email', escapeForExactIlike(p2EmailLower))
+    .limit(1)
+  if (existingP2Err) {
+    return { success: false, error: 'Unable to verify email. Please try again.' }
+  }
+  const existingP2List = Array.isArray(existingP2Rows) ? existingP2Rows : existingP2Rows ? [existingP2Rows] : []
+  if (existingP2List.length > 0) {
     return {
       success: false,
       error: 'This email is already registered for a team. Use a different address.',
+    }
+  }
+
+  const { data: dupPendingRows, error: dupPendingErr } = await admin
+    .from('teams')
+    .select('id')
+    .ilike('p2_invited_email', escapeForExactIlike(p2EmailLower))
+    .is('invitation_used_at', null)
+    .eq('status', 'pending_p2')
+    .neq('id', team.id)
+    .limit(1)
+  if (dupPendingErr) {
+    return { success: false, error: 'Unable to verify email. Please try again.' }
+  }
+  const dupPendingList = Array.isArray(dupPendingRows)
+    ? dupPendingRows
+    : dupPendingRows
+      ? [dupPendingRows]
+      : []
+  if (dupPendingList.length > 0) {
+    return {
+      success: false,
+      error:
+        'This email already has a pending team invitation from another team. Use a different address.',
     }
   }
 

@@ -155,6 +155,12 @@ export default function TeamCreatePage() {
         setError('p2Email', { type: 'manual', message: 'Participant 2 must use a different email address than yours.' })
         return
       }
+      const { validateInvitedP2EmailForTeamCreation } = await import('@/app/actions/team')
+      const p2InviteCheck = await validateInvitedP2EmailForTeamCreation(getValues('p2Email'))
+      if (!p2InviteCheck.ok) {
+        setError('p2Email', { type: 'manual', message: p2InviteCheck.error })
+        return
+      }
     }
     if (step === 2) {
       const ok = await trigger(['p1Gender', 'p1Phone', 'p1Aadhar', 'p1Class', 'p1DateOfBirth'])

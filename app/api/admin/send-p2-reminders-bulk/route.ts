@@ -65,7 +65,6 @@ export async function POST() {
     let failed = 0
     const errors: string[] = []
     const siteUrl = getSiteUrl()
-    const updateP2EmailLink = `${siteUrl}/team/update-p2-email`
 
     for (const team of pending) {
       const p2Email = team.p2_invited_email!.trim()
@@ -109,7 +108,6 @@ export async function POST() {
         schoolName: p1?.school_name ?? '',
         invitationLink,
         expiresAt: expiresAtFormatted,
-        updateP2EmailLink,
       })
 
       const result = await sendEmail(
