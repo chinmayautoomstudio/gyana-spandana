@@ -19,6 +19,7 @@ interface TeamDetail {
   authority_phone: string | null
   p2_invited_email: string | null
   invitation_expires_at: string | null
+  team_name_renamed_at: string | null
 }
 
 interface ParticipantSummary {
@@ -51,6 +52,7 @@ export default function AdminTeamDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [reminding, setReminding] = useState(false)
+  const [resettingRename, setResettingRename] = useState(false)
 
   useEffect(() => {
     if (!teamId) return
@@ -61,7 +63,7 @@ export default function AdminTeamDetailPage() {
       const { data: teamData, error: teamError } = await supabase
         .from('teams')
         .select(
-          'id, team_name, team_code, status, created_at, authority_name, authority_email, authority_phone, p2_invited_email, invitation_expires_at',
+          'id, team_name, team_code, status, created_at, authority_name, authority_email, authority_phone, p2_invited_email, invitation_expires_at, team_name_renamed_at',
         )
         .eq('id', teamId)
         .single()
@@ -135,6 +137,36 @@ export default function AdminTeamDetailPage() {
       router.push('/admin/teams')
     } else {
       setError(result.error)
+    }
+  }
+
+  const handleResetTeamRenameFlag = async () => {
+    if (!teamId || !team) return
+    if (
+      !window.confirm(
+        'Allow Participant 1 to use their one-time team rename again? This only clears the rename lock; it does not change the current team name.',
+      )
+    ) {
+      return
+    }
+    setResettingRename(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/teams/reset-team-name-rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body.success) {
+        setError((body as { error?: string }).error || 'Failed to reset rename flag.')
+      } else {
+        setTeam((t) => (t ? { ...t, team_name_renamed_at: null } : t))
+      }
+    } catch {
+      setError('Failed to reset rename flag. Please try again.')
+    } finally {
+      setResettingRename(false)
     }
   }
 
@@ -249,7 +281,25 @@ export default function AdminTeamDetailPage() {
                 <dt className="text-gray-600">Authority phone</dt>
                 <dd className="text-gray-900">{team.authority_phone || '—'}</dd>
               </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-gray-600 shrink-0">One-time rename used</dt>
+                <dd className="text-gray-900 text-right">
+                  {team.team_name_renamed_at ? formatDateTime(team.team_name_renamed_at) : 'No'}
+                </dd>
+              </div>
             </dl>
+            {team.team_name_renamed_at && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 w-full"
+                onClick={handleResetTeamRenameFlag}
+                disabled={resettingRename}
+                isLoading={resettingRename}
+              >
+                Allow team name change again
+              </Button>
+            )}
           </div>
 
           {team.status === 'pending_p2' && (

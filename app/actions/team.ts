@@ -4,11 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   TEAM_NAME_MAX_LENGTH,
+  teamNameSchema,
   type TeamCreationFormData,
   type P2RegistrationFormData,
   type P2RegistrationWithGoogleFormData,
 } from '@/lib/validations'
 import { notifyAllAdmins } from '@/app/actions/notification'
+import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
+import { buildTeamNameChangedP2Email } from '@/lib/email/templates/team-name-changed-p2'
 
 const INVITATION_EXPIRY_DAYS = 7
 
@@ -40,6 +44,7 @@ export type TeamNameAvailabilityResult = { available: true } | { available: fals
 export type CompleteP2Result = { success: true } | { success: false; error: string }
 export type ResendInvitationResult = { success: true } | { success: false; error: string }
 export type UpdateP2EmailResult = { success: true } | { success: false; error: string }
+export type RenameTeamOnceResult = { success: true } | { success: false; error: string }
 export type UpdateTeamAuthorityResult = { success: true } | { success: false; error: string }
 export type InvitationDetails = {
   valid: true
@@ -131,6 +136,60 @@ export async function checkPendingInvitationForEmail(
 
 export type InvitedP2EmailCheckResult = { ok: true } | { ok: false; error: string }
 
+type P2InviteEmailAvail = { ok: true } | { ok: false; error: string }
+
+/**
+ * Participant 2 invite email must not match any registered participant and must not be
+ * p2_invited_email on another pending_p2 team (even if an invite link was already opened).
+ */
+async function assertP2InviteEmailAvailable(
+  normalizedEmail: string,
+  excludeTeamId?: string
+): Promise<P2InviteEmailAvail> {
+  const admin = createAdminClient()
+
+  const { data: p2Rows, error: p2Err } = await admin
+    .from('participants')
+    .select('id')
+    .ilike('email', escapeForExactIlike(normalizedEmail))
+    .limit(1)
+  if (p2Err) {
+    return { ok: false, error: 'Unable to verify Participant 2 email. Please try again.' }
+  }
+  const p2List = Array.isArray(p2Rows) ? p2Rows : p2Rows ? [p2Rows] : []
+  if (p2List.length > 0) {
+    return {
+      ok: false,
+      error:
+        'This email is already registered on a team. Use a different address for Participant 2.',
+    }
+  }
+
+  let pendingQuery = admin
+    .from('teams')
+    .select('id')
+    .ilike('p2_invited_email', escapeForExactIlike(normalizedEmail))
+    .eq('status', 'pending_p2')
+    .limit(1)
+  if (excludeTeamId) {
+    pendingQuery = pendingQuery.neq('id', excludeTeamId)
+  }
+  const { data: pendingRows, error: pendErr } = await pendingQuery
+  if (pendErr) {
+    return { ok: false, error: 'Unable to verify Participant 2 email. Please try again.' }
+  }
+  const pendList = Array.isArray(pendingRows) ? pendingRows : pendingRows ? [pendingRows] : []
+  if (pendList.length > 0) {
+    return {
+      ok: false,
+      error:
+        'This email is already invited as Participant 2 on another team that has not finished registration. Use a different address.',
+    }
+  }
+
+  return { ok: true }
+}
+
 /**
  * Validates Participant 2 invite email before team creation (step UX + same rules as createTeamAndInviteP2).
  */
@@ -160,45 +219,7 @@ export async function validateInvitedP2EmailForTeamCreation(
     return { ok: false, error: 'Participant 2 must use a different email address than yours.' }
   }
 
-  const admin = createAdminClient()
-
-  const { data: p2Rows, error: p2Err } = await admin
-    .from('participants')
-    .select('id')
-    .ilike('email', escapeForExactIlike(p2Email))
-    .limit(1)
-  if (p2Err) {
-    return { ok: false, error: 'Unable to verify Participant 2 email. Please try again.' }
-  }
-  const p2List = Array.isArray(p2Rows) ? p2Rows : p2Rows ? [p2Rows] : []
-  if (p2List.length > 0) {
-    return {
-      ok: false,
-      error:
-        'This email is already registered on a team. They cannot be invited as Participant 2 on a new team.',
-    }
-  }
-
-  const { data: pendingRows, error: pendErr } = await admin
-    .from('teams')
-    .select('id')
-    .ilike('p2_invited_email', escapeForExactIlike(p2Email))
-    .is('invitation_used_at', null)
-    .eq('status', 'pending_p2')
-    .limit(1)
-  if (pendErr) {
-    return { ok: false, error: 'Unable to verify Participant 2 email. Please try again.' }
-  }
-  const pendList = Array.isArray(pendingRows) ? pendingRows : pendingRows ? [pendingRows] : []
-  if (pendList.length > 0) {
-    return {
-      ok: false,
-      error:
-        'This email already has a pending team invitation. They must complete or decline that invite before being invited again.',
-    }
-  }
-
-  return { ok: true }
+  return assertP2InviteEmailAvailable(p2Email)
 }
 
 export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise<CreateTeamResult> {
@@ -892,44 +913,9 @@ export async function updateP2InvitedEmail(newEmail: string): Promise<UpdateP2Em
     return { success: false, error: 'Enter a different email address than the current invite.' }
   }
 
-  const { data: existingP2Rows, error: existingP2Err } = await admin
-    .from('participants')
-    .select('id')
-    .ilike('email', escapeForExactIlike(p2EmailLower))
-    .limit(1)
-  if (existingP2Err) {
-    return { success: false, error: 'Unable to verify email. Please try again.' }
-  }
-  const existingP2List = Array.isArray(existingP2Rows) ? existingP2Rows : existingP2Rows ? [existingP2Rows] : []
-  if (existingP2List.length > 0) {
-    return {
-      success: false,
-      error: 'This email is already registered for a team. Use a different address.',
-    }
-  }
-
-  const { data: dupPendingRows, error: dupPendingErr } = await admin
-    .from('teams')
-    .select('id')
-    .ilike('p2_invited_email', escapeForExactIlike(p2EmailLower))
-    .is('invitation_used_at', null)
-    .eq('status', 'pending_p2')
-    .neq('id', team.id)
-    .limit(1)
-  if (dupPendingErr) {
-    return { success: false, error: 'Unable to verify email. Please try again.' }
-  }
-  const dupPendingList = Array.isArray(dupPendingRows)
-    ? dupPendingRows
-    : dupPendingRows
-      ? [dupPendingRows]
-      : []
-  if (dupPendingList.length > 0) {
-    return {
-      success: false,
-      error:
-        'This email already has a pending team invitation from another team. Use a different address.',
-    }
+  const avail = await assertP2InviteEmailAvailable(p2EmailLower, team.id)
+  if (!avail.ok) {
+    return { success: false, error: avail.error }
   }
 
   const invitationToken = generateInvitationToken()
@@ -984,6 +970,182 @@ export async function updateP2InvitedEmail(newEmail: string): Promise<UpdateP2Em
     .catch((e) => {
       console.error('Send invitation after P2 email update error', e)
     })
+
+  return { success: true }
+}
+
+/**
+ * Participant 1 may rename the team once per `team_name_renamed_at` cycle (admins can clear the flag).
+ * Allowed when the team is `pending_p2` or `complete`. Refreshes the P2 invite email when still pending;
+ * emails Participant 2 when the team is already complete.
+ */
+export async function renameTeamNameOnce(newTeamName: string): Promise<RenameTeamOnceResult> {
+  const supabaseServer = await createClient()
+  const {
+    data: { user },
+  } = await supabaseServer.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+
+  const parsed = teamNameSchema.safeParse(newTeamName)
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? 'Invalid team name.'
+    return { success: false, error: msg }
+  }
+  const newNameTrimmed = parsed.data
+
+  const admin = createAdminClient()
+  const { data: p1Participant, error: p1Error } = await admin
+    .from('participants')
+    .select('id, team_id')
+    .eq('user_id', user.id)
+    .eq('is_participant1', true)
+    .maybeSingle()
+
+  if (p1Error || !p1Participant?.team_id) {
+    return { success: false, error: 'Only Participant 1 can rename the team.' }
+  }
+
+  const { data: team, error: teamError } = await admin
+    .from('teams')
+    .select('id, team_name, status, team_name_renamed_at, p2_invited_email')
+    .eq('id', p1Participant.team_id)
+    .single()
+
+  if (teamError || !team) {
+    return { success: false, error: 'Team not found.' }
+  }
+  if (team.status !== 'pending_p2' && team.status !== 'complete') {
+    return { success: false, error: 'Your team cannot be renamed at this time.' }
+  }
+  if (team.team_name_renamed_at) {
+    return {
+      success: false,
+      error:
+        'You have already used your one-time team rename. Contact support if you need further changes.',
+    }
+  }
+  if (newNameTrimmed === team.team_name) {
+    return { success: false, error: 'Choose a different name than your current team name.' }
+  }
+
+  const { data: nameDup } = await admin
+    .from('teams')
+    .select('id')
+    .eq('team_name', newNameTrimmed)
+    .neq('id', team.id)
+    .maybeSingle()
+  if (nameDup) {
+    return { success: false, error: 'That team name is already taken.' }
+  }
+
+  const previousName = team.team_name
+  const p2Addr = team.p2_invited_email?.trim()
+  const pendingWithP2 = team.status === 'pending_p2' && Boolean(p2Addr)
+
+  const renamedAt = new Date().toISOString()
+  let invitationToken: string | null = null
+  let expiresAtIso: string | null = null
+
+  if (pendingWithP2) {
+    invitationToken = generateInvitationToken()
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + INVITATION_EXPIRY_DAYS)
+    expiresAtIso = expiresAt.toISOString()
+  }
+
+  const updatePayload: Record<string, string> = {
+    team_name: newNameTrimmed,
+    team_name_renamed_at: renamedAt,
+  }
+  if (pendingWithP2 && invitationToken && expiresAtIso) {
+    updatePayload.invitation_token = invitationToken
+    updatePayload.invitation_expires_at = expiresAtIso
+  }
+
+  const { error: renameErr } = await admin.from('teams').update(updatePayload).eq('id', team.id)
+
+  if (renameErr) {
+    return { success: false, error: renameErr.message ?? 'Failed to rename team.' }
+  }
+
+  if (pendingWithP2 && p2Addr && invitationToken && expiresAtIso) {
+    const { data: p1Row } = await admin
+      .from('participants')
+      .select('name, school_name')
+      .eq('team_id', team.id)
+      .eq('is_participant1', true)
+      .single()
+
+    const invitationLink = `${getSiteUrl()}/register/invite/${invitationToken}`
+    const expiresAtFormatted = new Date(expiresAtIso).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+
+    void fetch(`${getSiteUrl()}/api/send-team-invitation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p2Email: p2Addr,
+        p1Name: p1Row?.name ?? 'Your teammate',
+        teamName: newNameTrimmed,
+        schoolName: p1Row?.school_name ?? '',
+        invitationLink,
+        expiresAt: expiresAtFormatted,
+      }),
+    })
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok && !(body as { skipped?: boolean }).skipped) {
+          console.error('Send invitation after team rename failed', res.status, body)
+        }
+      })
+      .catch((e) => {
+        console.error('Send invitation after team rename error', e)
+      })
+  } else if (team.status === 'complete') {
+    const { data: p2Row } = await admin
+      .from('participants')
+      .select('email, name')
+      .eq('team_id', team.id)
+      .eq('is_participant1', false)
+      .maybeSingle()
+
+    const p2Email = p2Row?.email?.trim()
+    if (!p2Email) {
+      console.warn('renameTeamNameOnce: complete team has no P2 email; skipping notice')
+      return { success: true }
+    }
+
+    const { data: p1Row } = await admin
+      .from('participants')
+      .select('name')
+      .eq('team_id', team.id)
+      .eq('is_participant1', true)
+      .single()
+
+    const { subject, html, text } = buildTeamNameChangedP2Email({
+      p2Name: p2Row?.name ?? 'there',
+      p1Name: p1Row?.name ?? 'Your teammate',
+      previousTeamName: previousName,
+      newTeamName: newNameTrimmed,
+    })
+
+    void sendEmail(
+      { to: p2Email, subject, html, text },
+      {
+        emailType: SENT_EMAIL_TYPES.TEAM_NAME_CHANGED_P2,
+        metadata: { team_id: team.id, previous_team_name: previousName, new_team_name: newNameTrimmed },
+      },
+    ).then((r) => {
+      if (!r.success) {
+        console.error('Team name changed email to P2 failed:', r.error)
+      }
+    })
+  }
 
   return { success: true }
 }
