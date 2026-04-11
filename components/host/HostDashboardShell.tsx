@@ -2,13 +2,13 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { signOutAndRedirect } from '@/lib/auth/client-sign-out'
 
 export function HostDashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [displayName, setDisplayName] = useState('')
   const [emailFallback, setEmailFallback] = useState('')
@@ -35,9 +35,8 @@ export function HostDashboardShell({ children }: { children: React.ReactNode }) 
 
   const handleLogout = useCallback(async () => {
     const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }, [router])
+    await signOutAndRedirect(supabase, '/login')
+  }, [])
 
   const hostHomeActive = pathname === '/host'
   const navClass = (active: boolean) =>

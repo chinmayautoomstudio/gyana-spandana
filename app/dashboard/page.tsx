@@ -12,6 +12,7 @@ import { ProfileCompletionModal } from '@/components/ui/ProfileCompletionModal'
 import { NotificationBell } from '@/components/admin/NotificationBell'
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton'
 import { updateExamStatuses } from '@/lib/utils/examScheduler'
+import { signOutAndRedirect } from '@/lib/auth/client-sign-out'
 
 /** Single browser Supabase client per tab (avoids repeated client construction) */
 let browserSupabase: ReturnType<typeof createClient> | null = null
@@ -212,8 +213,7 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     const supabase = getSupabase()
     if (typeof window !== 'undefined') sessionStorage.removeItem(EXAM_STATUS_SYNC_KEY)
-    await supabase.auth.signOut()
-    router.push('/login')
+    await signOutAndRedirect(supabase, '/login')
   }
 
   const handleProfileComplete = async () => {
@@ -489,6 +489,7 @@ export default function DashboardPage() {
                   </div>
                   {/* Logout button */}
                   <button
+                    type="button"
                     onClick={handleLogout}
                     className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-red-500/10 text-red-600 rounded-lg hover:bg-red-500/20 transition-colors font-medium flex-shrink-0"
                     title="Logout"

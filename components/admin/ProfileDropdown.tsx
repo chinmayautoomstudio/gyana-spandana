@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { signOutAndRedirect } from '@/lib/auth/client-sign-out'
 import Link from 'next/link'
 
 interface ProfileDropdownProps {
@@ -17,8 +17,6 @@ export function ProfileDropdown({ userName, userEmail, userRole }: ProfileDropdo
   const containerRef = useRef<HTMLDivElement>(null)
   const dropdownMenuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
-  const router = useRouter()
-
   useEffect(() => {
     // Close dropdown when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
@@ -100,8 +98,7 @@ export function ProfileDropdown({ userName, userEmail, userRole }: ProfileDropdo
 
   const handleLogout = async () => {
     const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
+    await signOutAndRedirect(supabase, '/login')
   }
 
   const getInitials = (name: string) => {

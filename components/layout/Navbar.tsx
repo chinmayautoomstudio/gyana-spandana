@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { signOutAndRedirect } from '@/lib/auth/client-sign-out'
 import type { User } from '@supabase/supabase-js'
 import { Button } from '@/components/ui/Button'
 
@@ -56,9 +57,8 @@ export function Navbar() {
 
   const handleLogout = async () => {
     const supabase = createClient()
-    await supabase.auth.signOut()
     setMobileMenuOpen(false)
-    router.push('/')
+    await signOutAndRedirect(supabase, '/')
   }
 
   // Eager prefetch so Login/Register are ready when user clicks
