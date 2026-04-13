@@ -131,6 +131,46 @@ export function subscribeToSession(sessionId: string, handlers: QuizEventHandler
   }
 }
 
+/**
+ * Refetch-friendly realtime: postgres changes on question events and direct attempts.
+ * Use alongside broadcast `subscribeToSession` so UIs update when DB rows change without a broadcast.
+ */
+export function subscribeQuizDataRefresh(
+  sessionId: string,
+  roundIds: string[],
+  onRefresh: () => void,
+): () => void {
+  const supabase = createClient()
+  const channelName = `quiz-pg-refresh:${sessionId}`
+  const channel = supabase.channel(channelName)
+
+  if (roundIds.length > 0) {
+    const filter = `round_id=in.(${roundIds.join(',')})`
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'quiz_question_events', filter },
+      () => onRefresh(),
+    )
+  }
+
+  channel.on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'quiz_direct_attempts',
+      filter: `session_id=eq.${sessionId}`,
+    },
+    () => onRefresh(),
+  )
+
+  channel.subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
+
 export async function broadcastEvent(
   sessionId: string,
   type: QuizEventType,

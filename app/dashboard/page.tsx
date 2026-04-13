@@ -47,6 +47,27 @@ const PARTICIPANT_WITH_TEAM_SELECT = [
 ].join(', ')
 
 /** Row shape for participants select (explicit columns); avoids GenericStringError from dynamic select typing */
+type QuizOverviewSession = {
+  id: string
+  title: string
+  status: string
+  is_test_session?: boolean
+  created_at: string
+  rounds: Array<{
+    id: string
+    title: string
+    round_order: number
+    round_type: string
+    status: string
+    questions: Array<{
+      id: string
+      question_order: number
+      question_type: string | null
+      preview: string
+    }>
+  }>
+}
+
 type DashboardParticipantRow = {
   id: string
   user_id: string
@@ -98,6 +119,7 @@ export default function DashboardPage() {
   const [authorityError, setAuthorityError] = useState<string | null>(null)
   const [authorityFieldErrors, setAuthorityFieldErrors] = useState<{ email?: string; phone?: string }>({})
   const [showInvitationBanner, setShowInvitationBanner] = useState(false)
+  const [quizOverview, setQuizOverview] = useState<QuizOverviewSession[] | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -209,6 +231,31 @@ export default function DashboardPage() {
 
     return () => clearTimeout(timeoutId)
   }, [router])
+
+  useEffect(() => {
+    if (!participantData) {
+      setQuizOverview(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const r = await fetch('/api/quiz/participant/overview')
+        const d = await r.json()
+        if (cancelled) return
+        if (r.ok && Array.isArray(d.sessions)) {
+          setQuizOverview(d.sessions as QuizOverviewSession[])
+        } else {
+          setQuizOverview([])
+        }
+      } catch {
+        if (!cancelled) setQuizOverview([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [participantData?.id])
 
   const handleLogout = async () => {
     const supabase = getSupabase()
@@ -892,6 +939,74 @@ export default function DashboardPage() {
               )}
             </div>
 
+            {quizOverview && quizOverview.length > 0 ? (
+              <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                      />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">Live quiz</h2>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Sessions where your team is assigned. Question text is a short preview only; correct answers are not shown here.
+                </p>
+                <ul className="space-y-6">
+                  {quizOverview.map((s) => (
+                    <li key={s.id} className="rounded-xl border border-gray-200/80 bg-white/40 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-900">{s.title}</p>
+                          <p className="text-xs text-gray-500">
+                            Status: {s.status}
+                            {s.is_test_session ? ' · Test session' : ''}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href={`/quiz/${s.id}/play`}
+                            className="inline-flex items-center rounded-lg bg-[#C0392B] px-3 py-2 text-sm font-medium text-white hover:bg-[#A93226]"
+                          >
+                            Open play
+                          </Link>
+                          <Link
+                            href={`/quiz/${s.id}/display`}
+                            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                          >
+                            Display board
+                          </Link>
+                        </div>
+                      </div>
+                      <ul className="mt-4 space-y-3 border-t border-gray-200/60 pt-3">
+                        {s.rounds.map((r) => (
+                          <li key={r.id} className="text-sm">
+                            <p className="font-medium text-gray-800">
+                              Round {r.round_order}: {r.title || r.round_type}{' '}
+                              <span className="text-gray-500">({r.status})</span>
+                            </p>
+                            <ul className="mt-1 ml-3 list-disc text-gray-600 space-y-0.5">
+                              {r.questions.map((q) => (
+                                <li key={q.id}>
+                                  Q{q.question_order}
+                                  {q.question_type ? ` · ${q.question_type}` : ''} — {q.preview}
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             {/* Quiz Status Card */}
             <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6 sm:p-8">
               <div className="flex items-center gap-3 mb-6">
@@ -900,7 +1015,7 @@ export default function DashboardPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Quiz Status</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Exams</h2>
               </div>
               <div className="text-center py-8 sm:py-12">
                 {availableExamsCount > 0 ? (

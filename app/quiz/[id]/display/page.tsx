@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { subscribeToSession } from '@/lib/services/quizSessionService'
+import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
 import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
 import type { TeamLabel } from '@/lib/utils/teamColors'
@@ -54,6 +54,12 @@ export default function DisplayBoardPage() {
     return () => unsub()
   }, [sessionId, fetchState])
 
+  useEffect(() => {
+    if (!sessionId || !state?.rounds?.length) return
+    const roundIds = (state.rounds as { id: string }[]).map((r) => r.id)
+    return subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
+  }, [sessionId, state?.rounds, fetchState])
+
   const teamNames = useMemo(() => {
     if (state?.team_display_names) return state.team_display_names
     const slots = state?.session?.team_slots || {}
@@ -72,6 +78,10 @@ export default function DisplayBoardPage() {
   if (!state) {
     return <div className="p-6 text-gray-200">Loading display board...</div>
   }
+
+  const isDirectRound = state.activeRound?.round_type === 'direct_question'
+  const revealCorrect = Boolean(state.currentQuestionEvent?.correct_answer_revealed_at)
+  const showOptions = !isDirectRound && state.currentQuestionEvent?.status === 'options_revealed'
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 lg:p-8">
@@ -94,8 +104,9 @@ export default function DisplayBoardPage() {
         <div className="rounded-2xl bg-white/10 p-4">
           <QuestionDisplay
             question={state.currentQuestion}
-            showOptions={state.currentQuestionEvent?.status === 'options_revealed'}
+            showOptions={showOptions}
             readOnly
+            revealCorrectAnswer={revealCorrect}
           />
         </div>
       </div>

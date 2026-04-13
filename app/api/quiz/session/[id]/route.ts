@@ -79,6 +79,42 @@ async function getTeamDisplayNames(session: { team_slots?: Record<string, string
   }, {} as Record<TeamLabel, string>)
 }
 
+function previewText(text: string | null | undefined, maxLen = 72): string {
+  const t = (text || '').replace(/\s+/g, ' ').trim()
+  if (t.length <= maxLen) return t
+  return `${t.slice(0, maxLen - 1)}…`
+}
+
+function stripCorrectAnswer(question: any | null, eventAllows: boolean) {
+  if (!question) return question
+  if (eventAllows) return question
+  const { correct_answer: _c, ...rest } = question
+  return rest
+}
+
+async function isSessionHostOrAdmin(
+  sessionId: string,
+  supabase: any,
+): Promise<{ isHostOrAdmin: boolean; userId: string | null }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { isHostOrAdmin: false, userId: null }
+  const { data: session } = await supabase
+    .from('quiz_live_sessions')
+    .select('assigned_host_id')
+    .eq('id', sessionId)
+    .single()
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('user_id', user.id)
+    .single()
+  const role = profile?.role || user.user_metadata?.role || 'participant'
+  const isHostOrAdmin = role === 'admin' || session?.assigned_host_id === user.id
+  return { isHostOrAdmin, userId: user.id }
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } },
@@ -111,6 +147,15 @@ export async function GET(
 
     let latestEvent = null
     let currentQuestion = null
+    let activeRoundQuestions: Array<{
+      id: string
+      question_order: number
+      question_type: string | null
+      preview: string
+    }> | null = null
+    let pendingDirectAnswer: { team_label: string; answer_text: string } | null = null
+    let participantDirectAttempt: { answer_text: string; verdict: string } | null = null
+
     if (activeRound) {
       const { data: event } = await supabase
         .from('quiz_question_events')
@@ -121,6 +166,18 @@ export async function GET(
         .maybeSingle()
       latestEvent = event || null
 
+      const { data: qs } = await supabase
+        .from('quiz_questions')
+        .select('id, question_order, question_type, question_text')
+        .eq('round_id', activeRound.id)
+        .order('question_order', { ascending: true })
+      activeRoundQuestions = (qs || []).map((q: any) => ({
+        id: q.id,
+        question_order: q.question_order,
+        question_type: q.question_type,
+        preview: previewText(q.question_text),
+      }))
+
       if (event?.question_id) {
         const { data: question } = await supabase
           .from('quiz_questions')
@@ -128,6 +185,67 @@ export async function GET(
           .eq('id', event.question_id)
           .single()
         currentQuestion = question || null
+      }
+    }
+
+    const { isHostOrAdmin } = await isSessionHostOrAdmin(sessionId, supabase)
+    const revealCorrect = Boolean((latestEvent as any)?.correct_answer_revealed_at)
+    const showCorrectInPayload = revealCorrect || isHostOrAdmin
+    currentQuestion = stripCorrectAnswer(currentQuestion, showCorrectInPayload)
+
+    if (
+      latestEvent &&
+      isHostOrAdmin &&
+      activeRound?.round_type === 'direct_question' &&
+      ['revealed', 'options_revealed'].includes(String((latestEvent as any).status))
+    ) {
+      const dir = (latestEvent as any).directed_team as TeamLabel
+      if (dir && TEAM_LABELS.includes(dir)) {
+        const { data: att } = await supabase
+          .from('quiz_direct_attempts')
+          .select('team_label, answer_text, verdict')
+          .eq('question_event_id', (latestEvent as any).id)
+          .eq('team_label', dir)
+          .eq('verdict', 'pending')
+          .maybeSingle()
+        if (att) {
+          pendingDirectAnswer = { team_label: att.team_label, answer_text: att.answer_text }
+        }
+      }
+    }
+
+    if (
+      latestEvent &&
+      !isHostOrAdmin &&
+      activeRound?.round_type === 'direct_question' &&
+      String((latestEvent as any).status) === 'revealed'
+    ) {
+      const {
+        data: { user: participantUser },
+      } = await supabase.auth.getUser()
+      if (participantUser) {
+        const { data: participantRow } = await supabase
+          .from('participants')
+          .select('team_id')
+          .eq('user_id', participantUser.id)
+          .maybeSingle()
+        const slotsPart = (session.team_slots || {}) as Record<string, string>
+        const myLabel = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id)
+        const dirEv = (latestEvent as any).directed_team as TeamLabel
+        if (myLabel && myLabel === dirEv) {
+          const { data: pAtt } = await supabase
+            .from('quiz_direct_attempts')
+            .select('answer_text, verdict')
+            .eq('question_event_id', (latestEvent as any).id)
+            .eq('team_label', myLabel)
+            .maybeSingle()
+          if (pAtt) {
+            participantDirectAttempt = {
+              answer_text: String(pAtt.answer_text ?? ''),
+              verdict: String(pAtt.verdict ?? 'pending'),
+            }
+          }
+        }
       }
     }
 
@@ -142,6 +260,9 @@ export async function GET(
       currentQuestion,
       scores,
       team_display_names,
+      activeRoundQuestions,
+      pendingDirectAnswer,
+      participantDirectAttempt,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -217,16 +338,46 @@ export async function PATCH(
 
       if (!round) return NextResponse.json({ error: 'Round not found' }, { status: 404 })
 
-      const nextIndex = Number(round.current_question_index || 0)
-      const { data: question } = await supabase
-        .from('quiz_questions')
-        .select('*')
-        .eq('round_id', roundId)
-        .eq('question_order', nextIndex + 1)
-        .single()
+      const requestedQuestionId = typeof body?.questionId === 'string' ? body.questionId.trim() : ''
+      let question: any = null
 
-      if (!question) {
-        return NextResponse.json({ error: 'No more questions in this round' }, { status: 400 })
+      if (requestedQuestionId) {
+        const { data: qRow, error: qErr } = await supabase
+          .from('quiz_questions')
+          .select('*')
+          .eq('id', requestedQuestionId)
+          .eq('round_id', roundId)
+          .single()
+        if (qErr || !qRow) {
+          return NextResponse.json({ error: 'Question not found in this round' }, { status: 400 })
+        }
+        const { data: inflight } = await supabase
+          .from('quiz_question_events')
+          .select('id')
+          .eq('round_id', roundId)
+          .eq('question_id', requestedQuestionId)
+          .in('status', ['revealed', 'options_revealed', 'buzzer_open'])
+          .limit(1)
+          .maybeSingle()
+        if (inflight) {
+          return NextResponse.json(
+            { error: 'This question is still in progress; finish or drop it first' },
+            { status: 400 },
+          )
+        }
+        question = qRow
+      } else {
+        const nextIndex = Number(round.current_question_index || 0)
+        const { data: qRow } = await supabase
+          .from('quiz_questions')
+          .select('*')
+          .eq('round_id', roundId)
+          .eq('question_order', nextIndex + 1)
+          .single()
+        if (!qRow) {
+          return NextResponse.json({ error: 'No more questions in this round' }, { status: 400 })
+        }
+        question = qRow
       }
 
       const { data: event, error: eventError } = await supabase
@@ -245,12 +396,15 @@ export async function PATCH(
         return NextResponse.json({ error: eventError.message }, { status: 500 })
       }
 
-      await supabase
-        .from('quiz_rounds')
-        .update({ current_question_index: nextIndex + 1 })
-        .eq('id', roundId)
+      const newIndex = Math.max(Number(round.current_question_index || 0), Number(question.question_order || 0))
+      await supabase.from('quiz_rounds').update({ current_question_index: newIndex }).eq('id', roundId)
 
-      return NextResponse.json({ success: true, event, question, roundQuestionIndex: nextIndex + 1 })
+      return NextResponse.json({
+        success: true,
+        event,
+        question,
+        roundQuestionIndex: question.question_order,
+      })
     }
 
     if (action === 'reveal_options') {
@@ -258,6 +412,23 @@ export async function PATCH(
       const directedTeam = body?.directedTeam as TeamLabel | undefined
       if (!questionEventId) {
         return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+
+      const { data: evRound } = await supabase
+        .from('quiz_question_events')
+        .select('round_id')
+        .eq('id', questionEventId)
+        .single()
+      const { data: roForReveal } = await supabase
+        .from('quiz_rounds')
+        .select('round_type')
+        .eq('id', evRound?.round_id || '')
+        .maybeSingle()
+      if (roForReveal?.round_type === 'direct_question') {
+        return NextResponse.json(
+          { error: 'Reveal options is not used for direct question rounds' },
+          { status: 400 },
+        )
       }
 
       const update: Record<string, unknown> = {
@@ -296,6 +467,12 @@ export async function PATCH(
         .select('round_type')
         .eq('id', event.round_id)
         .single()
+      if (round?.round_type === 'direct_question' && event.status === 'revealed') {
+        return NextResponse.json(
+          { error: 'Use Correct (judge) for direct question rounds while the question is open' },
+          { status: 400 },
+        )
+      }
       const { data: session } = await supabase
         .from('quiz_live_sessions')
         .select('points_full, points_half')
@@ -371,6 +548,18 @@ export async function PATCH(
 
       if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
 
+      const { data: roundMcq } = await supabase
+        .from('quiz_rounds')
+        .select('round_type')
+        .eq('id', event.round_id)
+        .single()
+      if (roundMcq?.round_type === 'direct_question' && event.status === 'revealed') {
+        return NextResponse.json(
+          { error: 'Use Pass to next team for direct question rounds' },
+          { status: 400 },
+        )
+      }
+
       const { data: sessionPass } = await supabase
         .from('quiz_live_sessions')
         .select('is_test_session, team_slots')
@@ -435,6 +624,310 @@ export async function PATCH(
         .select('*')
         .single()
       return NextResponse.json({ success: true, state: 'pass_next_team', event: updatedEvent })
+    }
+
+    if (action === 'judge_direct_answer') {
+      const questionEventId = body?.questionEventId as string | undefined
+      const verdict = body?.verdict as string | undefined
+      if (!questionEventId || (verdict !== 'correct' && verdict !== 'wrong')) {
+        return NextResponse.json(
+          { error: 'questionEventId and verdict (correct|wrong) are required' },
+          { status: 400 },
+        )
+      }
+
+      const { data: event } = await supabase
+        .from('quiz_question_events')
+        .select('*')
+        .eq('id', questionEventId)
+        .single()
+      if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+      if (event.status !== 'revealed') {
+        return NextResponse.json({ error: 'Question is not open for judging' }, { status: 400 })
+      }
+      if (event.correct_answer_revealed_at) {
+        return NextResponse.json({ error: 'Question is closed' }, { status: 400 })
+      }
+
+      const { data: roundJ } = await supabase
+        .from('quiz_rounds')
+        .select('round_type')
+        .eq('id', event.round_id)
+        .single()
+      if (roundJ?.round_type !== 'direct_question') {
+        return NextResponse.json({ error: 'Only for direct question rounds' }, { status: 400 })
+      }
+
+      const teamLabel = event.directed_team as TeamLabel
+      if (!teamLabel || !TEAM_LABELS.includes(teamLabel)) {
+        return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
+      }
+
+      const { data: attempt } = await supabase
+        .from('quiz_direct_attempts')
+        .select('*')
+        .eq('question_event_id', questionEventId)
+        .eq('team_label', teamLabel)
+        .maybeSingle()
+
+      if (!attempt) {
+        return NextResponse.json({ error: 'No answer submitted for this team yet' }, { status: 400 })
+      }
+      if (attempt.verdict !== 'pending') {
+        return NextResponse.json({ error: 'Answer already judged' }, { status: 400 })
+      }
+
+      const now = new Date().toISOString()
+      if (verdict === 'wrong') {
+        await supabase
+          .from('quiz_direct_attempts')
+          .update({ verdict: 'wrong', updated_at: now })
+          .eq('id', attempt.id)
+        return NextResponse.json({ success: true, verdict: 'wrong', event })
+      }
+
+      const { data: sessionJ } = await supabase
+        .from('quiz_live_sessions')
+        .select('points_full, points_half')
+        .eq('id', sessionId)
+        .single()
+      const pointsAwarded = resolvePoints(
+        Number(event.attempt_number || 1),
+        Number(sessionJ?.points_full || 10),
+        Number(sessionJ?.points_half || 5),
+        'direct_question',
+      )
+
+      await supabase
+        .from('quiz_direct_attempts')
+        .update({ verdict: 'correct', updated_at: now })
+        .eq('id', attempt.id)
+
+      await supabase
+        .from('quiz_question_events')
+        .update({
+          status: 'answered',
+          answered_by_team: teamLabel,
+          points_awarded: pointsAwarded,
+        })
+        .eq('id', questionEventId)
+
+      const { data: scoreRowJ } = await supabase
+        .from('quiz_session_scores')
+        .select('id,total_score,questions_answered,questions_correct')
+        .eq('session_id', sessionId)
+        .eq('team_label', teamLabel)
+        .single()
+
+      if (!scoreRowJ) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
+
+      await supabase
+        .from('quiz_session_scores')
+        .update({
+          total_score: Number(scoreRowJ.total_score || 0) + pointsAwarded,
+          questions_answered: Number(scoreRowJ.questions_answered || 0) + 1,
+          questions_correct: Number(scoreRowJ.questions_correct || 0) + 1,
+          updated_at: now,
+        })
+        .eq('id', scoreRowJ.id)
+
+      const { data: qAns } = await supabase
+        .from('quiz_questions')
+        .select('correct_answer')
+        .eq('id', event.question_id)
+        .single()
+      const updatedScores = await getScoreMap(sessionId, supabase)
+      return NextResponse.json({
+        success: true,
+        verdict: 'correct',
+        teamLabel,
+        pointsAwarded,
+        correctAnswer: qAns?.correct_answer || '',
+        updatedScores,
+      })
+    }
+
+    if (action === 'pass_direct_question') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+
+      const { data: event } = await supabase
+        .from('quiz_question_events')
+        .select('*')
+        .eq('id', questionEventId)
+        .single()
+      if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+      if (event.status !== 'revealed') {
+        return NextResponse.json({ error: 'Can only pass while the question is open' }, { status: 400 })
+      }
+      if (event.correct_answer_revealed_at) {
+        return NextResponse.json({ error: 'Question is closed' }, { status: 400 })
+      }
+
+      const { data: roundP } = await supabase
+        .from('quiz_rounds')
+        .select('round_type')
+        .eq('id', event.round_id)
+        .single()
+      if (roundP?.round_type !== 'direct_question') {
+        return NextResponse.json({ error: 'Only for direct question rounds' }, { status: 400 })
+      }
+
+      const { data: sessionP } = await supabase
+        .from('quiz_live_sessions')
+        .select('is_test_session, team_slots')
+        .eq('id', sessionId)
+        .single()
+      const occupiedP = getOccupiedLabels((sessionP?.team_slots || {}) as Record<string, string>)
+      const useTestRotation = Boolean(sessionP?.is_test_session) && occupiedP.length > 0
+      const passThreshold = useTestRotation ? occupiedP.length : 4
+
+      const teamLabel = event.directed_team as TeamLabel
+      const now = new Date().toISOString()
+
+      await supabase
+        .from('quiz_direct_attempts')
+        .update({ verdict: 'wrong', updated_at: now })
+        .eq('question_event_id', questionEventId)
+        .eq('team_label', teamLabel)
+        .eq('verdict', 'pending')
+
+      const { data: anyAttemptRow } = await supabase
+        .from('quiz_direct_attempts')
+        .select('id')
+        .eq('question_event_id', questionEventId)
+        .eq('team_label', teamLabel)
+        .maybeSingle()
+      if (!anyAttemptRow) {
+        const { error: insErr } = await supabase.from('quiz_direct_attempts').insert({
+          session_id: sessionId,
+          question_event_id: questionEventId,
+          team_label: teamLabel,
+          answer_text: '',
+          verdict: 'wrong',
+        })
+        if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+      }
+
+      const attemptNumber = Number(event.attempt_number || 1)
+      await supabase.from('quiz_pass_log').insert({
+        question_event_id: questionEventId,
+        team_label: teamLabel,
+        attempt_number: attemptNumber,
+        passed_or_wrong: true,
+      })
+
+      if (attemptNumber === 1) {
+        const newDirectedTeam = useTestRotation
+          ? nextOccupiedLabel(teamLabel, occupiedP)
+          : nextTeam(teamLabel)
+        const { data: updatedEvent, error: uErr } = await supabase
+          .from('quiz_question_events')
+          .update({
+            status: 'revealed',
+            attempt_number: 2,
+            directed_team: newDirectedTeam,
+          })
+          .eq('id', questionEventId)
+          .select('*')
+          .single()
+        if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
+        return NextResponse.json({ success: true, state: 'pass_next_team', event: updatedEvent })
+      }
+
+      const { data: passRowsP } = await supabase
+        .from('quiz_pass_log')
+        .select('team_label')
+        .eq('question_event_id', questionEventId)
+        .eq('attempt_number', 2)
+
+      const tried = new Set((passRowsP || []).map((p: any) => p.team_label))
+      if (tried.size >= passThreshold) {
+        return NextResponse.json({
+          success: true,
+          state: 'awaiting_reveal_or_skip',
+          event,
+        })
+      }
+
+      const orderP: TeamLabel[] =
+        useTestRotation && occupiedP.length > 0 ? occupiedP : [...TEAM_LABELS]
+      const nextP =
+        orderP.find((l) => !tried.has(l)) ||
+        (useTestRotation ? nextOccupiedLabel(teamLabel, occupiedP) : nextTeam(teamLabel))
+      const { data: updatedEventP, error: uErr2 } = await supabase
+        .from('quiz_question_events')
+        .update({ directed_team: nextP, status: 'revealed' })
+        .eq('id', questionEventId)
+        .select('*')
+        .single()
+      if (uErr2) return NextResponse.json({ error: uErr2.message }, { status: 500 })
+      return NextResponse.json({ success: true, state: 'pass_next_team', event: updatedEventP })
+    }
+
+    if (action === 'reveal_correct_answer') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+
+      const { data: event } = await supabase
+        .from('quiz_question_events')
+        .select('*')
+        .eq('id', questionEventId)
+        .single()
+      if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+      if (event.correct_answer_revealed_at) {
+        return NextResponse.json({ error: 'Answer already revealed' }, { status: 400 })
+      }
+
+      const { data: roundR } = await supabase
+        .from('quiz_rounds')
+        .select('round_type')
+        .eq('id', event.round_id)
+        .single()
+      if (roundR?.round_type !== 'direct_question') {
+        return NextResponse.json({ error: 'Only for direct question rounds' }, { status: 400 })
+      }
+
+      const { data: sessionR } = await supabase
+        .from('quiz_live_sessions')
+        .select('team_slots, is_test_session')
+        .eq('id', sessionId)
+        .single()
+      const occupiedR = getOccupiedLabels((sessionR?.team_slots || {}) as Record<string, string>)
+      const labels = occupiedR.length > 0 ? occupiedR : [...TEAM_LABELS]
+
+      for (const L of labels) {
+        const { data: wr } = await supabase
+          .from('quiz_direct_attempts')
+          .select('id')
+          .eq('question_event_id', questionEventId)
+          .eq('team_label', L)
+          .eq('verdict', 'wrong')
+          .maybeSingle()
+        if (!wr) {
+          return NextResponse.json(
+            { error: `Each team must be marked wrong before revealing the answer (missing: Team ${L})` },
+            { status: 400 },
+          )
+        }
+      }
+
+      const revealedAt = new Date().toISOString()
+      const { data: updatedEv, error: revErr } = await supabase
+        .from('quiz_question_events')
+        .update({
+          correct_answer_revealed_at: revealedAt,
+          status: 'dropped',
+        })
+        .eq('id', questionEventId)
+        .select('*')
+        .single()
+      if (revErr) return NextResponse.json({ error: revErr.message }, { status: 500 })
+      return NextResponse.json({ success: true, event: updatedEv })
     }
 
     if (action === 'skip_question') {

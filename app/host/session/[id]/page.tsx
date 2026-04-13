@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { subscribeToSession } from '@/lib/services/quizSessionService'
+import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
 import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
 import { RoundNavigator } from '@/components/quiz/RoundNavigator'
 import { DirectQuestionControls } from '@/components/quiz/DirectQuestionControls'
@@ -17,6 +17,13 @@ interface SessionState {
   currentQuestion: any | null
   scores: Record<TeamLabel, number>
   team_display_names?: Record<TeamLabel, string>
+  activeRoundQuestions?: Array<{
+    id: string
+    question_order: number
+    question_type: string | null
+    preview: string
+  }> | null
+  pendingDirectAnswer?: { team_label: string; answer_text: string } | null
 }
 
 export default function HostSessionPage() {
@@ -57,6 +64,13 @@ export default function HostSessionPage() {
     return () => unsub()
   }, [sessionId, fetchState])
 
+  useEffect(() => {
+    if (!sessionId || !state?.rounds?.length) return
+    const roundIds = (state.rounds as { id: string }[]).map((r) => r.id)
+    const unsub = subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
+    return unsub
+  }, [sessionId, state?.rounds, fetchState])
+
   const teamNames = useMemo(() => {
     if (state?.team_display_names) return state.team_display_names
     const slots = state?.session?.team_slots || {}
@@ -82,7 +96,10 @@ export default function HostSessionPage() {
   }, [state?.session?.id, state?.session?.is_test_session, state?.session?.team_slots])
 
   const activeRound = state?.activeRound
-  const totalQuestions = Number(activeRound?.current_question_index || 0) + 1
+  const roundQuestionCount = state?.activeRoundQuestions?.length ?? 0
+  const totalQuestions = Math.max(roundQuestionCount, 1)
+  const questionNumber =
+    state?.currentQuestion?.question_order ?? Number(activeRound?.current_question_index || 0)
 
   const runAction = async (action: string, payload: Record<string, unknown> = {}) => {
     if (!sessionId) return
@@ -146,29 +163,38 @@ export default function HostSessionPage() {
           {!activeRound ? (
             <div className="space-y-3">
               <p className="text-gray-700">No active round. Start one from the round navigator.</p>
-              {state.rounds
-                .filter((r) => r.status === 'pending')
-                .slice(0, 1)
-                .map((round) => (
-                  <button
-                    key={round.id}
-                    className="rounded-lg bg-[#C0392B] px-3 py-2 text-sm font-medium text-white"
-                    onClick={() => runAction('start_round', { roundId: round.id })}
-                    disabled={busy}
-                  >
-                    Start {round.title || round.round_type}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                {state.rounds
+                  .filter((r) => r.status === 'pending')
+                  .map((round) => (
+                    <button
+                      key={round.id}
+                      type="button"
+                      className="rounded-lg bg-[#C0392B] px-3 py-2 text-sm font-medium text-white"
+                      onClick={() => runAction('start_round', { roundId: round.id })}
+                      disabled={busy}
+                    >
+                      Start {round.title || round.round_type}
+                    </button>
+                  ))}
+              </div>
             </div>
           ) : (
             <DirectQuestionControls
               question={state.currentQuestion}
               event={state.currentQuestionEvent}
-              questionNumber={Number(activeRound.current_question_index || 0)}
+              questionNumber={Number(questionNumber)}
               totalQuestions={totalQuestions}
               selectedTeam={selectedTeam}
               onSelectTeam={setSelectedTeam}
-              onNextQuestion={() =>
+              onNextQuestion={(questionId) =>
+                runAction('reveal_question', {
+                  roundId: activeRound.id,
+                  directedTeam: selectedTeam,
+                  ...(questionId ? { questionId } : {}),
+                })
+              }
+              onNextSequential={() =>
                 runAction('reveal_question', {
                   roundId: activeRound.id,
                   directedTeam: selectedTeam,
@@ -199,8 +225,34 @@ export default function HostSessionPage() {
                 state.currentQuestionEvent &&
                 runAction('skip_question', { questionEventId: state.currentQuestionEvent.id })
               }
+              onJudgeCorrect={() =>
+                state.currentQuestionEvent &&
+                runAction('judge_direct_answer', {
+                  questionEventId: state.currentQuestionEvent.id,
+                  verdict: 'correct',
+                })
+              }
+              onJudgeWrong={() =>
+                state.currentQuestionEvent &&
+                runAction('judge_direct_answer', {
+                  questionEventId: state.currentQuestionEvent.id,
+                  verdict: 'wrong',
+                })
+              }
+              onPassDirect={() =>
+                state.currentQuestionEvent &&
+                runAction('pass_direct_question', { questionEventId: state.currentQuestionEvent.id })
+              }
+              onRevealCorrectAnswer={() =>
+                state.currentQuestionEvent &&
+                runAction('reveal_correct_answer', { questionEventId: state.currentQuestionEvent.id })
+              }
               busy={busy}
               selectableTeams={hostSelectableTeams}
+              roundType={activeRound?.round_type}
+              activeRoundQuestions={state.activeRoundQuestions ?? null}
+              teamDisplayNames={teamNames}
+              pendingDirectAnswer={state.pendingDirectAnswer ?? null}
             />
           )}
         </div>
