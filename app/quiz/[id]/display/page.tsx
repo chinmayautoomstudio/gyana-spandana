@@ -80,8 +80,30 @@ export default function DisplayBoardPage() {
   }
 
   const isDirectRound = state.activeRound?.round_type === 'direct_question'
+  const isTrueFalseRound = state.activeRound?.round_type === 'true_or_false'
   const revealCorrect = Boolean(state.currentQuestionEvent?.correct_answer_revealed_at)
-  const showOptions = !isDirectRound && state.currentQuestionEvent?.status === 'options_revealed'
+  const showOptions = isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed'
+  const directedTeam = state.currentQuestionEvent?.directed_team as TeamLabel | undefined
+
+  const phaseText = (() => {
+    if (!state.activeRound) return 'Waiting for round'
+    if (!state.currentQuestionEvent) return 'Waiting for question'
+    if (isDirectRound) {
+      if (revealCorrect) return 'Direct question answer revealed'
+      if (state.currentQuestionEvent.status === 'revealed') {
+        return directedTeam ? `Direct question — Team ${directedTeam} answering` : 'Direct question in progress'
+      }
+      return 'Direct question complete'
+    }
+    if (isTrueFalseRound) {
+      if (state.currentQuestionEvent.status === 'options_revealed') {
+        return directedTeam ? `True/False — Team ${directedTeam} answering` : 'True/False options open'
+      }
+      if (state.currentQuestionEvent.status === 'revealed') return 'True/False question revealed'
+      return 'True/False question complete'
+    }
+    return 'Round in progress'
+  })()
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 lg:p-8">
@@ -92,9 +114,12 @@ export default function DisplayBoardPage() {
       ) : null}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl lg:text-3xl font-bold">GYANA SPARDHA</h1>
-        <p className="text-sm lg:text-base text-gray-200">
-          {state.activeRound ? state.activeRound.title || state.activeRound.round_type : 'Waiting for round'}
-        </p>
+        <div className="text-right">
+          <p className="text-sm lg:text-base text-gray-200">
+            {state.activeRound ? state.activeRound.title || state.activeRound.round_type : 'Waiting for round'}
+          </p>
+          <p className="text-xs lg:text-sm text-gray-300">{phaseText}</p>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">

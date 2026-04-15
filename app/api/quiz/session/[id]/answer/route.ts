@@ -22,7 +22,7 @@ export async function POST(
 
     const body = await request.json()
     const questionEventId = body?.questionEventId as string | undefined
-    const answerText = typeof body?.answerText === 'string' ? body.answerText.trim() : ''
+    const answerText = typeof body?.answerText === 'string' ? body.answerText.trim().toUpperCase() : ''
     if (!questionEventId) {
       return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
     }
@@ -62,6 +62,9 @@ export async function POST(
     }
     if (round.round_type !== 'direct_question') {
       return NextResponse.json({ error: 'Text answers are only for direct question rounds' }, { status: 400 })
+    }
+    if (!TEAM_LABELS.includes(answerText as TeamLabel)) {
+      return NextResponse.json({ error: 'Please select a valid option (A, B, C, or D)' }, { status: 400 })
     }
 
     const { data: session } = await supabase
@@ -108,6 +111,26 @@ export async function POST(
         verdict: 'pending',
       })
       if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    }
+
+    // Best-effort realtime ping so host UI refreshes immediately when a participant submits.
+    try {
+      const channel = supabase.channel(`quiz:session:${sessionId}`)
+      await channel.send({
+        type: 'broadcast',
+        event: 'quiz_event',
+        payload: {
+          type: 'participant_answer_submitted',
+          payload: {
+            questionEventId,
+            teamLabel: directed,
+            submittedAt: now,
+          },
+          timestamp: now,
+        },
+      })
+    } catch {
+      // Ignore realtime send failures; DB write already succeeded and fallback refresh listeners still apply.
     }
 
     return NextResponse.json({ success: true })

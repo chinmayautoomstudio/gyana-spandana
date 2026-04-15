@@ -47,25 +47,25 @@ const PARTICIPANT_WITH_TEAM_SELECT = [
 ].join(', ')
 
 /** Row shape for participants select (explicit columns); avoids GenericStringError from dynamic select typing */
+type QuizOverviewRound = {
+  id: string
+  title: string
+  round_order: number
+  round_type: string
+  status: string
+}
+
 type QuizOverviewSession = {
   id: string
   title: string
   status: string
   is_test_session?: boolean
   created_at: string
-  rounds: Array<{
-    id: string
-    title: string
-    round_order: number
-    round_type: string
-    status: string
-    questions: Array<{
-      id: string
-      question_order: number
-      question_type: string | null
-      preview: string
-    }>
-  }>
+  rounds: QuizOverviewRound[]
+}
+
+type QuizOverviewSessionRaw = Omit<QuizOverviewSession, 'rounds'> & {
+  rounds?: unknown
 }
 
 type DashboardParticipantRow = {
@@ -244,7 +244,11 @@ export default function DashboardPage() {
         const d = await r.json()
         if (cancelled) return
         if (r.ok && Array.isArray(d.sessions)) {
-          setQuizOverview(d.sessions as QuizOverviewSession[])
+          const normalized = (d.sessions as QuizOverviewSessionRaw[]).map((session) => ({
+            ...session,
+            rounds: Array.isArray(session.rounds) ? (session.rounds as QuizOverviewRound[]) : [],
+          }))
+          setQuizOverview(normalized)
         } else {
           setQuizOverview([])
         }
@@ -955,7 +959,7 @@ export default function DashboardPage() {
                   <h2 className="text-2xl font-bold text-gray-900">Live quiz</h2>
                 </div>
                 <p className="text-sm text-gray-600 mb-4">
-                  Sessions where your team is assigned. Question text is a short preview only; correct answers are not shown here.
+                  Sessions where your team is assigned. Questions are visible only during live play when the host reveals them.
                 </p>
                 <ul className="space-y-6">
                   {quizOverview.map((s) => (
@@ -983,23 +987,18 @@ export default function DashboardPage() {
                           </Link>
                         </div>
                       </div>
-                      <ul className="mt-4 space-y-3 border-t border-gray-200/60 pt-3">
-                        {s.rounds.map((r) => (
+                      <ul className="mt-4 space-y-2 border-t border-gray-200/60 pt-3">
+                        {(Array.isArray(s.rounds) ? s.rounds : []).map((r) => (
                           <li key={r.id} className="text-sm">
                             <p className="font-medium text-gray-800">
                               Round {r.round_order}: {r.title || r.round_type}{' '}
                               <span className="text-gray-500">({r.status})</span>
                             </p>
-                            <ul className="mt-1 ml-3 list-disc text-gray-600 space-y-0.5">
-                              {r.questions.map((q) => (
-                                <li key={q.id}>
-                                  Q{q.question_order}
-                                  {q.question_type ? ` · ${q.question_type}` : ''} — {q.preview}
-                                </li>
-                              ))}
-                            </ul>
                           </li>
                         ))}
+                        {(Array.isArray(s.rounds) ? s.rounds : []).length === 0 ? (
+                          <li className="text-sm text-gray-500">Rounds will appear once configured.</li>
+                        ) : null}
                       </ul>
                     </li>
                   ))}

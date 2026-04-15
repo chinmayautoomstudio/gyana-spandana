@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { TeamBadge } from '@/components/quiz/TeamBadge'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
@@ -35,7 +35,12 @@ interface DirectQuestionControlsProps {
   roundType?: string | null
   activeRoundQuestions?: ActiveRoundQuestionOption[] | null
   teamDisplayNames?: Record<TeamLabel, string>
-  pendingDirectAnswer?: { team_label: string; answer_text: string } | null
+  pendingDirectAnswer?: {
+    team_label: string
+    answer_text: string
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_text: string | null
+  } | null
 }
 
 export function DirectQuestionControls({
@@ -64,18 +69,12 @@ export function DirectQuestionControls({
 }: DirectQuestionControlsProps) {
   const isDirectRound = roundType === 'direct_question'
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('')
-
-  useEffect(() => {
+  const effectiveSelectedQuestionId = useMemo(() => {
     const list = activeRoundQuestions || []
-    if (list.length === 0) {
-      setSelectedQuestionId('')
-      return
-    }
-    setSelectedQuestionId((prev) => {
-      if (prev && list.some((q) => q.id === prev)) return prev
-      return list[0].id
-    })
-  }, [activeRoundQuestions])
+    if (list.length === 0) return ''
+    if (selectedQuestionId && list.some((q) => q.id === selectedQuestionId)) return selectedQuestionId
+    return list[0].id
+  }, [activeRoundQuestions, selectedQuestionId])
 
   const isIdle = !event || event.status === 'answered' || event.status === 'dropped'
 
@@ -153,7 +152,7 @@ export function DirectQuestionControls({
               <select
                 id="host-question-pick"
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                value={selectedQuestionId}
+                value={effectiveSelectedQuestionId}
                 onChange={(e) => setSelectedQuestionId(e.target.value)}
               >
                 {activeRoundQuestions.map((q) => (
@@ -165,9 +164,9 @@ export function DirectQuestionControls({
               </select>
               <div className="flex flex-wrap gap-2">
                 <Button
-                  onClick={() => onNextQuestion(selectedQuestionId || undefined)}
+                  onClick={() => onNextQuestion(effectiveSelectedQuestionId || undefined)}
                   isLoading={busy}
-                  disabled={!selectedQuestionId}
+                  disabled={!effectiveSelectedQuestionId}
                 >
                   Ask selected question
                 </Button>
@@ -199,12 +198,21 @@ export function DirectQuestionControls({
                   <p className="font-medium text-gray-800">
                     Team {pendingDirectAnswer.team_label} answer
                   </p>
-                  <p className="mt-1 whitespace-pre-wrap text-gray-700">
-                    {pendingDirectAnswer.answer_text || '(empty)'}
-                  </p>
+                  {pendingDirectAnswer.answer_option_label ? (
+                    <p className="mt-1 whitespace-pre-wrap text-gray-700">
+                      Selected option: <span className="font-semibold">{pendingDirectAnswer.answer_option_label}</span>
+                      {pendingDirectAnswer.answer_option_text
+                        ? `) ${pendingDirectAnswer.answer_option_text}`
+                        : ''}
+                    </p>
+                  ) : (
+                    <p className="mt-1 whitespace-pre-wrap text-gray-700">
+                      {pendingDirectAnswer.answer_text || '(empty)'}
+                    </p>
+                  )}
                 </div>
               ) : (
-                <p className="text-sm text-amber-900">Waiting for the team to submit a written answer…</p>
+                <p className="text-sm text-amber-900">Waiting for the team to submit an answer…</p>
               )}
               <div className="flex flex-wrap gap-2">
                 <Button onClick={onJudgeCorrect} isLoading={busy} disabled={!pendingDirectAnswer}>

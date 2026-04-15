@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-function previewText(text: string | null | undefined, maxLen = 72): string {
-  const t = (text || '').replace(/\s+/g, ' ').trim()
-  if (t.length <= maxLen) return t
-  return `${t.slice(0, maxLen - 1)}…`
-}
-
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -56,30 +50,6 @@ export async function GET() {
       .in('session_id', sessionIds)
       .order('round_order', { ascending: true })
 
-    const roundIds = (rounds || []).map((r: { id: string }) => r.id)
-    let questions: Array<{
-      id: string
-      round_id: string
-      question_order: number
-      question_type: string | null
-      question_text: string | null
-    }> = []
-    if (roundIds.length > 0) {
-      const { data: qs } = await supabase
-        .from('quiz_questions')
-        .select('id, round_id, question_order, question_type, question_text')
-        .in('round_id', roundIds)
-        .order('question_order', { ascending: true })
-      questions = qs || []
-    }
-
-    const questionsByRound = new Map<string, typeof questions>()
-    for (const q of questions) {
-      const list = questionsByRound.get(q.round_id) || []
-      list.push(q)
-      questionsByRound.set(q.round_id, list)
-    }
-
     const roundsBySession = new Map<string, NonNullable<typeof rounds>>()
     for (const r of rounds || []) {
       const list = roundsBySession.get(r.session_id) || []
@@ -100,7 +70,8 @@ export async function GET() {
         status: s.status,
         is_test_session: s.is_test_session,
         created_at: s.created_at,
-        rounds: (roundsBySession.get(s.id) || []).map(
+        rounds: Array.isArray(roundsBySession.get(s.id))
+          ? (roundsBySession.get(s.id) || []).map(
           (r: {
             id: string
             title: string
@@ -113,14 +84,9 @@ export async function GET() {
             round_order: r.round_order,
             round_type: r.round_type,
             status: r.status,
-            questions: (questionsByRound.get(r.id) || []).map((q) => ({
-              id: q.id,
-              question_order: q.question_order,
-              question_type: q.question_type,
-              preview: previewText(q.question_text),
-            })),
           }),
-        ),
+            )
+          : [],
       }),
     )
 

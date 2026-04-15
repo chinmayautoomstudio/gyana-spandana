@@ -17,6 +17,7 @@ export type QuizEventType =
   | 'round_ended'
   | 'session_ended'
   | 'rapid_fire_team_change'
+  | 'participant_answer_submitted'
 
 export interface QuizEvent {
   type: QuizEventType
@@ -63,6 +64,12 @@ export interface ScoresUpdatedPayload {
   scores: ScoreMap
 }
 
+export interface ParticipantAnswerSubmittedPayload {
+  questionEventId: string
+  teamLabel: string
+  submittedAt: string
+}
+
 export interface RoundEndedPayload {
   roundId: string
   roundType: string
@@ -81,6 +88,7 @@ export interface QuizEventHandlers {
   onQuestionRevealed?: (payload: QuestionRevealedPayload) => void
   onOptionsRevealed?: (payload: OptionsRevealedPayload) => void
   onAnswerResult?: (payload: AnswerResultPayload) => void
+  onParticipantAnswerSubmitted?: (payload: ParticipantAnswerSubmittedPayload) => void
   onScoresUpdated?: (payload: ScoresUpdatedPayload) => void
   onRoundEnded?: (payload: RoundEndedPayload) => void
   onSessionEnded?: () => void
@@ -107,6 +115,11 @@ export function subscribeToSession(sessionId: string, handlers: QuizEventHandler
           break
         case 'answer_result':
           handlers.onAnswerResult?.(payload.payload as unknown as AnswerResultPayload)
+          break
+        case 'participant_answer_submitted':
+          handlers.onParticipantAnswerSubmitted?.(
+            payload.payload as unknown as ParticipantAnswerSubmittedPayload,
+          )
           break
         case 'scores_updated':
           handlers.onScoresUpdated?.(payload.payload as unknown as ScoresUpdatedPayload)

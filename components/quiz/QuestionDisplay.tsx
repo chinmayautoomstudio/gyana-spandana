@@ -50,7 +50,7 @@ export function QuestionDisplay({
   if (!question) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-500">
-        No active question.
+        Questions will be assigned soon.
       </div>
     )
   }

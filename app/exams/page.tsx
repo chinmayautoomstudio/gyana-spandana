@@ -11,6 +11,7 @@ interface Exam {
   description: string | null
   duration_minutes: number
   total_questions: number
+  questions_per_participant: number | null
   scheduled_start: string | null
   scheduled_end: string | null
   status: string
@@ -148,6 +149,8 @@ export default function AvailableExamsPage() {
             {exams.map((exam) => {
               const attempted = hasAttempted(exam.id)
               const canTake = canTakeExam(exam)
+              const displayedQuestionCount =
+                exam.questions_per_participant ?? exam.total_questions
 
               return (
                 <div
@@ -174,7 +177,7 @@ export default function AvailableExamsPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Questions:</span>
-                      <span className="font-medium text-gray-900">{exam.total_questions}</span>
+                      <span className="font-medium text-gray-900">{displayedQuestionCount}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Starts:</span>

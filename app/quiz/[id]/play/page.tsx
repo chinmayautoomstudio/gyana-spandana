@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
-import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
 import { Button } from '@/components/ui/Button'
 import type { TeamLabel } from '@/lib/utils/teamColors'
 
@@ -15,8 +14,6 @@ interface SessionState {
   activeRound: any | null
   currentQuestionEvent: any | null
   currentQuestion: any | null
-  scores: Record<TeamLabel, number>
-  team_display_names?: Record<TeamLabel, string>
   participantDirectAttempt?: { answer_text: string; verdict: string } | null
 }
 
@@ -30,7 +27,8 @@ export default function ParticipantPlayPage() {
   const [error, setError] = useState<string | null>(null)
   const [myTeamLabel, setMyTeamLabel] = useState<TeamLabel | null>(null)
   const [selectedTrueFalse, setSelectedTrueFalse] = useState<'TRUE' | 'FALSE' | null>(null)
-  const [answerDraft, setAnswerDraft] = useState('')
+  const [trueFalseLockedEventId, setTrueFalseLockedEventId] = useState<string | null>(null)
+  const [selectedDirectOption, setSelectedDirectOption] = useState<'A' | 'B' | 'C' | 'D' | null>(null)
   const [answerBusy, setAnswerBusy] = useState(false)
 
   const fetchState = useCallback(async () => {
@@ -91,28 +89,22 @@ export default function ParticipantPlayPage() {
     return subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
   }, [sessionId, state?.rounds, fetchState])
 
-  const teamNames = useMemo(() => {
-    if (state?.team_display_names) return state.team_display_names
-    const slots = state?.session?.team_slots || {}
-    return {
-      A: `Team ${slots.A ? slots.A.slice(0, 8) : 'A'}`,
-      B: `Team ${slots.B ? slots.B.slice(0, 8) : 'B'}`,
-      C: `Team ${slots.C ? slots.C.slice(0, 8) : 'C'}`,
-      D: `Team ${slots.D ? slots.D.slice(0, 8) : 'D'}`,
-    } as Record<TeamLabel, string>
-  }, [state?.team_display_names, state?.session?.team_slots])
-
   useEffect(() => {
     setSelectedTrueFalse(null)
+    setTrueFalseLockedEventId(null)
   }, [state?.currentQuestionEvent?.id])
 
   useEffect(() => {
-    const a = state?.participantDirectAttempt?.answer_text
-    setAnswerDraft(typeof a === 'string' ? a : '')
+    const answer = String(state?.participantDirectAttempt?.answer_text || '').trim().toUpperCase()
+    if (answer === 'A' || answer === 'B' || answer === 'C' || answer === 'D') {
+      setSelectedDirectOption(answer)
+      return
+    }
+    setSelectedDirectOption(null)
   }, [state?.currentQuestionEvent?.id, state?.participantDirectAttempt?.answer_text])
 
   const submitDirectAnswer = async () => {
-    if (!sessionId || !state?.currentQuestionEvent?.id) return
+    if (!sessionId || !state?.currentQuestionEvent?.id || !selectedDirectOption) return
     setAnswerBusy(true)
     setError(null)
     try {
@@ -121,7 +113,7 @@ export default function ParticipantPlayPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           questionEventId: state.currentQuestionEvent.id,
-          answerText: answerDraft,
+          answerText: selectedDirectOption,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -147,8 +139,9 @@ export default function ParticipantPlayPage() {
   const directedTeam = (state.currentQuestionEvent?.directed_team || null) as TeamLabel | null
   const isMyTurn = Boolean(directedTeam && myTeamLabel && directedTeam === myTeamLabel)
   const isDirectRound = state.activeRound?.round_type === 'direct_question'
+  const isTrueFalseRound = state.activeRound?.round_type === 'true_or_false'
   const revealCorrect = Boolean(state.currentQuestionEvent?.correct_answer_revealed_at)
-  const showOptions = !isDirectRound && state.currentQuestionEvent?.status === 'options_revealed'
+  const showOptions = isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed'
 
   const attempt = state.participantDirectAttempt
   const directPhaseOpen =
@@ -160,28 +153,47 @@ export default function ParticipantPlayPage() {
     directPhaseOpen && (!attempt || attempt.verdict === 'pending')
   const blockedAfterJudgment =
     directPhaseOpen && attempt && attempt.verdict !== 'pending'
+  const trueFalseEventId = state.currentQuestionEvent?.id || null
+  const trueFalsePhaseOpen =
+    isTrueFalseRound &&
+    Boolean(state.currentQuestion) &&
+    state.currentQuestionEvent?.status === 'options_revealed' &&
+    !revealCorrect
+  const canChooseTrueFalse =
+    trueFalsePhaseOpen &&
+    isMyTurn &&
+    !!trueFalseEventId &&
+    trueFalseLockedEventId !== trueFalseEventId
+
+  const onTrueFalseSelect = (value: 'TRUE' | 'FALSE') => {
+    setSelectedTrueFalse(value)
+    if (canChooseTrueFalse && trueFalseEventId) {
+      // There is no persisted participant T/F submission endpoint yet.
+      // Lock after one local choice per question event to reflect turn-based UX.
+      setTrueFalseLockedEventId(trueFalseEventId)
+    }
+  }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-      <ScoreSidebar teams={teamNames} scores={state.scores} />
-      <div className="space-y-4">
+    <div className="min-h-screen w-full bg-white px-4 py-6 sm:px-6">
+      <div className="mx-auto w-full max-w-4xl space-y-4">
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          {state.session.is_test_session ? (
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Test session — rehearsal run; not a scored competition round.
+        {state.session.is_test_session ? (
+            <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+            Test session — rehearsal run; not a scored competition round.
             </div>
-          ) : null}
+        ) : null}
           <p className="text-sm text-gray-500">Session</p>
           <h1 className="text-2xl font-bold text-gray-900">{state.session.title}</h1>
           <p className="text-sm text-gray-600">
             {state.activeRound
               ? `Round: ${state.activeRound.title || state.activeRound.round_type}`
-              : 'Waiting for round to start'}
+              : 'Round: Questions will be assigned soon.'}
           </p>
           <p className="mt-2 text-sm font-medium text-[#C0392B]">
             {myTeamLabel
-              ? `You are Team ${myTeamLabel}`
+              ? `Participant team: Team ${myTeamLabel}`
               : 'Your team is not mapped in this session'}
           </p>
           {directedTeam && (
@@ -192,14 +204,20 @@ export default function ParticipantPlayPage() {
           )}
         </div>
 
-        <QuestionDisplay
-          question={state.currentQuestion}
-          showOptions={showOptions}
-          readOnly={!isMyTurn}
-          selectedTrueFalse={selectedTrueFalse}
-          onTrueFalseSelect={setSelectedTrueFalse}
-          revealCorrectAnswer={revealCorrect}
-        />
+        {!state.currentQuestion ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-600">
+            Questions will be assigned soon.
+          </div>
+        ) : (
+          <QuestionDisplay
+            question={state.currentQuestion}
+            showOptions={showOptions}
+            readOnly={!canChooseTrueFalse}
+            selectedTrueFalse={selectedTrueFalse}
+            onTrueFalseSelect={onTrueFalseSelect}
+            revealCorrectAnswer={revealCorrect}
+          />
+        )}
 
         {isDirectRound && state.currentQuestion && !revealCorrect && state.currentQuestionEvent?.status === 'revealed' ? (
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
@@ -213,26 +231,67 @@ export default function ParticipantPlayPage() {
               </p>
             ) : canEditDirectAnswer ? (
               <>
-                <label htmlFor="direct-answer" className="text-sm font-medium text-gray-800">
-                  Your answer (direct question)
-                </label>
-                <textarea
-                  id="direct-answer"
-                  className="min-h-[120px] w-full rounded-lg border border-gray-300 p-3 text-sm text-gray-900"
-                  value={answerDraft}
-                  onChange={(e) => setAnswerDraft(e.target.value)}
-                  placeholder="Type your answer…"
-                />
-                <Button onClick={() => void submitDirectAnswer()} isLoading={answerBusy}>
+                <p className="text-sm font-medium text-gray-800">Select your answer (direct question)</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      { key: 'A', text: state.currentQuestion.option_a },
+                      { key: 'B', text: state.currentQuestion.option_b },
+                      { key: 'C', text: state.currentQuestion.option_c },
+                      { key: 'D', text: state.currentQuestion.option_d },
+                    ] as const
+                  ).map(({ key, text }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                        selectedDirectOption === key
+                          ? 'border-[#C0392B] bg-[#C0392B]/10 text-[#C0392B]'
+                          : 'border-gray-300 bg-white text-gray-800'
+                      }`}
+                      onClick={() => setSelectedDirectOption(key)}
+                    >
+                      <span className="font-semibold">{key}) </span>
+                      <span>{text || '(Not set)'}</span>
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  onClick={() => void submitDirectAnswer()}
+                  isLoading={answerBusy}
+                  disabled={!selectedDirectOption}
+                >
                   Submit answer
                 </Button>
                 <p className="text-xs text-gray-500">
-                  You can update your text until the host marks your answer. One pending attempt per turn.
+                  You can update your selected option until the host judges your answer.
                 </p>
               </>
             ) : (
               <p className="text-sm font-medium text-gray-800">
                 Your answer was submitted. Waiting for the host…
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {isTrueFalseRound && state.currentQuestion ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            {!trueFalsePhaseOpen ? (
+              <p className="text-sm text-gray-600">
+                Waiting for host to reveal True/False options...
+              </p>
+            ) : !isMyTurn ? (
+              <p className="text-sm text-gray-600">
+                Waiting for the directed team to answer...
+              </p>
+            ) : trueFalseLockedEventId === trueFalseEventId ? (
+              <p className="text-sm font-medium text-gray-800">
+                Your True/False choice is locked for this question. Waiting for host judgement...
+              </p>
+            ) : (
+              <p className="text-sm text-gray-700">
+                Select TRUE or FALSE above. Your first choice is treated as final for this turn.
               </p>
             )}
           </div>

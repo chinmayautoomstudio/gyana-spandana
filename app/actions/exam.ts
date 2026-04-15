@@ -9,6 +9,7 @@ export interface AvailableExam {
     description: string | null
     duration_minutes: number
     total_questions: number
+    questions_per_participant: number | null
     scheduled_start: string | null
     scheduled_end: string | null
     status: string
@@ -58,7 +59,7 @@ export async function getAvailableExams(verifiedParticipantId?: string): Promise
     // 1. Fetch available exams (active or scheduled)
     const { data: exams, error: examsError } = await supabaseAdmin
         .from('exams')
-        .select('id, title, description, duration_minutes, total_questions, scheduled_start, scheduled_end, status')
+        .select('id, title, description, duration_minutes, total_questions, questions_per_participant, scheduled_start, scheduled_end, status')
         .in('status', ['scheduled', 'active'])
         .order('scheduled_start', { ascending: true })
 

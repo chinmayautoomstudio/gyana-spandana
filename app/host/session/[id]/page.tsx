@@ -6,6 +6,7 @@ import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/qui
 import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
 import { RoundNavigator } from '@/components/quiz/RoundNavigator'
 import { DirectQuestionControls } from '@/components/quiz/DirectQuestionControls'
+import { TrueOrFalseControls } from '@/components/quiz/TrueOrFalseControls'
 import { getOccupiedLabels } from '@/lib/quiz/teamSlots'
 import type { TeamLabel } from '@/lib/utils/teamColors'
 
@@ -23,7 +24,12 @@ interface SessionState {
     question_type: string | null
     preview: string
   }> | null
-  pendingDirectAnswer?: { team_label: string; answer_text: string } | null
+  pendingDirectAnswer?: {
+    team_label: string
+    answer_text: string
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_text: string | null
+  } | null
 }
 
 export default function HostSessionPage() {
@@ -57,6 +63,7 @@ export default function HostSessionPage() {
         onQuestionRevealed: () => void fetchState(),
         onOptionsRevealed: () => void fetchState(),
         onAnswerResult: () => void fetchState(),
+        onParticipantAnswerSubmitted: () => void fetchState(),
         onScoresUpdated: () => void fetchState(),
         onRoundStarted: () => void fetchState(),
       })
@@ -96,6 +103,7 @@ export default function HostSessionPage() {
   }, [state?.session?.id, state?.session?.is_test_session, state?.session?.team_slots])
 
   const activeRound = state?.activeRound
+  const isSessionCompleted = state?.session?.status === 'completed'
   const roundQuestionCount = state?.activeRoundQuestions?.length ?? 0
   const totalQuestions = Math.max(roundQuestionCount, 1)
   const questionNumber =
@@ -133,6 +141,12 @@ export default function HostSessionPage() {
           <span className="text-amber-900"> — Rehearsal only. Flow matches a live quiz; you can use fewer than four teams.</span>
         </div>
       ) : null}
+      {isSessionCompleted ? (
+        <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <span className="font-semibold">Session completed</span>
+          <span className="text-emerald-900"> — This session is closed. Question flow controls are disabled.</span>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">{state.session.title}</h1>
@@ -147,9 +161,9 @@ export default function HostSessionPage() {
           <button
             className="rounded-lg bg-[#C0392B] px-3 py-2 text-sm font-medium text-white"
             onClick={() => runAction('end_session')}
-            disabled={busy}
+            disabled={busy || isSessionCompleted}
           >
-            End Session
+            {isSessionCompleted ? 'Session Completed' : 'End Session'}
           </button>
         </div>
       </div>
@@ -160,7 +174,11 @@ export default function HostSessionPage() {
         <ScoreSidebar teams={teamNames} scores={state.scores} />
 
         <div className="rounded-2xl border border-gray-200 bg-white p-4">
-          {!activeRound ? (
+          {isSessionCompleted ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+              Session is completed. Start/reveal/judgement actions are disabled.
+            </div>
+          ) : !activeRound ? (
             <div className="space-y-3">
               <p className="text-gray-700">No active round. Start one from the round navigator.</p>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -180,80 +198,139 @@ export default function HostSessionPage() {
               </div>
             </div>
           ) : (
-            <DirectQuestionControls
-              question={state.currentQuestion}
-              event={state.currentQuestionEvent}
-              questionNumber={Number(questionNumber)}
-              totalQuestions={totalQuestions}
-              selectedTeam={selectedTeam}
-              onSelectTeam={setSelectedTeam}
-              onNextQuestion={(questionId) =>
-                runAction('reveal_question', {
-                  roundId: activeRound.id,
-                  directedTeam: selectedTeam,
-                  ...(questionId ? { questionId } : {}),
-                })
-              }
-              onNextSequential={() =>
-                runAction('reveal_question', {
-                  roundId: activeRound.id,
-                  directedTeam: selectedTeam,
-                })
-              }
-              onRevealOptions={() =>
-                state.currentQuestionEvent &&
-                runAction('reveal_options', {
-                  questionEventId: state.currentQuestionEvent.id,
-                  directedTeam: state.currentQuestionEvent.directed_team || selectedTeam,
-                })
-              }
-              onMarkCorrect={() =>
-                state.currentQuestionEvent &&
-                runAction('mark_correct', {
-                  questionEventId: state.currentQuestionEvent.id,
-                  teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
-                })
-              }
-              onMarkWrongPass={() =>
-                state.currentQuestionEvent &&
-                runAction('mark_wrong_pass', {
-                  questionEventId: state.currentQuestionEvent.id,
-                  teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
-                })
-              }
-              onSkip={() =>
-                state.currentQuestionEvent &&
-                runAction('skip_question', { questionEventId: state.currentQuestionEvent.id })
-              }
-              onJudgeCorrect={() =>
-                state.currentQuestionEvent &&
-                runAction('judge_direct_answer', {
-                  questionEventId: state.currentQuestionEvent.id,
-                  verdict: 'correct',
-                })
-              }
-              onJudgeWrong={() =>
-                state.currentQuestionEvent &&
-                runAction('judge_direct_answer', {
-                  questionEventId: state.currentQuestionEvent.id,
-                  verdict: 'wrong',
-                })
-              }
-              onPassDirect={() =>
-                state.currentQuestionEvent &&
-                runAction('pass_direct_question', { questionEventId: state.currentQuestionEvent.id })
-              }
-              onRevealCorrectAnswer={() =>
-                state.currentQuestionEvent &&
-                runAction('reveal_correct_answer', { questionEventId: state.currentQuestionEvent.id })
-              }
-              busy={busy}
-              selectableTeams={hostSelectableTeams}
-              roundType={activeRound?.round_type}
-              activeRoundQuestions={state.activeRoundQuestions ?? null}
-              teamDisplayNames={teamNames}
-              pendingDirectAnswer={state.pendingDirectAnswer ?? null}
-            />
+            <>
+              {activeRound.round_type === 'direct_question' ? (
+                <DirectQuestionControls
+                  question={state.currentQuestion}
+                  event={state.currentQuestionEvent}
+                  questionNumber={Number(questionNumber)}
+                  totalQuestions={totalQuestions}
+                  selectedTeam={selectedTeam}
+                  onSelectTeam={setSelectedTeam}
+                  onNextQuestion={(questionId) =>
+                    runAction('reveal_question', {
+                      roundId: activeRound.id,
+                      directedTeam: selectedTeam,
+                      ...(questionId ? { questionId } : {}),
+                    })
+                  }
+                  onNextSequential={() =>
+                    runAction('reveal_question', {
+                      roundId: activeRound.id,
+                      directedTeam: selectedTeam,
+                    })
+                  }
+                  onRevealOptions={() =>
+                    state.currentQuestionEvent &&
+                    runAction('reveal_options', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      directedTeam: state.currentQuestionEvent.directed_team || selectedTeam,
+                    })
+                  }
+                  onMarkCorrect={() =>
+                    state.currentQuestionEvent &&
+                    runAction('mark_correct', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
+                    })
+                  }
+                  onMarkWrongPass={() =>
+                    state.currentQuestionEvent &&
+                    runAction('mark_wrong_pass', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
+                    })
+                  }
+                  onSkip={() =>
+                    state.currentQuestionEvent &&
+                    runAction('skip_question', { questionEventId: state.currentQuestionEvent.id })
+                  }
+                  onJudgeCorrect={() =>
+                    state.currentQuestionEvent &&
+                    runAction('judge_direct_answer', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      verdict: 'correct',
+                    })
+                  }
+                  onJudgeWrong={() =>
+                    state.currentQuestionEvent &&
+                    runAction('judge_direct_answer', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      verdict: 'wrong',
+                    })
+                  }
+                  onPassDirect={() =>
+                    state.currentQuestionEvent &&
+                    runAction('pass_direct_question', { questionEventId: state.currentQuestionEvent.id })
+                  }
+                  onRevealCorrectAnswer={() =>
+                    state.currentQuestionEvent &&
+                    runAction('reveal_correct_answer', { questionEventId: state.currentQuestionEvent.id })
+                  }
+                  busy={busy}
+                  selectableTeams={hostSelectableTeams}
+                  roundType={activeRound?.round_type}
+                  activeRoundQuestions={state.activeRoundQuestions ?? null}
+                  teamDisplayNames={teamNames}
+                  pendingDirectAnswer={state.pendingDirectAnswer ?? null}
+                />
+              ) : activeRound.round_type === 'true_or_false' ? (
+                <TrueOrFalseControls
+                  question={state.currentQuestion}
+                  event={state.currentQuestionEvent}
+                  questionNumber={Number(questionNumber)}
+                  totalQuestions={totalQuestions}
+                  selectedTeam={selectedTeam}
+                  onSelectTeam={setSelectedTeam}
+                  onNextQuestion={(questionId) =>
+                    runAction('reveal_question', {
+                      roundId: activeRound.id,
+                      directedTeam: selectedTeam,
+                      ...(questionId ? { questionId } : {}),
+                    })
+                  }
+                  onNextSequential={() =>
+                    runAction('reveal_question', {
+                      roundId: activeRound.id,
+                      directedTeam: selectedTeam,
+                    })
+                  }
+                  onRevealOptions={() =>
+                    state.currentQuestionEvent &&
+                    runAction('reveal_options', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      directedTeam: state.currentQuestionEvent.directed_team || selectedTeam,
+                    })
+                  }
+                  onMarkCorrect={() =>
+                    state.currentQuestionEvent &&
+                    runAction('mark_correct', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
+                    })
+                  }
+                  onMarkWrongPass={() =>
+                    state.currentQuestionEvent &&
+                    runAction('mark_wrong_pass', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
+                    })
+                  }
+                  onSkip={() =>
+                    state.currentQuestionEvent &&
+                    runAction('skip_question', { questionEventId: state.currentQuestionEvent.id })
+                  }
+                  busy={busy}
+                  selectableTeams={hostSelectableTeams}
+                  activeRoundQuestions={state.activeRoundQuestions ?? null}
+                  teamDisplayNames={teamNames}
+                />
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                  Host controls for this round type are not enabled in this scoped implementation.
+                </div>
+              )}
+            </>
           )}
         </div>
 

@@ -88,7 +88,8 @@ function previewText(text: string | null | undefined, maxLen = 72): string {
 function stripCorrectAnswer(question: any | null, eventAllows: boolean) {
   if (!question) return question
   if (eventAllows) return question
-  const { correct_answer: _c, ...rest } = question
+  const rest = { ...question }
+  delete rest.correct_answer
   return rest
 }
 
@@ -141,9 +142,11 @@ export async function GET(
       .order('round_order', { ascending: true })
 
     const activeRound =
-      rounds?.find((r: any) => r.status === 'active') ||
-      rounds?.find((r: any) => r.id === session.current_round_id) ||
-      null
+      session.status === 'completed'
+        ? null
+        : rounds?.find((r: any) => r.status === 'active') ||
+          rounds?.find((r: any) => r.id === session.current_round_id) ||
+          null
 
     let latestEvent = null
     let currentQuestion = null
@@ -153,7 +156,12 @@ export async function GET(
       question_type: string | null
       preview: string
     }> | null = null
-    let pendingDirectAnswer: { team_label: string; answer_text: string } | null = null
+    let pendingDirectAnswer: {
+      team_label: string
+      answer_text: string
+      answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+      answer_option_text: string | null
+    } | null = null
     let participantDirectAttempt: { answer_text: string; verdict: string } | null = null
 
     if (activeRound) {
@@ -209,7 +217,20 @@ export async function GET(
           .eq('verdict', 'pending')
           .maybeSingle()
         if (att) {
-          pendingDirectAnswer = { team_label: att.team_label, answer_text: att.answer_text }
+          const rawAnswer = String(att.answer_text || '').trim().toUpperCase()
+          const optionLabel =
+            rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
+              ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
+              : null
+          const optionText = optionLabel
+            ? (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
+            : null
+          pendingDirectAnswer = {
+            team_label: att.team_label,
+            answer_text: String(att.answer_text ?? ''),
+            answer_option_label: optionLabel,
+            answer_option_text: optionText,
+          }
         }
       }
     }
@@ -956,11 +977,34 @@ export async function PATCH(
     }
 
     if (action === 'end_session') {
-      await supabase
+      const now = new Date().toISOString()
+      const { data: updatedRounds, error: roundsError } = await supabase
+        .from('quiz_rounds')
+        .update({ status: 'completed' })
+        .eq('session_id', sessionId)
+        .neq('status', 'completed')
+        .select('id')
+
+      if (roundsError) {
+        return NextResponse.json({ error: roundsError.message }, { status: 500 })
+      }
+
+      const { data: updatedSession, error: sessionError } = await supabase
         .from('quiz_live_sessions')
-        .update({ status: 'completed', updated_at: new Date().toISOString() })
+        .update({ status: 'completed', current_round_id: null, updated_at: now })
         .eq('id', sessionId)
-      return NextResponse.json({ success: true })
+        .select('id, status, current_round_id, updated_at')
+        .single()
+
+      if (sessionError) {
+        return NextResponse.json({ error: sessionError.message }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        session: updatedSession,
+        roundsCompletedCount: (updatedRounds || []).length,
+      })
     }
 
     return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
