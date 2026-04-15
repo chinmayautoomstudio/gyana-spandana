@@ -29,16 +29,22 @@ export function QuestionForm({
 }: QuestionFormProps) {
   const [formData, setFormData] = useState({
     question_text: question?.question_text || '',
+    question_text_odia: question?.question_text_odia || '',
     question_type: (question?.question_type || 'mcq') as 'mcq' | 'true_false' | 'visual_image' | 'visual_video',
     media_url: question?.media_url || '',
     option_a: question?.option_a || '',
     option_b: question?.option_b || '',
     option_c: question?.option_c || '',
     option_d: question?.option_d || '',
+    option_a_odia: question?.option_a_odia || '',
+    option_b_odia: question?.option_b_odia || '',
+    option_c_odia: question?.option_c_odia || '',
+    option_d_odia: question?.option_d_odia || '',
     correct_answer: (question?.correct_answer || 'A') as 'A' | 'B' | 'C' | 'D',
     correct_answer_tf: (question?.correct_answer_tf || 'TRUE') as 'TRUE' | 'FALSE',
     points: question?.points || 1,
     explanation: question?.explanation || '',
+    explanation_odia: question?.explanation_odia || '',
     category: question?.category || '',
     difficulty_level: (question?.difficulty_level || 'medium') as 'easy' | 'medium' | 'hard',
     tags: Array.isArray(question?.tags) ? question.tags.join(', ') : '',
@@ -87,18 +93,26 @@ export function QuestionForm({
         .map((tag) => tag.trim())
         .filter((tag) => tag.length > 0)
 
+      const nullIfBlank = (s: string) => (s.trim() === '' ? null : s.trim())
+
       const questionData: any = {
         question_text: formData.question_text,
+        question_text_odia: nullIfBlank(formData.question_text_odia),
         question_type: formData.question_type,
         media_url: formData.media_url || null,
         option_a: formData.question_type === 'true_false' ? null : formData.option_a,
         option_b: formData.question_type === 'true_false' ? null : formData.option_b,
         option_c: formData.question_type === 'true_false' ? null : formData.option_c,
         option_d: formData.question_type === 'true_false' ? null : formData.option_d,
+        option_a_odia: formData.question_type === 'true_false' ? null : nullIfBlank(formData.option_a_odia),
+        option_b_odia: formData.question_type === 'true_false' ? null : nullIfBlank(formData.option_b_odia),
+        option_c_odia: formData.question_type === 'true_false' ? null : nullIfBlank(formData.option_c_odia),
+        option_d_odia: formData.question_type === 'true_false' ? null : nullIfBlank(formData.option_d_odia),
         correct_answer: formData.question_type === 'true_false' ? 'A' : formData.correct_answer,
         correct_answer_tf: formData.question_type === 'true_false' ? formData.correct_answer_tf : null,
         points: formData.points,
         explanation: formData.explanation || null,
+        explanation_odia: nullIfBlank(formData.explanation_odia),
         category: formData.category || null,
         difficulty_level: formData.difficulty_level,
         tags: tagsArray.length > 0 ? tagsArray : null,
@@ -179,6 +193,22 @@ export function QuestionForm({
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
             placeholder="Enter your question..."
             required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Question Text (Odia, optional)
+          </label>
+          <textarea
+            value={formData.question_text_odia}
+            onChange={(e) => {
+              markTouched()
+              setFormData({ ...formData, question_text_odia: e.target.value })
+            }}
+            rows={3}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+            placeholder="ଓଡ଼ିଆରେ ପ୍ରଶ୍ନ..."
           />
         </div>
 
@@ -276,6 +306,59 @@ export function QuestionForm({
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
               required
             />
+          </div>
+          <div className="md:col-span-2 border-t border-gray-100 pt-4 mt-2">
+            <p className="text-sm font-medium text-gray-600 mb-3">Options (Odia, optional)</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Option A (Odia)</label>
+                <input
+                  type="text"
+                  value={formData.option_a_odia}
+                  onChange={(e) => {
+                    markTouched()
+                    setFormData({ ...formData, option_a_odia: e.target.value })
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Option B (Odia)</label>
+                <input
+                  type="text"
+                  value={formData.option_b_odia}
+                  onChange={(e) => {
+                    markTouched()
+                    setFormData({ ...formData, option_b_odia: e.target.value })
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Option C (Odia)</label>
+                <input
+                  type="text"
+                  value={formData.option_c_odia}
+                  onChange={(e) => {
+                    markTouched()
+                    setFormData({ ...formData, option_c_odia: e.target.value })
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Option D (Odia)</label>
+                <input
+                  type="text"
+                  value={formData.option_d_odia}
+                  onChange={(e) => {
+                    markTouched()
+                    setFormData({ ...formData, option_d_odia: e.target.value })
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+                />
+              </div>
+            </div>
           </div>
           </div>
         )}
@@ -385,6 +468,22 @@ export function QuestionForm({
             rows={2}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
             placeholder="Explain why this is the correct answer..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Explanation (Odia, optional)
+          </label>
+          <textarea
+            value={formData.explanation_odia}
+            onChange={(e) => {
+              markTouched()
+              setFormData({ ...formData, explanation_odia: e.target.value })
+            }}
+            rows={2}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C0392B] focus:border-transparent text-gray-900 bg-white"
+            placeholder="ବ୍ୟାଖ୍ୟା (ଐଚ୍ଛିକ)..."
           />
         </div>
 

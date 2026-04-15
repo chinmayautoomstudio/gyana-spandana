@@ -14,7 +14,19 @@ export const QUESTION_IMPORT_FIELDS = [
   'tags',
 ] as const
 
+/** Optional Odia translations (same row as English in DB) */
+export const ODIA_IMPORT_FIELDS = [
+  'question_text_odia',
+  'option_a_odia',
+  'option_b_odia',
+  'option_c_odia',
+  'option_d_odia',
+  'explanation_odia',
+] as const
+
 export type QuestionImportField = (typeof QUESTION_IMPORT_FIELDS)[number]
+export type OdiaImportField = (typeof ODIA_IMPORT_FIELDS)[number]
+export type AllImportField = QuestionImportField | OdiaImportField
 
 /** One row after column mapping, before DB insert */
 export const importRowSchema = z.object({
@@ -32,6 +44,18 @@ export const importRowSchema = z.object({
   difficulty_level: z.enum(['easy', 'medium', 'hard']).default('medium'),
   explanation: z.string().nullable().optional(),
   tags: z.array(z.string()).nullable().optional(),
+  question_text_odia: z
+    .preprocess((v) => (v === '' || v === null || v === undefined ? undefined : String(v).trim() || undefined), z.string().optional()),
+  option_a_odia: z
+    .preprocess((v) => (v === '' || v === null || v === undefined ? undefined : String(v).trim() || undefined), z.string().optional()),
+  option_b_odia: z
+    .preprocess((v) => (v === '' || v === null || v === undefined ? undefined : String(v).trim() || undefined), z.string().optional()),
+  option_c_odia: z
+    .preprocess((v) => (v === '' || v === null || v === undefined ? undefined : String(v).trim() || undefined), z.string().optional()),
+  option_d_odia: z
+    .preprocess((v) => (v === '' || v === null || v === undefined ? undefined : String(v).trim() || undefined), z.string().optional()),
+  explanation_odia: z
+    .preprocess((v) => (v === '' || v === null || v === undefined ? undefined : String(v).trim() || undefined), z.string().optional()),
 })
 
 export type ImportRow = z.infer<typeof importRowSchema>
@@ -71,6 +95,29 @@ export function parseTags(raw: string | undefined | null): string[] | null {
     .map((t) => t.trim())
     .filter(Boolean)
   return parts.length ? parts : null
+}
+
+/**
+ * Parses tags from sheet/HTML exports: JSON arrays like `["a","b"]`, or CSV-style lists.
+ */
+export function parseTagsFromSheet(raw: string | undefined | null): string[] | null {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  if (s === '') return null
+  if (s.startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(s)
+      if (Array.isArray(parsed)) {
+        const out = parsed
+          .map((x) => (typeof x === 'string' ? x.trim() : String(x).trim()))
+          .filter(Boolean)
+        return out.length ? out : null
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return parseTags(s)
 }
 
 export function validateImportRow(row: Partial<ImportRow>): { ok: true; data: ImportRow } | { ok: false; errors: string[] } {

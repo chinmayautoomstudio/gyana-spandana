@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +25,13 @@ interface Question {
   correct_answer: 'A' | 'B' | 'C' | 'D'
   points: number
   order_index: number | null
+  explanation?: string | null
+  question_text_odia?: string | null
+  option_a_odia?: string | null
+  option_b_odia?: string | null
+  option_c_odia?: string | null
+  option_d_odia?: string | null
+  explanation_odia?: string | null
 }
 
 interface Exam {
@@ -58,6 +65,15 @@ export default function TakeExamPage() {
   const [examStarted, setExamStarted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [showSubmitModal, setShowSubmitModal] = useState(false)
+  const [language, setLanguage] = useState<'en' | 'od'>('en')
+
+  const hasOdiaQuestions = useMemo(
+    () =>
+      questions.some(
+        (q) => q.question_text_odia != null && String(q.question_text_odia).trim() !== ''
+      ),
+    [questions]
+  )
 
   useEffect(() => {
     if (!examId) return
@@ -746,9 +762,25 @@ export default function TakeExamPage() {
                 <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                   <div className="w-full md:flex-1">
                     <h1 className="text-xl font-bold text-gray-900">{exam.title}</h1>
-                    <p className="text-sm text-gray-600">
-                      Question {currentQuestionIndex + 1} of {questions.length}
-                    </p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-1">
+                      <p className="text-sm text-gray-600">
+                        Question {currentQuestionIndex + 1} of {questions.length}
+                      </p>
+                      {hasOdiaQuestions && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Language</span>
+                          <button
+                            type="button"
+                            onClick={() => setLanguage((l) => (l === 'en' ? 'od' : 'en'))}
+                            className="text-sm font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-800 hover:border-[#C0392B] hover:text-[#C0392B] transition-colors"
+                            aria-pressed={language === 'od'}
+                          >
+                            {language === 'en' ? 'English' : 'ଓଡ଼ିଆ'} —{' '}
+                            {language === 'en' ? 'Switch to ଓଡ଼ିଆ' : 'Switch to English'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {submitError && (
                       <div
                         role="alert"
@@ -782,6 +814,7 @@ export default function TakeExamPage() {
 
                 <MCQQuestion
                   question={currentQuestion}
+                  language={language}
                   selectedAnswer={currentAnswer}
                   onAnswerSelect={(option) => handleAnswerSelect(currentQuestion.id, option)}
                   disabled={false}

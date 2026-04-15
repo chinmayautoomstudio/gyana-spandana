@@ -5,6 +5,7 @@ import { type Question } from './QuestionCard'
 
 interface QuestionsTableProps {
   questions: Question[]
+  language?: 'en' | 'od'
   selectedQuestions: Set<string>
   onSelectQuestion: (questionId: string, selected: boolean) => void
   onSelectAll: () => void
@@ -15,6 +16,7 @@ interface QuestionsTableProps {
 
 export function QuestionsTable({
   questions,
+  language = 'en',
   selectedQuestions,
   onSelectQuestion,
   onSelectAll,
@@ -31,6 +33,12 @@ export function QuestionsTable({
   const truncateText = (text: string, maxLength: number = 60) => {
     if (text.length <= maxLength) return text
     return text.substring(0, maxLength) + '...'
+  }
+
+  const pickText = (en: string | null | undefined, od: string | null | undefined) => {
+    const english = en ?? ''
+    if (language !== 'od') return english
+    return od && od.trim() !== '' ? od : english
   }
 
   const visibleSelectedCount = questions.filter((q) => selectedQuestions.has(q.id)).length
@@ -113,7 +121,7 @@ export function QuestionsTable({
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-900">
-                          {index + 1}. {truncateText(question.question_text)}
+                          {index + 1}. {truncateText(pickText(question.question_text, question.question_text_odia))}
                         </span>
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                           MCQ

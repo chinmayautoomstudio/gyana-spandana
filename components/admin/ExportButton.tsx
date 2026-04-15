@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 interface ExportButtonProps {
   data: any[]
   filename: string
-  exportType?: 'csv' | 'pdf' | 'both'
+  exportType?: 'csv' | 'xlsx' | 'pdf' | 'both'
   pdfTitle?: string
   columns?: { header: string; dataKey: string }[]
   size?: 'sm' | 'md' | 'lg'
@@ -41,6 +42,21 @@ export function ExportButton({
     } catch (error) {
       console.error('Error exporting to CSV:', error)
       alert('Failed to export CSV')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const exportToXLSX = () => {
+    setIsExporting(true)
+    try {
+      const ws = XLSX.utils.json_to_sheet(data)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Questions')
+      XLSX.writeFile(wb, `${filename}.xlsx`)
+    } catch (error) {
+      console.error('Error exporting to XLSX:', error)
+      alert('Failed to export XLSX')
     } finally {
       setIsExporting(false)
     }
@@ -85,10 +101,22 @@ export function ExportButton({
     if (exportType === 'csv' || exportType === 'both') {
       exportToCSV()
     }
+    if (exportType === 'xlsx') {
+      exportToXLSX()
+    }
     if (exportType === 'pdf' || exportType === 'both') {
       setTimeout(() => exportToPDF(), exportType === 'both' ? 500 : 0)
     }
   }
+
+  const label =
+    exportType === 'csv'
+      ? 'CSV'
+      : exportType === 'xlsx'
+        ? 'XLSX'
+        : exportType === 'pdf'
+          ? 'PDF'
+          : 'Data'
 
   return (
     <Button
@@ -101,7 +129,7 @@ export function ExportButton({
       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
-      Export {exportType === 'csv' ? 'CSV' : exportType === 'pdf' ? 'PDF' : 'Data'}
+      Export {label}
     </Button>
   )
 }

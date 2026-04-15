@@ -8,7 +8,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import {
   QUESTION_IMPORT_FIELDS,
-  type QuestionImportField,
+  ODIA_IMPORT_FIELDS,
+  type AllImportField,
   type ImportRow,
   normalizeAnswer,
   normalizeDifficulty,
@@ -56,6 +57,8 @@ function formatBytes(n: number): string {
 
 function draftToImportPartial(d: Record<string, string>): Record<string, unknown> {
   const tagsStr = d.tags ?? ''
+  const emptyToUndef = (s: string | undefined) =>
+    s === undefined || String(s).trim() === '' ? undefined : String(s).trim()
   return {
     question_text: d.question_text ?? '',
     option_a: d.option_a ?? '',
@@ -68,6 +71,12 @@ function draftToImportPartial(d: Record<string, string>): Record<string, unknown
     difficulty_level: normalizeDifficulty(d.difficulty_level),
     explanation: d.explanation || null,
     tags: typeof tagsStr === 'string' ? parseTags(tagsStr) : null,
+    question_text_odia: emptyToUndef(d.question_text_odia),
+    option_a_odia: emptyToUndef(d.option_a_odia),
+    option_b_odia: emptyToUndef(d.option_b_odia),
+    option_c_odia: emptyToUndef(d.option_c_odia),
+    option_d_odia: emptyToUndef(d.option_d_odia),
+    explanation_odia: emptyToUndef(d.explanation_odia),
   }
 }
 
@@ -89,6 +98,12 @@ function buildPreviewRows(
       difficulty_level: p.difficulty_level ?? 'medium',
       explanation: p.explanation ?? '',
       tags: Array.isArray(p.tags) ? p.tags.join(', ') : '',
+      question_text_odia: p.question_text_odia ?? '',
+      option_a_odia: p.option_a_odia ?? '',
+      option_b_odia: p.option_b_odia ?? '',
+      option_c_odia: p.option_c_odia ?? '',
+      option_d_odia: p.option_d_odia ?? '',
+      explanation_odia: p.explanation_odia ?? '',
     }
     const partial = draftToImportPartial(d)
     const v = validateImportRow(partial as Partial<ImportRow>)
@@ -125,7 +140,7 @@ export function QuestionImportFlow({
   const [source, setSource] = useState<'csv' | 'xlsx' | 'pdf' | null>(null)
   const [headers, setHeaders] = useState<string[]>([])
   const [rawRows, setRawRows] = useState<string[][]>([])
-  const [columnMapping, setColumnMapping] = useState<Record<number, QuestionImportField>>({})
+  const [columnMapping, setColumnMapping] = useState<Record<number, AllImportField>>({})
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
   const [extracting, setExtracting] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -164,6 +179,16 @@ export function QuestionImportFlow({
     }
     setFile(f)
     toast.success(`Selected ${f.name}`)
+  }, [])
+
+  const downloadXlsxTemplate = useCallback(() => {
+    const headers = [...QUESTION_IMPORT_FIELDS, ...ODIA_IMPORT_FIELDS]
+    const ws = XLSX.utils.aoa_to_sheet([headers])
+    // Set a reasonable column width so headers are readable in Excel
+    ws['!cols'] = headers.map(() => ({ wch: 24 }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Questions')
+    XLSX.writeFile(wb, 'questions-template.xlsx')
   }, [])
 
   const onDrop = useCallback(
@@ -234,6 +259,12 @@ export function QuestionImportFlow({
       const obj = applyColumnMapping(row, columnMapping)
       const flat = rowObjectToImportPartial(obj) as Record<string, unknown>
       const ans = normalizeAnswer(flat.correct_answer as string | null)
+      const odEmpty = (k: string) => {
+        const v = flat[k]
+        if (v === undefined || v === null) return undefined
+        const s = String(v).trim()
+        return s === '' ? undefined : s
+      }
       partials.push({
         question_text: String(flat.question_text || ''),
         option_a: String(flat.option_a || ''),
@@ -246,6 +277,12 @@ export function QuestionImportFlow({
         difficulty_level: normalizeDifficulty(flat.difficulty_level as string),
         explanation: (flat.explanation as string) || null,
         tags: parseTags(flat.tags as string),
+        question_text_odia: odEmpty('question_text_odia'),
+        option_a_odia: odEmpty('option_a_odia'),
+        option_b_odia: odEmpty('option_b_odia'),
+        option_c_odia: odEmpty('option_c_odia'),
+        option_d_odia: odEmpty('option_d_odia'),
+        explanation_odia: odEmpty('explanation_odia'),
       })
     }
     setPreviewRows(buildPreviewRows(partials, bankTextToId))
@@ -407,6 +444,12 @@ export function QuestionImportFlow({
           difficulty_level: v.data.difficulty_level,
           tags: tagsArray,
           import_batch_id: batchId,
+          question_text_odia: v.data.question_text_odia ?? null,
+          option_a_odia: v.data.option_a_odia ?? null,
+          option_b_odia: v.data.option_b_odia ?? null,
+          option_c_odia: v.data.option_c_odia ?? null,
+          option_d_odia: v.data.option_d_odia ?? null,
+          explanation_odia: v.data.explanation_odia ?? null,
         }
 
         if (duplicateAction === 'overwrite' && dupExistingId) {
@@ -497,6 +540,17 @@ export function QuestionImportFlow({
               </span>
             </label>
             <p className="text-xs text-gray-500 mt-3">CSV, XLSX, or PDF — max 15MB (PDF)</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Need a template?{' '}
+              <button
+                type="button"
+                onClick={downloadXlsxTemplate}
+                className="text-[#C0392B] underline hover:text-[#A93226] font-medium"
+              >
+                Download XLSX Template
+              </button>{' '}
+              (includes all English &amp; Odia columns)
+            </p>
             {file && (
               <p className="mt-4 text-sm text-gray-800">
                 <strong>{file.name}</strong>
@@ -530,7 +584,7 @@ export function QuestionImportFlow({
                         <select
                           value={columnMapping[idx] ?? ''}
                           onChange={(e) => {
-                            const v = e.target.value as QuestionImportField | ''
+                            const v = e.target.value as AllImportField | ''
                             setColumnMapping((prev) => {
                               const next = { ...prev }
                               if (!v) delete next[idx]
@@ -541,11 +595,20 @@ export function QuestionImportFlow({
                           className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-gray-900 bg-white"
                         >
                           <option value="">— Ignore —</option>
-                          {QUESTION_IMPORT_FIELDS.map((f) => (
-                            <option key={f} value={f}>
-                              {f}
-                            </option>
-                          ))}
+                          <optgroup label="English (required fields)">
+                            {QUESTION_IMPORT_FIELDS.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Odia (optional translations)">
+                            {ODIA_IMPORT_FIELDS.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
+                          </optgroup>
                         </select>
                       </td>
                     </tr>
@@ -594,7 +657,7 @@ export function QuestionImportFlow({
               Invalid rows are unchecked by default—fix fields to enable selection, or leave unchecked to skip.
             </p>
             <div className="overflow-x-auto border rounded-lg max-h-[min(45vh,320px)] sm:max-h-[min(50vh,400px)] overflow-y-auto">
-              <table className="w-full text-xs min-w-[920px]">
+              <table className="w-full text-xs min-w-[1080px]">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="text-left p-2 w-10">
@@ -602,6 +665,7 @@ export function QuestionImportFlow({
                     </th>
                     <th className="text-left p-2 sticky left-0 bg-gray-50 z-20">#</th>
                     <th className="text-left p-2 min-w-[180px]">Question</th>
+                    <th className="text-left p-2 min-w-[140px]">Question (Odia)</th>
                     <th className="text-left p-2">A–D</th>
                     <th className="text-left p-2">Ans</th>
                     <th className="text-left p-2">Pts</th>
@@ -642,6 +706,15 @@ export function QuestionImportFlow({
                         {r.validationErrors.length > 0 && (
                           <p className="text-[10px] text-red-600 mt-0.5">{r.validationErrors.join('; ')}</p>
                         )}
+                      </td>
+                      <td className="p-1 align-top">
+                        <textarea
+                          value={r.draft.question_text_odia}
+                          onChange={(e) => updateDraft(r.key, 'question_text_odia', e.target.value)}
+                          rows={2}
+                          className="w-full border rounded px-1 py-0.5 text-gray-900"
+                          placeholder="Odia (optional)"
+                        />
                       </td>
                       <td className="p-1 space-y-1">
                         {(['option_a', 'option_b', 'option_c', 'option_d'] as const).map((f) => (

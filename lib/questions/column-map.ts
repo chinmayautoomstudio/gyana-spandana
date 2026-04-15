@@ -1,7 +1,7 @@
-import type { QuestionImportField } from './import-schema'
+import type { AllImportField } from './import-schema'
 
 /** Map normalized header → canonical field (first match wins) */
-const HEADER_ALIASES: Record<string, QuestionImportField> = {
+const HEADER_ALIASES: Record<string, AllImportField> = {
   question: 'question_text',
   'question text': 'question_text',
   question_text: 'question_text',
@@ -54,6 +54,23 @@ const HEADER_ALIASES: Record<string, QuestionImportField> = {
   tags: 'tags',
   tag: 'tags',
   keywords: 'tags',
+
+  'question text odia': 'question_text_odia',
+  question_text_odia: 'question_text_odia',
+  'question odia': 'question_text_odia',
+  stem_odia: 'question_text_odia',
+
+  'option a odia': 'option_a_odia',
+  option_a_odia: 'option_a_odia',
+  'option b odia': 'option_b_odia',
+  option_b_odia: 'option_b_odia',
+  'option c odia': 'option_c_odia',
+  option_c_odia: 'option_c_odia',
+  'option d odia': 'option_d_odia',
+  option_d_odia: 'option_d_odia',
+
+  'explanation odia': 'explanation_odia',
+  explanation_odia: 'explanation_odia',
 }
 
 function normalizeHeader(h: string): string {
@@ -68,8 +85,8 @@ function normalizeHeader(h: string): string {
  * Given CSV/XLSX header row, suggest mapping header index → field.
  * Unmapped columns are omitted.
  */
-export function suggestColumnMapping(headers: string[]): Record<number, QuestionImportField> {
-  const map: Record<number, QuestionImportField> = {}
+export function suggestColumnMapping(headers: string[]): Record<number, AllImportField> {
+  const map: Record<number, AllImportField> = {}
   headers.forEach((h, index) => {
     const key = normalizeHeader(h)
     const field = HEADER_ALIASES[key]
@@ -80,9 +97,9 @@ export function suggestColumnMapping(headers: string[]): Record<number, Question
 
 export function applyColumnMapping(
   row: string[],
-  mapping: Record<number, QuestionImportField>
-): Partial<Record<QuestionImportField, string>> {
-  const out: Partial<Record<QuestionImportField, string>> = {}
+  mapping: Record<number, AllImportField>
+): Partial<Record<AllImportField, string>> {
+  const out: Partial<Record<AllImportField, string>> = {}
   Object.entries(mapping).forEach(([idxStr, field]) => {
     const idx = parseInt(idxStr, 10)
     const cell = row[idx]
@@ -94,7 +111,7 @@ export function applyColumnMapping(
   return out
 }
 
-export function rowObjectToImportPartial(obj: Partial<Record<QuestionImportField, string>>): Record<string, unknown> {
+export function rowObjectToImportPartial(obj: Partial<Record<AllImportField, string>>): Record<string, unknown> {
   const {
     question_text,
     option_a,
@@ -107,6 +124,12 @@ export function rowObjectToImportPartial(obj: Partial<Record<QuestionImportField
     difficulty_level,
     explanation,
     tags,
+    question_text_odia,
+    option_a_odia,
+    option_b_odia,
+    option_c_odia,
+    option_d_odia,
+    explanation_odia,
   } = obj
 
   return {
@@ -121,5 +144,11 @@ export function rowObjectToImportPartial(obj: Partial<Record<QuestionImportField
     difficulty_level: difficulty_level,
     explanation: explanation || null,
     tags: tags,
+    question_text_odia: question_text_odia,
+    option_a_odia: option_a_odia,
+    option_b_odia: option_b_odia,
+    option_c_odia: option_c_odia,
+    option_d_odia: option_d_odia,
+    explanation_odia: explanation_odia,
   }
 }

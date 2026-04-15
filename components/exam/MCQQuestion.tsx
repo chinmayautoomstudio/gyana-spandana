@@ -8,6 +8,8 @@ interface MCQOption {
   text: string
 }
 
+export type ExamQuestionLanguage = 'en' | 'od'
+
 interface MCQQuestionProps {
   question: {
     id: string
@@ -18,8 +20,18 @@ interface MCQQuestionProps {
     option_d: string
     correct_answer: 'A' | 'B' | 'C' | 'D'
     points: number
+    /** Legacy / alternate name for explanation text */
     answer_explanation?: string | null
+    explanation?: string | null
+    question_text_odia?: string | null
+    option_a_odia?: string | null
+    option_b_odia?: string | null
+    option_c_odia?: string | null
+    option_d_odia?: string | null
+    explanation_odia?: string | null
   }
+  /** When `od`, uses Odia fields with fallback to English if a field is missing. */
+  language?: ExamQuestionLanguage
   selectedAnswer: 'A' | 'B' | 'C' | 'D' | null
   onAnswerSelect: (option: 'A' | 'B' | 'C' | 'D') => void
   disabled?: boolean
@@ -28,6 +40,7 @@ interface MCQQuestionProps {
 
 export const MCQQuestion: React.FC<MCQQuestionProps> = ({
   question,
+  language = 'en',
   selectedAnswer,
   onAnswerSelect,
   disabled = false,
@@ -39,12 +52,25 @@ export const MCQQuestion: React.FC<MCQQuestionProps> = ({
     }
   }
 
+  const pick = (en: string, od: string | null | undefined) => {
+    if (language !== 'od') return en
+    const t = od != null && String(od).trim() !== '' ? String(od) : en
+    return t
+  }
+
+  const stem = pick(question.question_text, question.question_text_odia)
+  const baseExpl = question.answer_explanation ?? question.explanation ?? null
+  const expl =
+    language === 'od'
+      ? pick(baseExpl ?? '', question.explanation_odia)
+      : baseExpl
+
   // Convert question options to array format
   const mcqOptions: MCQOption[] = [
-    { option: 'A', text: question.option_a },
-    { option: 'B', text: question.option_b },
-    { option: 'C', text: question.option_c },
-    { option: 'D', text: question.option_d },
+    { option: 'A', text: pick(question.option_a, question.option_a_odia) },
+    { option: 'B', text: pick(question.option_b, question.option_b_odia) },
+    { option: 'C', text: pick(question.option_c, question.option_c_odia) },
+    { option: 'D', text: pick(question.option_d, question.option_d_odia) },
   ]
 
   return (
@@ -56,7 +82,7 @@ export const MCQQuestion: React.FC<MCQQuestionProps> = ({
             {question.points} point{question.points !== 1 ? 's' : ''}
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
-            <FormattedQuestionText text={question.question_text} />
+            <FormattedQuestionText text={stem} />
           </h2>
         </div>
       </div>
@@ -114,10 +140,10 @@ export const MCQQuestion: React.FC<MCQQuestionProps> = ({
       </div>
 
       {/* Answer explanation (show when disabled and answer is selected) */}
-      {disabled && selectedAnswer && question.answer_explanation && (
+      {disabled && selectedAnswer && expl && String(expl).trim() !== '' && (
         <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm font-semibold text-blue-900 mb-1">Explanation:</p>
-          <p className="text-sm text-blue-800">{question.answer_explanation}</p>
+          <p className="text-sm text-blue-800">{expl}</p>
         </div>
       )}
     </div>

@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/Button'
 
 interface QuestionPreviewModalProps {
   question: Question | null
+  language?: 'en' | 'od'
   onClose: () => void
 }
 
-export function QuestionPreviewModal({ question, onClose }: QuestionPreviewModalProps) {
+export function QuestionPreviewModal({ question, language = 'en', onClose }: QuestionPreviewModalProps) {
   if (!question) return null
 
   return (
@@ -29,7 +30,7 @@ export function QuestionPreviewModal({ question, onClose }: QuestionPreviewModal
                 </svg>
               </button>
             </div>
-            <QuestionCard question={question} compact={false} />
+            <QuestionCard question={question} language={language} compact={false} />
           </div>
           <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
             <Button

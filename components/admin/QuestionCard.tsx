@@ -21,6 +21,12 @@ export interface Question {
   category?: string | null
   difficulty_level?: 'easy' | 'medium' | 'hard' | null
   tags?: string[] | null
+  question_text_odia?: string | null
+  option_a_odia?: string | null
+  option_b_odia?: string | null
+  option_c_odia?: string | null
+  option_d_odia?: string | null
+  explanation_odia?: string | null
   created_at?: string
   exam?: {
     id: string
@@ -30,6 +36,7 @@ export interface Question {
 
 interface QuestionCardProps {
   question: Question
+  language?: 'en' | 'od'
   index?: number
   showExam?: boolean
   onEdit?: (question: Question) => void
@@ -44,6 +51,7 @@ interface QuestionCardProps {
 
 export function QuestionCard({
   question,
+  language = 'en',
   index,
   showExam = false,
   onEdit,
@@ -64,6 +72,11 @@ export function QuestionCard({
   }
 
   const difficultyLabel = question.difficulty_level || 'medium'
+  const pickText = (en: string | null | undefined, od: string | null | undefined) => {
+    const english = en ?? ''
+    if (language !== 'od') return english
+    return od && od.trim() !== '' ? od : english
+  }
 
   return (
     <div
@@ -89,7 +102,7 @@ export function QuestionCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-2 flex-wrap mb-2">
               <h3 className={`font-semibold text-gray-900 ${compact ? 'text-base' : 'text-lg'}`}>
-                {question.question_text}
+                {pickText(question.question_text, question.question_text_odia)}
               </h3>
               {question.difficulty_level && (
                 <span
@@ -195,7 +208,9 @@ export function QuestionCard({
         <div className={`grid grid-cols-1 ${compact ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-3 mb-4`}>
           {['A', 'B', 'C', 'D'].map((option) => {
             const optionKey = `option_${option.toLowerCase()}` as keyof Question
+            const odiaOptionKey = `option_${option.toLowerCase()}_odia` as keyof Question
             const optionText = question[optionKey] as string
+            const optionTextOdia = question[odiaOptionKey] as string | null | undefined
             const isCorrect = question.correct_answer === option
 
             return (
@@ -211,7 +226,9 @@ export function QuestionCard({
                     <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">Correct</span>
                   )}
                 </div>
-                <p className={`text-gray-900 ${compact ? 'text-sm' : ''}`}>{optionText}</p>
+                <p className={`text-gray-900 ${compact ? 'text-sm' : ''}`}>
+                  {pickText(optionText, optionTextOdia)}
+                </p>
               </div>
             )
           })}
@@ -223,7 +240,7 @@ export function QuestionCard({
           <span>
             Points: <strong>{question.points}</strong>
           </span>
-          {question.explanation && (
+          {pickText(question.explanation, question.explanation_odia).trim() !== '' && (
             <button
               onClick={() => setShowFullExplanation(!showFullExplanation)}
               className="text-[#C0392B] hover:text-[#A93226] flex items-center gap-1"
@@ -242,10 +259,10 @@ export function QuestionCard({
         </div>
       </div>
 
-      {showFullExplanation && question.explanation && (
+      {showFullExplanation && pickText(question.explanation, question.explanation_odia).trim() !== '' && (
         <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-gray-700">
-            <strong>Explanation:</strong> {question.explanation}
+            <strong>Explanation:</strong> {pickText(question.explanation, question.explanation_odia)}
           </p>
         </div>
       )}

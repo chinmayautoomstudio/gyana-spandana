@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
@@ -27,6 +27,8 @@ import {
   fetchBankDedupeMap,
 } from '@/lib/questions/bank-queries'
 
+type QuestionBankLanguage = 'en' | 'od'
+
 interface Exam {
   id: string
   title: string
@@ -41,6 +43,7 @@ export default function QuestionBankPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null)
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null)
+  const [language, setLanguage] = useState<QuestionBankLanguage>('en')
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [bypassFilters, setBypassFilters] = useState(false)
@@ -263,31 +266,24 @@ export default function QuestionBankPage() {
   const handleBulkExport = () => {
     const selectedQuestionsList = questions.filter((q) => selectedQuestions.has(q.id))
     const exportData = selectedQuestionsList.map((q) => ({
-      'Question Text': q.question_text,
-      'Option A': q.option_a,
-      'Option B': q.option_b,
-      'Option C': q.option_c,
-      'Option D': q.option_d,
+      'Question Text': pickLangText(q.question_text, q.question_text_odia),
+      'Option A': pickLangText(q.option_a, q.option_a_odia),
+      'Option B': pickLangText(q.option_b, q.option_b_odia),
+      'Option C': pickLangText(q.option_c, q.option_c_odia),
+      'Option D': pickLangText(q.option_d, q.option_d_odia),
       'Correct Answer': q.correct_answer,
       Points: q.points,
       Difficulty: q.difficulty_level || 'medium',
       Category: q.category || '',
       Tags: Array.isArray(q.tags) ? q.tags.join(', ') : '',
       'Exam Title': q.exam?.title || 'Unassigned',
-      Explanation: q.explanation || '',
+      Explanation: pickLangText(q.explanation, q.explanation_odia),
     }))
 
-    // Trigger export using ExportButton logic
-    const csv = Papa.unparse(exportData)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `questions-export-${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Questions')
+    XLSX.writeFile(wb, `questions-export-${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   const handleAssignToExam = () => {
@@ -332,24 +328,37 @@ export default function QuestionBankPage() {
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize))
   const safePage = Math.min(page, totalPages)
   const pagedQuestions = questions
+  const hasOdiaQuestions = useMemo(
+    () => questions.some((q) => q.question_text_odia && q.question_text_odia.trim() !== ''),
+    [questions]
+  )
+
+  const pickLangText = useCallback(
+    (en: string | null | undefined, od: string | null | undefined) => {
+      const english = en ?? ''
+      if (language !== 'od') return english
+      return od && od.trim() !== '' ? od : english
+    },
+    [language]
+  )
 
   const exportRows = useMemo(
     () =>
       pagedQuestions.map((q) => ({
-        'Question Text': q.question_text,
-        'Option A': q.option_a,
-        'Option B': q.option_b,
-        'Option C': q.option_c,
-        'Option D': q.option_d,
+        'Question Text': pickLangText(q.question_text, q.question_text_odia),
+        'Option A': pickLangText(q.option_a, q.option_a_odia),
+        'Option B': pickLangText(q.option_b, q.option_b_odia),
+        'Option C': pickLangText(q.option_c, q.option_c_odia),
+        'Option D': pickLangText(q.option_d, q.option_d_odia),
         'Correct Answer': q.correct_answer,
         Points: q.points,
         Difficulty: q.difficulty_level || 'medium',
         Category: q.category || '',
         Tags: Array.isArray(q.tags) ? q.tags.join(', ') : '',
         'Exam Title': q.exam?.title || 'Unassigned',
-        Explanation: q.explanation || '',
+        Explanation: pickLangText(q.explanation, q.explanation_odia),
       })),
-    [pagedQuestions]
+    [pagedQuestions, pickLangText]
   )
 
   const allVisibleSelected =
@@ -550,6 +559,20 @@ SELECT is_admin_user('your-user-id-here');`}
         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <label className="text-gray-600 whitespace-nowrap">Sort by</label>
+            {hasOdiaQuestions && (
+              <>
+                <label className="text-gray-600 whitespace-nowrap ml-2">Language</label>
+                <button
+                  type="button"
+                  onClick={() => setLanguage((prev) => (prev === 'en' ? 'od' : 'en'))}
+                  className="text-sm font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-800 hover:border-[#C0392B] hover:text-[#C0392B] transition-colors"
+                  aria-pressed={language === 'od'}
+                >
+                  {language === 'en' ? 'English' : 'ଓଡ଼ିଆ'} —{' '}
+                  {language === 'en' ? 'Switch to ଓଡ଼ିଆ' : 'Switch to English'}
+                </button>
+              </>
+            )}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'created_at' | 'points' | 'difficulty')}
@@ -636,6 +659,7 @@ SELECT is_admin_user('your-user-id-here');`}
         <>
           <QuestionsTable
             questions={pagedQuestions}
+            language={language}
             selectedQuestions={selectedQuestions}
             onSelectQuestion={handleSelectQuestion}
             onSelectAll={handleSelectAll}
@@ -676,7 +700,11 @@ SELECT is_admin_user('your-user-id-here');`}
 
       {/* Preview Modal */}
       {previewQuestion && (
-        <QuestionPreviewModal question={previewQuestion} onClose={() => setPreviewQuestion(null)} />
+        <QuestionPreviewModal
+          question={previewQuestion}
+          language={language}
+          onClose={() => setPreviewQuestion(null)}
+        />
       )}
     </div>
   )
