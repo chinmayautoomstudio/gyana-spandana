@@ -101,8 +101,8 @@ export function QuestionFormModal({
         onClick={handleClose}
       />
       <div
-        className={`relative w-full max-w-3xl rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 bg-white flex flex-col ${
-          shellTall ? 'h-[80vh] max-h-[80vh] sm:h-[80vh]' : 'max-h-[95vh] sm:max-h-[90vh]'
+        className={`relative w-full max-w-6xl rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 bg-white flex flex-col ${
+          shellTall ? 'h-[90vh] max-h-[90vh] sm:h-[90vh]' : 'max-h-[95vh] sm:max-h-[90vh]'
         }`}
         role="dialog"
         aria-modal="true"

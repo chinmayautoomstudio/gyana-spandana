@@ -563,21 +563,21 @@ export function QuestionImportFlow({
 
         {step === 'mapping' && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-800">
               Map each column to a question field. First row was used as headers.
             </p>
             <div className="overflow-x-auto border rounded-lg">
               <table className="w-full text-sm min-w-[640px]">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left p-2">Column</th>
-                    <th className="text-left p-2">Maps to</th>
+                    <th className="text-left text-gray-700 font-semibold p-2">Column</th>
+                    <th className="text-left text-gray-700 font-semibold p-2">Maps to</th>
                   </tr>
                 </thead>
                 <tbody>
                   {headers.map((h, idx) => (
                     <tr key={idx} className="border-t border-gray-100">
-                      <td className="p-2 font-mono text-xs max-w-[200px] truncate" title={h}>
+                      <td className="p-2 font-mono text-xs text-gray-800 max-w-[200px] truncate" title={h}>
                         {h || `(column ${idx + 1})`}
                       </td>
                       <td className="p-2">
@@ -616,7 +616,7 @@ export function QuestionImportFlow({
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-gray-500">{rawRows.length} data rows</p>
+            <p className="text-xs text-gray-700">{rawRows.length} data rows</p>
           </div>
         )}
 
@@ -656,21 +656,27 @@ export function QuestionImportFlow({
             <p className="text-xs text-gray-500">
               Invalid rows are unchecked by default—fix fields to enable selection, or leave unchecked to skip.
             </p>
-            <div className="overflow-x-auto border rounded-lg max-h-[min(45vh,320px)] sm:max-h-[min(50vh,400px)] overflow-y-auto">
-              <table className="w-full text-xs min-w-[1080px]">
+            <div className="overflow-x-auto border rounded-lg max-h-[55vh] overflow-y-auto">
+              <table className="w-full text-xs min-w-[1800px]">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left p-2 w-10">
+                    <th className="text-left text-gray-700 font-semibold p-2 w-10">
                       <span className="sr-only">Include</span>
                     </th>
-                    <th className="text-left p-2 sticky left-0 bg-gray-50 z-20">#</th>
-                    <th className="text-left p-2 min-w-[180px]">Question</th>
-                    <th className="text-left p-2 min-w-[140px]">Question (Odia)</th>
-                    <th className="text-left p-2">A–D</th>
-                    <th className="text-left p-2">Ans</th>
-                    <th className="text-left p-2">Pts</th>
-                    <th className="text-left p-2">Dup</th>
-                    <th className="text-left p-2">Action</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 sticky left-0 bg-gray-50 z-20">#</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[180px]">Question</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[160px]">Question (Odia)</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[180px]">Options A–D</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[180px]">Options A–D (Odia)</th>
+                    <th className="text-left text-gray-700 font-semibold p-2">Ans</th>
+                    <th className="text-left text-gray-700 font-semibold p-2">Pts</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[180px]">Explanation</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[180px]">Explanation (Odia)</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[120px]">Difficulty</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[140px]">Category</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[160px]">Tags</th>
+                    <th className="text-left text-gray-700 font-semibold p-2">Dup</th>
+                    <th className="text-left text-gray-700 font-semibold p-2">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -727,6 +733,19 @@ export function QuestionImportFlow({
                           />
                         ))}
                       </td>
+                      <td className="p-1 space-y-1">
+                        {(
+                          ['option_a_odia', 'option_b_odia', 'option_c_odia', 'option_d_odia'] as const
+                        ).map((f) => (
+                          <input
+                            key={f}
+                            value={r.draft[f]}
+                            onChange={(e) => updateDraft(r.key, f, e.target.value)}
+                            className="w-full border rounded px-1 text-gray-900"
+                            placeholder={f}
+                          />
+                        ))}
+                      </td>
                       <td className="p-1">
                         <select
                           value={r.draft.correct_answer}
@@ -747,6 +766,51 @@ export function QuestionImportFlow({
                           value={r.draft.points}
                           onChange={(e) => updateDraft(r.key, 'points', e.target.value)}
                           className="w-14 border rounded px-1 text-gray-900"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <textarea
+                          value={r.draft.explanation}
+                          onChange={(e) => updateDraft(r.key, 'explanation', e.target.value)}
+                          rows={2}
+                          className="w-full border rounded px-1 py-0.5 text-gray-900"
+                          placeholder="Explanation"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <textarea
+                          value={r.draft.explanation_odia}
+                          onChange={(e) => updateDraft(r.key, 'explanation_odia', e.target.value)}
+                          rows={2}
+                          className="w-full border rounded px-1 py-0.5 text-gray-900"
+                          placeholder="Explanation (Odia)"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <select
+                          value={r.draft.difficulty_level}
+                          onChange={(e) => updateDraft(r.key, 'difficulty_level', e.target.value)}
+                          className="w-full border rounded text-gray-900 bg-white"
+                        >
+                          <option value="easy">easy</option>
+                          <option value="medium">medium</option>
+                          <option value="hard">hard</option>
+                        </select>
+                      </td>
+                      <td className="p-1">
+                        <input
+                          value={r.draft.category}
+                          onChange={(e) => updateDraft(r.key, 'category', e.target.value)}
+                          className="w-full border rounded px-1 text-gray-900"
+                          placeholder="Category"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <input
+                          value={r.draft.tags}
+                          onChange={(e) => updateDraft(r.key, 'tags', e.target.value)}
+                          className="w-full border rounded px-1 text-gray-900"
+                          placeholder="tag1, tag2"
                         />
                       </td>
                       <td className="p-1 text-[10px]">

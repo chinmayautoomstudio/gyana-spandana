@@ -34,6 +34,13 @@ interface Exam {
   title: string
 }
 
+function getPageNumbers(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 4) return [1, 2, 3, 4, 5, '…', total]
+  if (current >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
+  return [1, '…', current - 1, current, current + 1, '…', total]
+}
+
 export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [exams, setExams] = useState<Exam[]>([])
@@ -51,8 +58,8 @@ export default function QuestionBankPage() {
   const [sortBy, setSortBy] = useState<'created_at' | 'points' | 'difficulty'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(25)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
-  const pageSize = 25
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -366,7 +373,7 @@ export default function QuestionBankPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [searchTerm, selectedExam, selectedDifficulty, selectedCategory, minPoints, maxPoints, bypassFilters])
+  }, [searchTerm, selectedExam, selectedDifficulty, selectedCategory, minPoints, maxPoints, bypassFilters, pageSize])
 
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages))
@@ -671,11 +678,29 @@ SELECT is_admin_user('your-user-id-here');`}
             onPreview={setPreviewQuestion}
           />
           {(totalPages > 1 || totalFilteredCount > 0) && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-3 text-sm text-gray-600">
-              <span>
-                Page {safePage} of {totalPages} · {totalFilteredCount} matching
-              </span>
-              <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-3 text-sm text-gray-700">
+              <div className="flex items-center gap-3">
+                <span>{totalFilteredCount} matching</span>
+                <label className="flex items-center gap-1.5 text-gray-600">
+                  Show
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value))
+                      setPage(1)
+                    }}
+                    className="border border-gray-300 rounded px-1.5 py-0.5 text-gray-900 bg-white"
+                  >
+                    {[10, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                  per page
+                </label>
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
                   size="sm"
@@ -684,6 +709,22 @@ SELECT is_admin_user('your-user-id-here');`}
                 >
                   Previous
                 </Button>
+                {getPageNumbers(safePage, totalPages).map((p, i) =>
+                  p === '…' ? (
+                    <span key={`ellipsis-${i}`} className="px-2 text-gray-400 select-none">
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={p}
+                      variant={p === safePage ? 'primary' : 'outline'}
+                      size="sm"
+                      onClick={() => setPage(p as number)}
+                    >
+                      {p}
+                    </Button>
+                  )
+                )}
                 <Button
                   variant="outline"
                   size="sm"
