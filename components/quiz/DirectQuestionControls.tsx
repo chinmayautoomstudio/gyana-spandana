@@ -134,6 +134,21 @@ export function DirectQuestionControls({
 
       {isIdle ? (
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+          {event?.status === 'answered' ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+              <p className="font-semibold">
+                Answer marked correct for Team {event.answered_by_team || directedTeam}
+                {Number(event.points_awarded || 0) > 0 ? ` (+${Number(event.points_awarded)} points)` : ''}.
+              </p>
+              <p className="mt-1 text-emerald-900">Ready to proceed to the next question.</p>
+            </div>
+          ) : null}
+          {event?.status === 'dropped' ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              <p className="font-semibold">Question closed without points.</p>
+              <p className="mt-1 text-amber-900">Proceed to the next question.</p>
+            </div>
+          ) : null}
           <p className="text-sm font-medium text-gray-700">Choose directed team for the next question</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {teamChoices.map((label) => (
@@ -176,7 +191,7 @@ export function DirectQuestionControls({
                   isLoading={busy}
                   disabled={!effectiveSelectedQuestionId}
                 >
-                  Ask selected question
+                  Next Question
                 </Button>
                 <Button variant="outline" onClick={() => onNextSequential()} isLoading={busy}>
                   Next in order

@@ -140,7 +140,7 @@ export function RapidFireControls({
         <>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="mb-2 text-sm text-gray-600">{teamLabelText} is answering</p>
-            <QuestionDisplay question={question} showOptions={false} readOnly />
+            <QuestionDisplay question={question} showOptions readOnly revealCorrectAnswer />
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleCorrect} isLoading={busy} disabled={!isQuestionActive || remainingSeconds <= 0}>

@@ -271,7 +271,7 @@ export default function HostSessionPage() {
         <h1 className="text-2xl font-bold text-gray-900">{state.session.title}</h1>
         <div className="flex gap-2">
           <button
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 disabled:text-gray-400"
             onClick={() => activeRound && runAction('end_round', { roundId: activeRound.id })}
             disabled={!activeRound || busy}
           >

@@ -1508,6 +1508,15 @@ export async function PATCH(
       if (!roundId) return NextResponse.json({ error: 'roundId is required' }, { status: 400 })
 
       await supabase.from('quiz_rounds').update({ status: 'completed' }).eq('id', roundId)
+      await supabase
+        .from('quiz_live_sessions')
+        .update({
+          current_round_id: null,
+          status: 'lobby',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', sessionId)
+        .eq('current_round_id', roundId)
       const { data: round } = await supabase.from('quiz_rounds').select('*').eq('id', roundId).single()
       const finalScores = await getScoreMap(sessionId, supabase)
       return NextResponse.json({ success: true, round, finalScores })

@@ -226,6 +226,8 @@ export default function ParticipantPlayPage() {
   const revealCorrect = Boolean(state.currentQuestionEvent?.correct_answer_revealed_at)
   const showOptions =
     (isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed') ||
+    (isRapidFireRound &&
+      ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || ''))) ||
     (isBuzzerRound && ['revealed', 'buzzer_open', 'options_revealed'].includes(String(state.currentQuestionEvent?.status || '')))
 
   const attempt = state.participantDirectAttempt
