@@ -24,6 +24,17 @@ interface TrueOrFalseControlsProps {
   selectableTeams?: TeamLabel[]
   activeRoundQuestions?: ActiveRoundQuestionOption[] | null
   teamDisplayNames?: Record<TeamLabel, string>
+  pendingDirectAnswer?: {
+    team_label: string
+    answer_text: string
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
+    answer_option_text: string | null
+  } | null
+  checkedResponseResult?: {
+    verdict: 'correct' | 'wrong'
+    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
+    correctAnswerText: string | null
+  } | null
 }
 
 export function TrueOrFalseControls({
@@ -43,6 +54,8 @@ export function TrueOrFalseControls({
   selectableTeams = ['A', 'B', 'C', 'D'],
   activeRoundQuestions = null,
   teamDisplayNames,
+  pendingDirectAnswer = null,
+  checkedResponseResult = null,
 }: TrueOrFalseControlsProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('')
   const teamChoices = selectableTeams.length > 0 ? selectableTeams : (['A', 'B', 'C', 'D'] as TeamLabel[])
@@ -139,6 +152,38 @@ export function TrueOrFalseControls({
       ) : (
         <>
           <QuestionDisplay question={question} showOptions={showOptions} readOnly revealCorrectAnswer={revealCorrect} />
+
+          {showOptions && !revealCorrect ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+              <p className="text-sm font-semibold text-amber-950">True/False response check</p>
+              {pendingDirectAnswer ? (
+                <div className="rounded-lg border border-amber-300 bg-white p-3 text-sm">
+                  <p className="font-medium text-gray-800">Team {pendingDirectAnswer.team_label} submitted:</p>
+                  <p className="mt-1 text-gray-900 font-semibold">
+                    {pendingDirectAnswer.answer_option_label || pendingDirectAnswer.answer_text || '(empty)'}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-amber-900">Waiting for the directed team to submit an answer...</p>
+              )}
+
+              {checkedResponseResult ? (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950">
+                  <p className="font-semibold">
+                    Checked result: {checkedResponseResult.verdict === 'correct' ? 'Correct' : 'Wrong'}
+                  </p>
+                  <p className="mt-1">
+                    Correct answer:{' '}
+                    <span className="font-semibold">
+                      {checkedResponseResult.correctAnswerLabel ||
+                        checkedResponseResult.correctAnswerText ||
+                        '(not set)'}
+                    </span>
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap gap-2">
             {!showOptions && (

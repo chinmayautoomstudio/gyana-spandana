@@ -39,12 +39,12 @@ interface DirectQuestionControlsProps {
   pendingDirectAnswer?: {
     team_label: string
     answer_text: string
-    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     answer_option_text: string | null
   } | null
   checkedResponseResult?: {
     verdict: 'correct' | 'wrong'
-    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | null
+    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     correctAnswerText: string | null
   } | null
 }

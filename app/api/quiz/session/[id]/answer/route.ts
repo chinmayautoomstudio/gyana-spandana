@@ -57,13 +57,23 @@ export async function POST(
     if (!round || round.session_id !== sessionId) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 400 })
     }
-    if (round.round_type !== 'direct_question' && round.round_type !== 'buzzer') {
+    if (
+      round.round_type !== 'direct_question' &&
+      round.round_type !== 'buzzer' &&
+      round.round_type !== 'true_or_false'
+    ) {
       return NextResponse.json(
-        { error: 'Answer submission is only allowed in direct question or buzzer rounds' },
+        { error: 'Answer submission is only allowed in direct question, true/false, or buzzer rounds' },
         { status: 400 },
       )
     }
-    if (!TEAM_LABELS.includes(answerText as TeamLabel)) {
+    const isLetterAnswer = TEAM_LABELS.includes(answerText as TeamLabel)
+    const isTrueFalseAnswer = answerText === 'TRUE' || answerText === 'FALSE'
+    if (round.round_type === 'true_or_false') {
+      if (!isTrueFalseAnswer) {
+        return NextResponse.json({ error: 'Please select a valid option (TRUE or FALSE)' }, { status: 400 })
+      }
+    } else if (!isLetterAnswer) {
       return NextResponse.json({ error: 'Please select a valid option (A, B, C, or D)' }, { status: 400 })
     }
 
@@ -84,6 +94,18 @@ export async function POST(
     if (round.round_type === 'direct_question') {
       if (event.status !== 'revealed') {
         return NextResponse.json({ error: 'Question is not open for answers' }, { status: 400 })
+      }
+      const directed = event.directed_team as TeamLabel
+      if (!directed || !TEAM_LABELS.includes(directed)) {
+        return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
+      }
+      if (participantLabel !== directed) {
+        return NextResponse.json({ error: 'It is not your team turn to answer' }, { status: 403 })
+      }
+      answeringTeam = directed
+    } else if (round.round_type === 'true_or_false') {
+      if (event.status !== 'options_revealed') {
+        return NextResponse.json({ error: 'True/False options are not open for answers' }, { status: 400 })
       }
       const directed = event.directed_team as TeamLabel
       if (!directed || !TEAM_LABELS.includes(directed)) {

@@ -34,13 +34,13 @@ interface SessionState {
   pendingDirectAnswer?: {
     team_label: string
     answer_text: string
-    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     answer_option_text: string | null
   } | null
   pendingBuzzerAnswer?: {
     team_label: string
     answer_text: string
-    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     answer_option_text: string | null
   } | null
 }
@@ -55,7 +55,7 @@ export default function HostSessionPage() {
   const [error, setError] = useState<string | null>(null)
   const [checkedResponseResult, setCheckedResponseResult] = useState<{
     verdict: 'correct' | 'wrong'
-    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | null
+    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     correctAnswerText: string | null
   } | null>(null)
   const [buzzEvents, setBuzzEvents] = useState<
@@ -73,7 +73,11 @@ export default function HostSessionPage() {
   const applyParticipantAnswerOptimistic = useCallback(
     (payload: ParticipantAnswerSubmittedPayload) => {
       setState((prev) => {
-        if (!prev?.currentQuestionEvent || prev.activeRound?.round_type !== 'direct_question') {
+        if (
+          !prev?.currentQuestionEvent ||
+          (prev.activeRound?.round_type !== 'direct_question' &&
+            prev.activeRound?.round_type !== 'true_or_false')
+        ) {
           return prev
         }
         if (prev.currentQuestionEvent.id !== payload.questionEventId) return prev
@@ -82,15 +86,18 @@ export default function HostSessionPage() {
         const optionLabel =
           raw === 'A' || raw === 'B' || raw === 'C' || raw === 'D' ? (raw as 'A' | 'B' | 'C' | 'D') : null
         const cq = prev.currentQuestion
+        const tfLabel = raw === 'TRUE' || raw === 'FALSE' ? (raw as 'TRUE' | 'FALSE') : null
         const optionText = optionLabel
           ? (String(cq?.[`option_${optionLabel.toLowerCase()}`] ?? '') || null)
-          : null
+          : tfLabel
+            ? tfLabel
+            : null
         return {
           ...prev,
           pendingDirectAnswer: {
             team_label: payload.teamLabel,
             answer_text: raw,
-            answer_option_label: optionLabel,
+            answer_option_label: optionLabel || tfLabel,
             answer_option_text: optionText,
           },
         }
@@ -277,9 +284,15 @@ export default function HostSessionPage() {
     const answerLabel =
       rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
         ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
+        : rawAnswer === 'TRUE' || rawAnswer === 'FALSE'
+          ? (rawAnswer as 'TRUE' | 'FALSE')
         : null
     const answerText = answerLabel
-      ? (String(data?.correctAnswerOptionText || state?.currentQuestion?.[`option_${answerLabel.toLowerCase()}`] || '') || null)
+      ? answerLabel === 'TRUE' || answerLabel === 'FALSE'
+        ? answerLabel
+        : (String(
+            data?.correctAnswerOptionText || state?.currentQuestion?.[`option_${answerLabel.toLowerCase()}`] || '',
+          ) || null)
       : (rawAnswer || null)
     if (data?.verdict === 'correct' || data?.verdict === 'wrong') {
       setCheckedResponseResult({
@@ -493,6 +506,8 @@ export default function HostSessionPage() {
                   selectableTeams={hostSelectableTeams}
                   activeRoundQuestions={state.activeRoundQuestions ?? null}
                   teamDisplayNames={teamNames}
+                  pendingDirectAnswer={state.pendingDirectAnswer ?? null}
+                  checkedResponseResult={checkedResponseResult}
                 />
               ) : activeRound.round_type === 'rapid_fire' ? (
                 <RapidFireControls

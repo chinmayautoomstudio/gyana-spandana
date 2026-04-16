@@ -161,6 +161,20 @@ export default function ParticipantPlayPage() {
     setSelectedDirectOption(null)
   }, [state?.currentQuestionEvent?.id, state?.participantDirectAttempt?.answer_text])
 
+  useEffect(() => {
+    const answer = String(state?.participantDirectAttempt?.answer_text || '').trim().toUpperCase()
+    const eventId = state?.currentQuestionEvent?.id || null
+    if (answer === 'TRUE' || answer === 'FALSE') {
+      setSelectedTrueFalse(answer)
+      if (eventId) {
+        setTrueFalseLockedEventId(eventId)
+      }
+      return
+    }
+    if (eventId && trueFalseLockedEventId === eventId) return
+    setSelectedTrueFalse(null)
+  }, [state?.currentQuestionEvent?.id, state?.participantDirectAttempt?.answer_text, trueFalseLockedEventId])
+
   const submitDirectAnswer = async () => {
     if (!sessionId || !state?.currentQuestionEvent?.id || !selectedDirectOption) return
     setAnswerBusy(true)
@@ -176,6 +190,32 @@ export default function ParticipantPlayPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || 'Failed to submit')
+      await fetchState()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setAnswerBusy(false)
+    }
+  }
+
+  const submitTrueFalseAnswer = async () => {
+    if (!sessionId || !state?.currentQuestionEvent?.id || !selectedTrueFalse) return
+    setAnswerBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/quiz/session/${sessionId}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionEventId: state.currentQuestionEvent.id,
+          answerText: selectedTrueFalse,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Failed to submit')
+      if (trueFalseEventId) {
+        setTrueFalseLockedEventId(trueFalseEventId)
+      }
       await fetchState()
     } catch (e: any) {
       setError(e.message)
@@ -337,11 +377,6 @@ export default function ParticipantPlayPage() {
 
   const onTrueFalseSelect = (value: 'TRUE' | 'FALSE') => {
     setSelectedTrueFalse(value)
-    if (canChooseTrueFalse && trueFalseEventId) {
-      // There is no persisted participant T/F submission endpoint yet.
-      // Lock after one local choice per question event to reflect turn-based UX.
-      setTrueFalseLockedEventId(trueFalseEventId)
-    }
   }
 
   return (
@@ -562,9 +597,16 @@ export default function ParticipantPlayPage() {
                 Your True/False choice is locked for this question. Waiting for host judgement...
               </p>
             ) : (
-              <p className="text-sm text-gray-700">
-                Select TRUE or FALSE above. Your first choice is treated as final for this turn.
-              </p>
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">Select TRUE or FALSE above, then submit your answer.</p>
+                <Button
+                  onClick={() => void submitTrueFalseAnswer()}
+                  isLoading={answerBusy}
+                  disabled={!selectedTrueFalse}
+                >
+                  Submit True/False answer
+                </Button>
+              </div>
             )}
           </div>
         ) : null}

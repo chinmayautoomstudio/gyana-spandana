@@ -185,13 +185,13 @@ export async function GET(
     let pendingDirectAnswer: {
       team_label: string
       answer_text: string
-      answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+      answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
       answer_option_text: string | null
     } | null = null
     let pendingBuzzerAnswer: {
       team_label: string
       answer_text: string
-      answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+      answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
       answer_option_text: string | null
     } | null = null
     let participantDirectAttempt: { answer_text: string; verdict: string } | null = null
@@ -240,7 +240,7 @@ export async function GET(
     const needPendingDirectAttempt =
       latestEvent &&
       isHostOrAdmin &&
-      activeRound?.round_type === 'direct_question' &&
+      (activeRound?.round_type === 'direct_question' || activeRound?.round_type === 'true_or_false') &&
       ['revealed', 'options_revealed'].includes(String(ev?.status))
 
     const dirForAttempt = needPendingDirectAttempt ? (ev.directed_team as TeamLabel) : null
@@ -275,9 +275,13 @@ export async function GET(
       const optionLabel =
         rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
           ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
+          : rawAnswer === 'TRUE' || rawAnswer === 'FALSE'
+            ? (rawAnswer as 'TRUE' | 'FALSE')
           : null
       const optionText = optionLabel
-        ? (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
+        ? optionLabel === 'TRUE' || optionLabel === 'FALSE'
+          ? optionLabel
+          : (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
         : null
       pendingDirectAnswer = {
         team_label: att.team_label,
@@ -326,9 +330,13 @@ export async function GET(
           const optionLabel =
             rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
               ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
+              : rawAnswer === 'TRUE' || rawAnswer === 'FALSE'
+                ? (rawAnswer as 'TRUE' | 'FALSE')
               : null
           const optionText = optionLabel
-            ? (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
+            ? optionLabel === 'TRUE' || optionLabel === 'FALSE'
+              ? optionLabel
+              : (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
             : null
           pendingBuzzerAnswer = {
             team_label: String(bAtt.team_label),
@@ -343,8 +351,10 @@ export async function GET(
     if (
       latestEvent &&
       !isHostOrAdmin &&
-      (activeRound?.round_type === 'direct_question' || activeRound?.round_type === 'buzzer') &&
-      ['revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status)) &&
+      (activeRound?.round_type === 'direct_question' ||
+        activeRound?.round_type === 'buzzer' ||
+        activeRound?.round_type === 'true_or_false') &&
+      ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status)) &&
       authUser
     ) {
       const { data: participantRow } = await supabase
@@ -1016,7 +1026,7 @@ export async function PATCH(
 
       const { data: qAns } = await supabase
         .from('quiz_questions')
-        .select('correct_answer, option_a, option_b, option_c, option_d')
+        .select('question_type, correct_answer, correct_answer_tf, option_a, option_b, option_c, option_d')
         .eq('id', event.question_id)
         .single()
 
@@ -1027,9 +1037,13 @@ export async function PATCH(
         return normalized
       }
 
-      const submitted = normalizeOptionValue(String(attempt.answer_text || ''))
-      const correctAnswer = String(qAns?.correct_answer || '').trim().toUpperCase()
-      const normalizedCorrect = normalizeOptionValue(correctAnswer)
+      const submittedRaw = String(attempt.answer_text || '').trim().toUpperCase()
+      const isTrueFalseQuestion = String(qAns?.question_type || '').toLowerCase() === 'true_false'
+      const submitted = isTrueFalseQuestion ? submittedRaw : normalizeOptionValue(submittedRaw)
+      const correctAnswer = isTrueFalseQuestion
+        ? String(qAns?.correct_answer_tf || '').trim().toUpperCase()
+        : String(qAns?.correct_answer || '').trim().toUpperCase()
+      const normalizedCorrect = isTrueFalseQuestion ? correctAnswer : normalizeOptionValue(correctAnswer)
       const verdict: 'correct' | 'wrong' =
         submitted && normalizedCorrect && submitted === normalizedCorrect ? 'correct' : 'wrong'
 
@@ -1037,11 +1051,15 @@ export async function PATCH(
         normalizedCorrect === 'A' ||
         normalizedCorrect === 'B' ||
         normalizedCorrect === 'C' ||
-        normalizedCorrect === 'D'
-          ? (normalizedCorrect as 'A' | 'B' | 'C' | 'D')
+        normalizedCorrect === 'D' ||
+        normalizedCorrect === 'TRUE' ||
+        normalizedCorrect === 'FALSE'
+          ? (normalizedCorrect as 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE')
           : null
       const correctAnswerOptionText = correctAnswerLabel
-        ? correctAnswerLabel === 'A'
+        ? correctAnswerLabel === 'TRUE' || correctAnswerLabel === 'FALSE'
+          ? correctAnswerLabel
+          : correctAnswerLabel === 'A'
           ? qAns?.option_a || null
           : correctAnswerLabel === 'B'
             ? qAns?.option_b || null
