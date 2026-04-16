@@ -1024,11 +1024,17 @@ export async function PATCH(
         return NextResponse.json({ error: 'Answer already judged' }, { status: 400 })
       }
 
-      const { data: qAns } = await supabase
+      const { data: qAns, error: qAnsError } = await supabase
         .from('quiz_questions')
-        .select('question_type, correct_answer, correct_answer_tf, option_a, option_b, option_c, option_d')
+        .select('question_type, correct_answer, option_a, option_b, option_c, option_d')
         .eq('id', event.question_id)
         .single()
+      if (qAnsError || !qAns) {
+        return NextResponse.json(
+          { error: qAnsError?.message || 'Question data not found for this event' },
+          { status: 500 },
+        )
+      }
 
       const normalizeOptionValue = (input: string | null | undefined) => {
         const normalized = String(input || '').trim().toUpperCase()
@@ -1040,9 +1046,7 @@ export async function PATCH(
       const submittedRaw = String(attempt.answer_text || '').trim().toUpperCase()
       const isTrueFalseQuestion = String(qAns?.question_type || '').toLowerCase() === 'true_false'
       const submitted = isTrueFalseQuestion ? submittedRaw : normalizeOptionValue(submittedRaw)
-      const correctAnswer = isTrueFalseQuestion
-        ? String(qAns?.correct_answer_tf || '').trim().toUpperCase()
-        : String(qAns?.correct_answer || '').trim().toUpperCase()
+      const correctAnswer = String(qAns?.correct_answer || '').trim().toUpperCase()
       const normalizedCorrect = isTrueFalseQuestion ? correctAnswer : normalizeOptionValue(correctAnswer)
       const verdict: 'correct' | 'wrong' =
         submitted && normalizedCorrect && submitted === normalizedCorrect ? 'correct' : 'wrong'
