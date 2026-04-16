@@ -11,6 +11,8 @@ import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
 import { RoundNavigator } from '@/components/quiz/RoundNavigator'
 import { DirectQuestionControls } from '@/components/quiz/DirectQuestionControls'
 import { TrueOrFalseControls } from '@/components/quiz/TrueOrFalseControls'
+import { RapidFireControls } from '@/components/quiz/RapidFireControls'
+import { BuzzerControls } from '@/components/quiz/BuzzerControls'
 import { getOccupiedLabels } from '@/lib/quiz/teamSlots'
 import type { TeamLabel } from '@/lib/utils/teamColors'
 
@@ -49,6 +51,9 @@ export default function HostSessionPage() {
     correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | null
     correctAnswerText: string | null
   } | null>(null)
+  const [buzzEvents, setBuzzEvents] = useState<
+    Array<{ id: string; team_label: TeamLabel; buzz_order: number | null; buzzed_at?: string | null }>
+  >([])
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
@@ -102,6 +107,37 @@ export default function HostSessionPage() {
         onQuestionRevealed: () => void fetchState(),
         onOptionsRevealed: () => void fetchState(),
         onAnswerResult: () => void fetchState(),
+        onTimerStarted: () => void fetchState(),
+        onBuzzerOpen: (payload) => {
+          setBuzzEvents([])
+          void fetchState()
+          if (payload?.questionEventId && state?.currentQuestionEvent?.id !== payload.questionEventId) {
+            setCheckedResponseResult(null)
+          }
+        },
+        onBuzzReceived: (payload) => {
+          setBuzzEvents((prev) => {
+            const exists = prev.find((item) => item.team_label === payload.teamLabel)
+            const next = exists
+              ? prev.map((item) =>
+                  item.team_label === payload.teamLabel
+                    ? { ...item, buzz_order: payload.buzzOrder ?? item.buzz_order }
+                    : item,
+                )
+              : [
+                  ...prev,
+                  {
+                    id: `${payload.questionEventId}:${payload.teamLabel}`,
+                    team_label: payload.teamLabel as TeamLabel,
+                    buzz_order: payload.buzzOrder ?? null,
+                    buzzed_at: new Date().toISOString(),
+                  },
+                ]
+            return next.sort((a, b) => Number(a.buzz_order || 999) - Number(b.buzz_order || 999))
+          })
+          void fetchState()
+        },
+        onRapidFireTeamChange: () => void fetchState(),
         onParticipantAnswerSubmitted: applyParticipantAnswerOptimistic,
         onDirectVerdictApplied: () => void fetchState(),
         onScoresUpdated: () => void fetchState(),
@@ -176,6 +212,9 @@ export default function HostSessionPage() {
   useEffect(() => {
     setCheckedResponseResult(null)
   }, [state?.currentQuestionEvent?.id])
+  useEffect(() => {
+    setBuzzEvents([])
+  }, [state?.currentQuestionEvent?.id])
 
   useEffect(() => {
     setCheckedResponseResult(null)
@@ -201,6 +240,12 @@ export default function HostSessionPage() {
         correctAnswerText: answerText,
       })
     }
+  }
+
+  const getActiveBuzzTeam = (): TeamLabel | null => {
+    if (!buzzEvents.length) return null
+    const first = [...buzzEvents].sort((a, b) => Number(a.buzz_order || 999) - Number(b.buzz_order || 999))[0]
+    return first?.team_label || null
   }
 
   if (!state) {
@@ -400,6 +445,79 @@ export default function HostSessionPage() {
                   selectableTeams={hostSelectableTeams}
                   activeRoundQuestions={state.activeRoundQuestions ?? null}
                   teamDisplayNames={teamNames}
+                />
+              ) : activeRound.round_type === 'rapid_fire' ? (
+                <RapidFireControls
+                  round={activeRound}
+                  question={state.currentQuestion}
+                  event={state.currentQuestionEvent}
+                  busy={busy}
+                  selectedTeam={selectedTeam}
+                  onSelectTeam={setSelectedTeam}
+                  onStartRapidFire={(teamLabel, durationSeconds) =>
+                    runAction('start_rapid_fire', {
+                      roundId: activeRound.id,
+                      teamLabel,
+                      durationSeconds,
+                    })
+                  }
+                  onCorrect={() =>
+                    state.currentQuestionEvent &&
+                    runAction('rapid_fire_correct', {
+                      questionEventId: state.currentQuestionEvent.id,
+                    })
+                  }
+                  onWrong={() =>
+                    state.currentQuestionEvent &&
+                    runAction('rapid_fire_wrong', {
+                      questionEventId: state.currentQuestionEvent.id,
+                    })
+                  }
+                  onEndTurn={() =>
+                    runAction('end_rapid_fire', {
+                      roundId: activeRound.id,
+                      teamLabel: (state.currentQuestionEvent?.rapid_fire_team || selectedTeam) as TeamLabel,
+                    })
+                  }
+                  teamDisplayNames={teamNames}
+                />
+              ) : activeRound.round_type === 'buzzer' ? (
+                <BuzzerControls
+                  question={state.currentQuestion}
+                  event={state.currentQuestionEvent}
+                  buzzEvents={buzzEvents}
+                  busy={busy}
+                  onNextQuestion={() =>
+                    runAction('reveal_question', {
+                      roundId: activeRound.id,
+                      directedTeam: selectedTeam,
+                    })
+                  }
+                  onOpenBuzzer={() =>
+                    state.currentQuestionEvent &&
+                    runAction('open_buzzer', { questionEventId: state.currentQuestionEvent.id })
+                  }
+                  onMarkCorrect={() =>
+                    state.currentQuestionEvent &&
+                    getActiveBuzzTeam() &&
+                    runAction('mark_correct', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      teamLabel: getActiveBuzzTeam(),
+                    })
+                  }
+                  onMarkWrong={() => {
+                    const activeTeam = getActiveBuzzTeam()
+                    if (!state.currentQuestionEvent || !activeTeam) return
+                    setBuzzEvents((prev) => prev.filter((item) => item.team_label !== activeTeam))
+                    void runAction('mark_wrong_pass', {
+                      questionEventId: state.currentQuestionEvent.id,
+                      teamLabel: activeTeam,
+                    })
+                  }}
+                  onSkip={() =>
+                    state.currentQuestionEvent &&
+                    runAction('close_buzzer', { questionEventId: state.currentQuestionEvent.id })
+                  }
                 />
               ) : (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">

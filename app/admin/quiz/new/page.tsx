@@ -25,9 +25,10 @@ interface QuestionSet {
 }
 
 interface RoundConfig {
-  round_type: 'direct_question' | 'true_or_false'
+  round_type: 'direct_question' | 'rapid_fire' | 'true_or_false' | 'buzzer'
   title: string
   question_set_id: string
+  rapid_fire_duration_seconds?: number
   true_false_mode?: 'directed' | 'buzzer'
   /** Omit or leave unset to snapshot every question in the set (set order). */
   question_count?: number
@@ -297,16 +298,39 @@ export default function NewQuizSessionPage() {
                       title:
                         nextType === 'true_or_false'
                           ? round.title || `True/False Round ${index + 1}`
+                          : nextType === 'rapid_fire'
+                            ? round.title || `Rapid Fire Round ${index + 1}`
+                            : nextType === 'buzzer'
+                              ? round.title || `Buzzer Round ${index + 1}`
                           : round.title || `Direct Question Round ${index + 1}`,
+                      rapid_fire_duration_seconds:
+                        nextType === 'rapid_fire' ? round.rapid_fire_duration_seconds || 45 : undefined,
                       true_false_mode: nextType === 'true_or_false' ? 'directed' : undefined,
                     })
                   }}
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900"
                 >
                   <option value="direct_question">Direct Question</option>
+                  <option value="rapid_fire">Rapid Fire</option>
                   <option value="true_or_false">True/False (Directed)</option>
+                  <option value="buzzer">Buzzer</option>
                 </select>
               </div>
+              {round.round_type === 'rapid_fire' ? (
+                <Input
+                  label="Rapid fire duration (seconds)"
+                  type="number"
+                  min={30}
+                  max={60}
+                  value={String(round.rapid_fire_duration_seconds ?? 45)}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10)
+                    if (Number.isNaN(n)) return
+                    updateRound(index, { rapid_fire_duration_seconds: Math.min(60, Math.max(30, n)) })
+                  }}
+                  helperText="Set per-team timer for this rapid fire round (30-60 seconds)."
+                />
+              ) : null}
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">Question set</label>
                 <select

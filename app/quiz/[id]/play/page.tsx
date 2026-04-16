@@ -30,6 +30,9 @@ export default function ParticipantPlayPage() {
   const [trueFalseLockedEventId, setTrueFalseLockedEventId] = useState<string | null>(null)
   const [selectedDirectOption, setSelectedDirectOption] = useState<'A' | 'B' | 'C' | 'D' | null>(null)
   const [answerBusy, setAnswerBusy] = useState(false)
+  const [rapidFireRemaining, setRapidFireRemaining] = useState<number | null>(null)
+  const [buzzerPressedForEventId, setBuzzerPressedForEventId] = useState<string | null>(null)
+  const [myBuzzOrder, setMyBuzzOrder] = useState<number | null>(null)
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
@@ -73,6 +76,23 @@ export default function ParticipantPlayPage() {
         onRoundStarted: () => void fetchState(),
         onQuestionRevealed: () => void fetchState(),
         onOptionsRevealed: () => void fetchState(),
+        onTimerStarted: (payload) => {
+          const seconds = Number(payload?.durationSeconds || 0)
+          setRapidFireRemaining(Number.isFinite(seconds) && seconds > 0 ? seconds : null)
+          void fetchState()
+        },
+        onBuzzerOpen: (payload) => {
+          setBuzzerPressedForEventId(payload?.questionEventId || null)
+          setMyBuzzOrder(null)
+          void fetchState()
+        },
+        onBuzzReceived: (payload) => {
+          if (myTeamLabel && payload.teamLabel === myTeamLabel) {
+            setMyBuzzOrder(Number(payload.buzzOrder || 0) || null)
+            setBuzzerPressedForEventId(payload.questionEventId)
+          }
+          void fetchState()
+        },
         onAnswerResult: () => void fetchState(),
         onParticipantAnswerSubmitted: () => void fetchState(),
         onDirectVerdictApplied: () => void fetchState(),
@@ -83,7 +103,7 @@ export default function ParticipantPlayPage() {
     }
 
     return () => unsub()
-  }, [sessionId, supabase, fetchState])
+  }, [sessionId, supabase, fetchState, myTeamLabel])
 
   const roundIdsKey = (state?.rounds ?? []).map((r: { id: string }) => r.id).sort().join(',')
 
@@ -112,6 +132,25 @@ export default function ParticipantPlayPage() {
     setSelectedTrueFalse(null)
     setTrueFalseLockedEventId(null)
   }, [state?.currentQuestionEvent?.id])
+
+  useEffect(() => {
+    setBuzzerPressedForEventId(null)
+    setMyBuzzOrder(null)
+    if (state?.activeRound?.round_type !== 'rapid_fire') {
+      setRapidFireRemaining(null)
+    }
+  }, [state?.currentQuestionEvent?.id, state?.activeRound?.round_type])
+
+  useEffect(() => {
+    if (rapidFireRemaining == null || rapidFireRemaining <= 0) return
+    const timer = setInterval(() => {
+      setRapidFireRemaining((prev) => {
+        if (prev == null || prev <= 1) return 0
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [rapidFireRemaining])
 
   useEffect(() => {
     const answer = String(state?.participantDirectAttempt?.answer_text || '').trim().toUpperCase()
@@ -145,6 +184,29 @@ export default function ParticipantPlayPage() {
     }
   }
 
+  const submitBuzz = async () => {
+    if (!sessionId || !state?.currentQuestionEvent?.id || !myTeamLabel) return
+    if (buzzerPressedForEventId === state.currentQuestionEvent.id) return
+    setError(null)
+    setBuzzerPressedForEventId(state.currentQuestionEvent.id)
+    try {
+      const res = await fetch(`/api/quiz/session/${sessionId}/buzz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionEventId: state.currentQuestionEvent.id,
+          teamLabel: myTeamLabel,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Failed to buzz in')
+      setMyBuzzOrder(Number(data?.buzzOrder || 0) || null)
+    } catch (e: any) {
+      setError(e.message)
+      setBuzzerPressedForEventId(null)
+    }
+  }
+
   if (loading) {
     return <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-600">Loading session...</div>
   }
@@ -159,8 +221,12 @@ export default function ParticipantPlayPage() {
   const isMyTurn = Boolean(directedTeam && myTeamLabel && directedTeam === myTeamLabel)
   const isDirectRound = state.activeRound?.round_type === 'direct_question'
   const isTrueFalseRound = state.activeRound?.round_type === 'true_or_false'
+  const isRapidFireRound = state.activeRound?.round_type === 'rapid_fire'
+  const isBuzzerRound = state.activeRound?.round_type === 'buzzer'
   const revealCorrect = Boolean(state.currentQuestionEvent?.correct_answer_revealed_at)
-  const showOptions = isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed'
+  const showOptions =
+    (isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed') ||
+    (isBuzzerRound && ['revealed', 'buzzer_open', 'options_revealed'].includes(String(state.currentQuestionEvent?.status || '')))
 
   const attempt = state.participantDirectAttempt
   const evStatus = String(state.currentQuestionEvent?.status || '')
@@ -211,6 +277,13 @@ export default function ParticipantPlayPage() {
   const canEditDirectAnswer =
     directPhaseOpen && (!attempt || verdict === 'pending')
   const trueFalseEventId = state.currentQuestionEvent?.id || null
+  const buzzerEventId = state.currentQuestionEvent?.id || null
+  const canBuzz =
+    isBuzzerRound &&
+    state.currentQuestionEvent?.status === 'buzzer_open' &&
+    Boolean(myTeamLabel) &&
+    !!buzzerEventId &&
+    buzzerPressedForEventId !== buzzerEventId
   const trueFalsePhaseOpen =
     isTrueFalseRound &&
     Boolean(state.currentQuestion) &&
@@ -257,6 +330,11 @@ export default function ParticipantPlayPage() {
             <p className="text-sm text-gray-700">
               Current turn: Team {directedTeam}
               {isMyTurn ? ' (Your turn)' : ''}
+            </p>
+          )}
+          {isRapidFireRound && (
+            <p className="mt-1 text-sm font-medium text-gray-700">
+              Rapid Fire timer: {rapidFireRemaining != null ? `${rapidFireRemaining}s` : 'Waiting for timer...'}
             </p>
           )}
         </div>
@@ -443,6 +521,31 @@ export default function ParticipantPlayPage() {
               <p className="text-sm text-gray-700">
                 Select TRUE or FALSE above. Your first choice is treated as final for this turn.
               </p>
+            )}
+          </div>
+        ) : null}
+
+        {isBuzzerRound && state.currentQuestion ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+            {state.currentQuestionEvent?.status !== 'buzzer_open' ? (
+              <p className="text-sm text-gray-600">Waiting for host to open buzzer...</p>
+            ) : canBuzz ? (
+              <button
+                type="button"
+                onTouchStart={(e) => {
+                  e.preventDefault()
+                  void submitBuzz()
+                }}
+                onClick={() => void submitBuzz()}
+                className="w-full rounded-2xl bg-[#C0392B] px-4 py-8 text-3xl font-bold text-white active:scale-[0.99]"
+              >
+                BUZZ IN!
+              </button>
+            ) : (
+              <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-6 text-center">
+                <p className="text-lg font-semibold text-gray-800">Buzzed!</p>
+                {myBuzzOrder ? <p className="text-sm text-gray-600">Your order: #{myBuzzOrder}</p> : null}
+              </div>
             )}
           </div>
         ) : null}

@@ -52,6 +52,22 @@ export interface OptionsRevealedPayload {
   directedTeam?: string
 }
 
+export interface TimerStartedPayload {
+  questionEventId: string
+  durationSeconds: number
+  team?: string
+}
+
+export interface BuzzerOpenPayload {
+  questionEventId: string
+}
+
+export interface BuzzReceivedPayload {
+  questionEventId: string
+  teamLabel: string
+  buzzOrder: number
+}
+
 export interface AnswerResultPayload {
   questionEventId: string
   correct: boolean
@@ -87,6 +103,11 @@ export interface RoundEndedPayload {
   finalScores: ScoreMap
 }
 
+export interface RapidFireTeamChangePayload {
+  team?: string
+  durationSeconds?: number
+}
+
 export type ScoreMap = {
   A: number
   B: number
@@ -98,12 +119,16 @@ export interface QuizEventHandlers {
   onRoundStarted?: (payload: RoundStartedPayload) => void
   onQuestionRevealed?: (payload: QuestionRevealedPayload) => void
   onOptionsRevealed?: (payload: OptionsRevealedPayload) => void
+  onTimerStarted?: (payload: TimerStartedPayload) => void
+  onBuzzerOpen?: (payload: BuzzerOpenPayload) => void
+  onBuzzReceived?: (payload: BuzzReceivedPayload) => void
   onAnswerResult?: (payload: AnswerResultPayload) => void
   onParticipantAnswerSubmitted?: (payload: ParticipantAnswerSubmittedPayload) => void
   onDirectVerdictApplied?: (payload: DirectVerdictAppliedPayload) => void
   onScoresUpdated?: (payload: ScoresUpdatedPayload) => void
   onRoundEnded?: (payload: RoundEndedPayload) => void
   onSessionEnded?: () => void
+  onRapidFireTeamChange?: (payload: RapidFireTeamChangePayload) => void
 }
 
 const channels: Map<string, ReturnType<ReturnType<typeof createClient>['channel']>> = new Map()
@@ -124,6 +149,15 @@ export function subscribeToSession(sessionId: string, handlers: QuizEventHandler
           break
         case 'options_revealed':
           handlers.onOptionsRevealed?.(payload.payload as unknown as OptionsRevealedPayload)
+          break
+        case 'timer_started':
+          handlers.onTimerStarted?.(payload.payload as unknown as TimerStartedPayload)
+          break
+        case 'buzzer_open':
+          handlers.onBuzzerOpen?.(payload.payload as unknown as BuzzerOpenPayload)
+          break
+        case 'buzz_received':
+          handlers.onBuzzReceived?.(payload.payload as unknown as BuzzReceivedPayload)
           break
         case 'answer_result':
           handlers.onAnswerResult?.(payload.payload as unknown as AnswerResultPayload)
@@ -146,6 +180,9 @@ export function subscribeToSession(sessionId: string, handlers: QuizEventHandler
           break
         case 'session_ended':
           handlers.onSessionEnded?.()
+          break
+        case 'rapid_fire_team_change':
+          handlers.onRapidFireTeamChange?.(payload.payload as unknown as RapidFireTeamChangePayload)
           break
         default:
           break

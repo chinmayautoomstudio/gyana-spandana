@@ -1164,6 +1164,330 @@ export async function PATCH(
       return NextResponse.json({ success: true, event: updatedEv })
     }
 
+    if (action === 'start_rapid_fire') {
+      const roundId = body?.roundId as string | undefined
+      const teamLabel = body?.teamLabel as TeamLabel | undefined
+      if (!roundId || !teamLabel) {
+        return NextResponse.json({ error: 'roundId and teamLabel are required' }, { status: 400 })
+      }
+      if (!TEAM_LABELS.includes(teamLabel)) {
+        return NextResponse.json({ error: 'teamLabel must be A/B/C/D' }, { status: 400 })
+      }
+
+      const { data: round } = await supabase
+        .from('quiz_rounds')
+        .select('id,round_type,current_question_index,rapid_fire_duration_seconds')
+        .eq('id', roundId)
+        .eq('session_id', sessionId)
+        .single()
+      if (!round) return NextResponse.json({ error: 'Round not found' }, { status: 404 })
+      if (round.round_type !== 'rapid_fire') {
+        return NextResponse.json({ error: 'Round is not rapid fire' }, { status: 400 })
+      }
+
+      const durationSeconds = Number(body?.durationSeconds || round.rapid_fire_duration_seconds || 45)
+      const { data: question } = await supabase
+        .from('quiz_questions')
+        .select('*')
+        .eq('round_id', roundId)
+        .eq('question_order', Number(round.current_question_index || 0) + 1)
+        .maybeSingle()
+      if (!question) return NextResponse.json({ error: 'No more questions in this round' }, { status: 400 })
+
+      const { data: event, error: eventErr } = await supabase
+        .from('quiz_question_events')
+        .insert({
+          round_id: roundId,
+          question_id: question.id,
+          status: 'revealed',
+          attempt_number: 1,
+          rapid_fire_team: teamLabel,
+          directed_team: teamLabel,
+        })
+        .select('*')
+        .single()
+      if (eventErr) return NextResponse.json({ error: eventErr.message }, { status: 500 })
+
+      await supabase
+        .from('quiz_rounds')
+        .update({ current_question_index: Number(question.question_order || 0) })
+        .eq('id', roundId)
+
+      const { data: rapidFireSession, error: rfErr } = await supabase
+        .from('quiz_rapid_fire_sessions')
+        .insert({
+          question_event_id: event.id,
+          team_label: teamLabel,
+          started_at: new Date().toISOString(),
+          duration_seconds: durationSeconds,
+        })
+        .select('*')
+        .single()
+      if (rfErr) return NextResponse.json({ error: rfErr.message }, { status: 500 })
+
+      return NextResponse.json({
+        success: true,
+        event,
+        question,
+        rapidFireSession,
+        timer: { durationSeconds, team: teamLabel, questionEventId: event.id },
+      })
+    }
+
+    if (action === 'rapid_fire_correct') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+
+      const { data: event } = await supabase
+        .from('quiz_question_events')
+        .select('*')
+        .eq('id', questionEventId)
+        .single()
+      if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+
+      const teamLabel = (event.rapid_fire_team || event.directed_team) as TeamLabel
+      if (!teamLabel || !TEAM_LABELS.includes(teamLabel)) {
+        return NextResponse.json({ error: 'Rapid fire team missing on question event' }, { status: 400 })
+      }
+
+      const { data: session } = await supabase
+        .from('quiz_live_sessions')
+        .select('points_full, points_half')
+        .eq('id', sessionId)
+        .single()
+      const { data: round } = await supabase
+        .from('quiz_rounds')
+        .select('id,current_question_index')
+        .eq('id', event.round_id)
+        .single()
+      if (!round) return NextResponse.json({ error: 'Round not found' }, { status: 404 })
+
+      const pointsAwarded = resolvePoints(1, Number(session?.points_full || 10), Number(session?.points_half || 5), 'rapid_fire')
+
+      await supabase
+        .from('quiz_question_events')
+        .update({
+          status: 'answered',
+          answered_by_team: teamLabel,
+          points_awarded: pointsAwarded,
+        })
+        .eq('id', questionEventId)
+
+      const { data: scoreRow } = await supabase
+        .from('quiz_session_scores')
+        .select('id,total_score,questions_answered,questions_correct')
+        .eq('session_id', sessionId)
+        .eq('team_label', teamLabel)
+        .single()
+      if (!scoreRow) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
+
+      await supabase
+        .from('quiz_session_scores')
+        .update({
+          total_score: Number(scoreRow.total_score || 0) + pointsAwarded,
+          questions_answered: Number(scoreRow.questions_answered || 0) + 1,
+          questions_correct: Number(scoreRow.questions_correct || 0) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', scoreRow.id)
+
+      const { data: activeRapid } = await supabase
+        .from('quiz_rapid_fire_sessions')
+        .select('id,questions_attempted,questions_correct,score_earned')
+        .eq('team_label', teamLabel)
+        .is('ended_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (activeRapid?.id) {
+        await supabase
+          .from('quiz_rapid_fire_sessions')
+          .update({
+            questions_attempted: Number(activeRapid.questions_attempted || 0) + 1,
+            questions_correct: Number(activeRapid.questions_correct || 0) + 1,
+            score_earned: Number(activeRapid.score_earned || 0) + pointsAwarded,
+          })
+          .eq('id', activeRapid.id)
+      }
+
+      const { data: nextQuestion } = await supabase
+        .from('quiz_questions')
+        .select('*')
+        .eq('round_id', round.id)
+        .eq('question_order', Number(round.current_question_index || 0) + 1)
+        .maybeSingle()
+
+      let nextEvent: any = null
+      if (nextQuestion) {
+        const { data: createdNext } = await supabase
+          .from('quiz_question_events')
+          .insert({
+            round_id: round.id,
+            question_id: nextQuestion.id,
+            status: 'revealed',
+            attempt_number: 1,
+            rapid_fire_team: teamLabel,
+            directed_team: teamLabel,
+          })
+          .select('*')
+          .single()
+        nextEvent = createdNext || null
+        await supabase
+          .from('quiz_rounds')
+          .update({ current_question_index: Number(nextQuestion.question_order || 0) })
+          .eq('id', round.id)
+      }
+
+      const updatedScores = await getScoreMap(sessionId, supabase)
+      return NextResponse.json({
+        success: true,
+        pointsAwarded,
+        teamLabel,
+        updatedScores,
+        nextEvent,
+        nextQuestion,
+      })
+    }
+
+    if (action === 'rapid_fire_wrong') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+
+      const { data: event } = await supabase
+        .from('quiz_question_events')
+        .select('*')
+        .eq('id', questionEventId)
+        .single()
+      if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+
+      const teamLabel = (event.rapid_fire_team || event.directed_team) as TeamLabel
+      if (!teamLabel || !TEAM_LABELS.includes(teamLabel)) {
+        return NextResponse.json({ error: 'Rapid fire team missing on question event' }, { status: 400 })
+      }
+
+      await supabase.from('quiz_question_events').update({ status: 'dropped' }).eq('id', questionEventId)
+
+      const { data: round } = await supabase
+        .from('quiz_rounds')
+        .select('id,current_question_index')
+        .eq('id', event.round_id)
+        .single()
+      if (!round) return NextResponse.json({ error: 'Round not found' }, { status: 404 })
+
+      const { data: activeRapid } = await supabase
+        .from('quiz_rapid_fire_sessions')
+        .select('id,questions_attempted')
+        .eq('team_label', teamLabel)
+        .is('ended_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (activeRapid?.id) {
+        await supabase
+          .from('quiz_rapid_fire_sessions')
+          .update({
+            questions_attempted: Number(activeRapid.questions_attempted || 0) + 1,
+          })
+          .eq('id', activeRapid.id)
+      }
+
+      const { data: nextQuestion } = await supabase
+        .from('quiz_questions')
+        .select('*')
+        .eq('round_id', round.id)
+        .eq('question_order', Number(round.current_question_index || 0) + 1)
+        .maybeSingle()
+
+      let nextEvent: any = null
+      if (nextQuestion) {
+        const { data: createdNext } = await supabase
+          .from('quiz_question_events')
+          .insert({
+            round_id: round.id,
+            question_id: nextQuestion.id,
+            status: 'revealed',
+            attempt_number: 1,
+            rapid_fire_team: teamLabel,
+            directed_team: teamLabel,
+          })
+          .select('*')
+          .single()
+        nextEvent = createdNext || null
+        await supabase
+          .from('quiz_rounds')
+          .update({ current_question_index: Number(nextQuestion.question_order || 0) })
+          .eq('id', round.id)
+      }
+
+      return NextResponse.json({
+        success: true,
+        teamLabel,
+        nextEvent,
+        nextQuestion,
+      })
+    }
+
+    if (action === 'end_rapid_fire') {
+      const roundId = body?.roundId as string | undefined
+      const teamLabel = body?.teamLabel as TeamLabel | undefined
+      if (!roundId || !teamLabel) {
+        return NextResponse.json({ error: 'roundId and teamLabel are required' }, { status: 400 })
+      }
+
+      const { data: activeRapid } = await supabase
+        .from('quiz_rapid_fire_sessions')
+        .select('id')
+        .eq('team_label', teamLabel)
+        .is('ended_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (activeRapid?.id) {
+        await supabase
+          .from('quiz_rapid_fire_sessions')
+          .update({ ended_at: new Date().toISOString() })
+          .eq('id', activeRapid.id)
+      }
+
+      await supabase.from('quiz_rounds').update({ status: 'active' }).eq('id', roundId)
+      const updatedScores = await getScoreMap(sessionId, supabase)
+      return NextResponse.json({ success: true, teamLabel, updatedScores })
+    }
+
+    if (action === 'open_buzzer') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+      const { data: event, error } = await supabase
+        .from('quiz_question_events')
+        .update({ status: 'buzzer_open' })
+        .eq('id', questionEventId)
+        .select('*')
+        .single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, event })
+    }
+
+    if (action === 'close_buzzer') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+      const { data: event, error } = await supabase
+        .from('quiz_question_events')
+        .update({ status: 'dropped' })
+        .eq('id', questionEventId)
+        .select('*')
+        .single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, event })
+    }
+
     if (action === 'skip_question') {
       const questionEventId = body?.questionEventId as string | undefined
       if (!questionEventId) return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })

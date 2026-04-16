@@ -4,6 +4,13 @@ import { parseSafeInternalRedirectPath } from '@/lib/auth/safe-redirect-path'
 import { getUserRoleFromAuthUser } from '@/lib/auth/user-role'
 
 export default async function proxy(request: NextRequest) {
+  // API routes enforce auth/roles in their own handlers.
+  // Skipping middleware-level auth refresh here avoids excessive
+  // `auth.getUser()` calls during polling-heavy realtime quiz flows.
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
