@@ -93,26 +93,20 @@ function stripCorrectAnswer(question: any | null, eventAllows: boolean) {
   return rest
 }
 
-async function isSessionHostOrAdmin(
-  sessionId: string,
+/** Host/admin check without re-fetching quiz_live_sessions (GET handler already has assigned_host_id). */
+async function resolveHostOrAdmin(
+  assignedHostId: string | null | undefined,
+  user: { id: string; user_metadata?: Record<string, unknown> } | null,
   supabase: any,
 ): Promise<{ isHostOrAdmin: boolean; userId: string | null }> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
   if (!user) return { isHostOrAdmin: false, userId: null }
-  const { data: session } = await supabase
-    .from('quiz_live_sessions')
-    .select('assigned_host_id')
-    .eq('id', sessionId)
-    .single()
   const { data: profile } = await supabase
     .from('user_profiles')
     .select('role')
     .eq('user_id', user.id)
     .single()
   const role = profile?.role || user.user_metadata?.role || 'participant'
-  const isHostOrAdmin = role === 'admin' || session?.assigned_host_id === user.id
+  const isHostOrAdmin = role === 'admin' || assignedHostId === user.id
   return { isHostOrAdmin, userId: user.id }
 }
 
@@ -125,21 +119,22 @@ export async function GET(
     const resolvedParams = params instanceof Promise ? await params : params
     const sessionId = resolvedParams.id
 
-    const { data: session, error: sessionError } = await supabase
-      .from('quiz_live_sessions')
-      .select('*')
-      .eq('id', sessionId)
-      .single()
+    // Batch 1: session + rounds + auth (independent)
+    const [{ data: session, error: sessionError }, { data: rounds }, authRes] = await Promise.all([
+      supabase.from('quiz_live_sessions').select('*').eq('id', sessionId).single(),
+      supabase
+        .from('quiz_rounds')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('round_order', { ascending: true }),
+      supabase.auth.getUser(),
+    ])
 
     if (sessionError || !session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })
     }
 
-    const { data: rounds } = await supabase
-      .from('quiz_rounds')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('round_order', { ascending: true })
+    const authUser = authRes.data?.user ?? null
 
     const activeRound =
       session.status === 'completed'
@@ -148,8 +143,7 @@ export async function GET(
           rounds?.find((r: any) => r.id === session.current_round_id) ||
           null
 
-    let latestEvent = null
-    let currentQuestion = null
+    let latestEvent: any = null
     let activeRoundQuestions: Array<{
       id: string
       question_order: number
@@ -164,74 +158,94 @@ export async function GET(
     } | null = null
     let participantDirectAttempt: { answer_text: string; verdict: string } | null = null
 
-    if (activeRound) {
-      const { data: event } = await supabase
-        .from('quiz_question_events')
-        .select('*')
-        .eq('round_id', activeRound.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      latestEvent = event || null
+    const roundId = activeRound?.id
 
-      const { data: qs } = await supabase
-        .from('quiz_questions')
-        .select('id, question_order, question_type, question_text')
-        .eq('round_id', activeRound.id)
-        .order('question_order', { ascending: true })
-      activeRoundQuestions = (qs || []).map((q: any) => ({
-        id: q.id,
-        question_order: q.question_order,
-        question_type: q.question_type,
-        preview: previewText(q.question_text),
-      }))
-
-      if (event?.question_id) {
-        const { data: question } = await supabase
-          .from('quiz_questions')
+    // Batch 2: latest event + round question list + host check + scores + team names (parallel)
+    const eventPromise = roundId
+      ? supabase
+          .from('quiz_question_events')
           .select('*')
-          .eq('id', event.question_id)
-          .single()
-        currentQuestion = question || null
-      }
-    }
+          .eq('round_id', roundId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null })
 
-    const { isHostOrAdmin } = await isSessionHostOrAdmin(sessionId, supabase)
-    const revealCorrect = Boolean((latestEvent as any)?.correct_answer_revealed_at)
-    const showCorrectInPayload = revealCorrect || isHostOrAdmin
-    currentQuestion = stripCorrectAnswer(currentQuestion, showCorrectInPayload)
+    const qsPromise = roundId
+      ? supabase
+          .from('quiz_questions')
+          .select('id, question_order, question_type, question_text')
+          .eq('round_id', roundId)
+          .order('question_order', { ascending: true })
+      : Promise.resolve({ data: null })
 
-    if (
+    const [{ data: event }, { data: qs }, { isHostOrAdmin }, scores, team_display_names] = await Promise.all([
+      eventPromise,
+      qsPromise,
+      resolveHostOrAdmin(session.assigned_host_id, authUser, supabase),
+      getScoreMap(sessionId, supabase),
+      getTeamDisplayNames(session, supabase),
+    ])
+
+    latestEvent = event || null
+    activeRoundQuestions = roundId
+      ? (qs || []).map((q: any) => ({
+          id: q.id,
+          question_order: q.question_order,
+          question_type: q.question_type,
+          preview: previewText(q.question_text),
+        }))
+      : null
+
+    const ev = latestEvent as any
+    const questionId = ev?.question_id as string | undefined
+    const needPendingDirectAttempt =
       latestEvent &&
       isHostOrAdmin &&
       activeRound?.round_type === 'direct_question' &&
-      ['revealed', 'options_revealed'].includes(String((latestEvent as any).status))
-    ) {
-      const dir = (latestEvent as any).directed_team as TeamLabel
-      if (dir && TEAM_LABELS.includes(dir)) {
-        const { data: att } = await supabase
-          .from('quiz_direct_attempts')
-          .select('team_label, answer_text, verdict')
-          .eq('question_event_id', (latestEvent as any).id)
-          .eq('team_label', dir)
-          .eq('verdict', 'pending')
-          .maybeSingle()
-        if (att) {
-          const rawAnswer = String(att.answer_text || '').trim().toUpperCase()
-          const optionLabel =
-            rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
-              ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
-              : null
-          const optionText = optionLabel
-            ? (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
-            : null
-          pendingDirectAnswer = {
-            team_label: att.team_label,
-            answer_text: String(att.answer_text ?? ''),
-            answer_option_label: optionLabel,
-            answer_option_text: optionText,
-          }
-        }
+      ['revealed', 'options_revealed'].includes(String(ev?.status))
+
+    const dirForAttempt = needPendingDirectAttempt ? (ev.directed_team as TeamLabel) : null
+    const directAttemptPromise =
+      needPendingDirectAttempt && dirForAttempt && TEAM_LABELS.includes(dirForAttempt)
+        ? supabase
+            .from('quiz_direct_attempts')
+            .select('team_label, answer_text, verdict')
+            .eq('question_event_id', ev.id)
+            .eq('team_label', dirForAttempt)
+            .eq('verdict', 'pending')
+            .maybeSingle()
+        : Promise.resolve({ data: null })
+
+    const currentQuestionPromise = questionId
+      ? supabase.from('quiz_questions').select('*').eq('id', questionId).single()
+      : Promise.resolve({ data: null })
+
+    // Batch 3: current question row + direct attempt (when host needs pending answer) in parallel
+    const [{ data: questionRow }, { data: att }] = await Promise.all([
+      currentQuestionPromise,
+      directAttemptPromise,
+    ])
+
+    let currentQuestion: any = questionRow || null
+    const revealCorrect = Boolean(ev?.correct_answer_revealed_at)
+    const showCorrectInPayload = revealCorrect || isHostOrAdmin
+    currentQuestion = stripCorrectAnswer(currentQuestion, showCorrectInPayload)
+
+    if (att) {
+      const rawAnswer = String(att.answer_text || '').trim().toUpperCase()
+      const optionLabel =
+        rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
+          ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
+          : null
+      const optionText = optionLabel
+        ? (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
+        : null
+      pendingDirectAnswer = {
+        team_label: att.team_label,
+        answer_text: String(att.answer_text ?? ''),
+        answer_option_label: optionLabel,
+        answer_option_text: optionText,
       }
     }
 
@@ -239,39 +253,32 @@ export async function GET(
       latestEvent &&
       !isHostOrAdmin &&
       activeRound?.round_type === 'direct_question' &&
-      String((latestEvent as any).status) === 'revealed'
+      String(ev?.status) === 'revealed' &&
+      authUser
     ) {
-      const {
-        data: { user: participantUser },
-      } = await supabase.auth.getUser()
-      if (participantUser) {
-        const { data: participantRow } = await supabase
-          .from('participants')
-          .select('team_id')
-          .eq('user_id', participantUser.id)
+      const { data: participantRow } = await supabase
+        .from('participants')
+        .select('team_id')
+        .eq('user_id', authUser.id)
+        .maybeSingle()
+      const slotsPart = (session.team_slots || {}) as Record<string, string>
+      const myLabel = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id)
+      const dirEv = ev.directed_team as TeamLabel
+      if (myLabel && myLabel === dirEv) {
+        const { data: pAtt } = await supabase
+          .from('quiz_direct_attempts')
+          .select('answer_text, verdict')
+          .eq('question_event_id', ev.id)
+          .eq('team_label', myLabel)
           .maybeSingle()
-        const slotsPart = (session.team_slots || {}) as Record<string, string>
-        const myLabel = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id)
-        const dirEv = (latestEvent as any).directed_team as TeamLabel
-        if (myLabel && myLabel === dirEv) {
-          const { data: pAtt } = await supabase
-            .from('quiz_direct_attempts')
-            .select('answer_text, verdict')
-            .eq('question_event_id', (latestEvent as any).id)
-            .eq('team_label', myLabel)
-            .maybeSingle()
-          if (pAtt) {
-            participantDirectAttempt = {
-              answer_text: String(pAtt.answer_text ?? ''),
-              verdict: String(pAtt.verdict ?? 'pending'),
-            }
+        if (pAtt) {
+          participantDirectAttempt = {
+            answer_text: String(pAtt.answer_text ?? ''),
+            verdict: String(pAtt.verdict ?? 'pending'),
           }
         }
       }
     }
-
-    const scores = await getScoreMap(sessionId, supabase)
-    const team_display_names = await getTeamDisplayNames(session, supabase)
 
     return NextResponse.json({
       session,
