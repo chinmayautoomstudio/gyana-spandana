@@ -44,6 +44,11 @@ export default function HostSessionPage() {
   const [selectedTeam, setSelectedTeam] = useState<TeamLabel>('A')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checkedResponseResult, setCheckedResponseResult] = useState<{
+    verdict: 'correct' | 'wrong'
+    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | null
+    correctAnswerText: string | null
+  } | null>(null)
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
@@ -159,10 +164,42 @@ export default function HostSessionPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `Failed to ${action}`)
       await fetchState()
+      return data
     } catch (e: any) {
       setError(e.message)
+      return null
     } finally {
       setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    setCheckedResponseResult(null)
+  }, [state?.currentQuestionEvent?.id])
+
+  useEffect(() => {
+    setCheckedResponseResult(null)
+  }, [state?.currentQuestionEvent?.directed_team])
+
+  const checkResponse = async () => {
+    if (!state?.currentQuestionEvent) return
+    const data = await runAction('check_direct_response', {
+      questionEventId: state.currentQuestionEvent.id,
+    })
+    const rawAnswer = String(data?.correctAnswer || '').trim().toUpperCase()
+    const answerLabel =
+      rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
+        ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
+        : null
+    const answerText = answerLabel
+      ? (String(data?.correctAnswerOptionText || state?.currentQuestion?.[`option_${answerLabel.toLowerCase()}`] || '') || null)
+      : (rawAnswer || null)
+    if (data?.verdict === 'correct' || data?.verdict === 'wrong') {
+      setCheckedResponseResult({
+        verdict: data.verdict,
+        correctAnswerLabel: answerLabel,
+        correctAnswerText: answerText,
+      })
     }
   }
 
@@ -296,6 +333,7 @@ export default function HostSessionPage() {
                       verdict: 'wrong',
                     })
                   }
+                  onCheckResponse={checkResponse}
                   onPassDirect={() =>
                     state.currentQuestionEvent &&
                     runAction('pass_direct_question', { questionEventId: state.currentQuestionEvent.id })
@@ -310,6 +348,7 @@ export default function HostSessionPage() {
                   activeRoundQuestions={state.activeRoundQuestions ?? null}
                   teamDisplayNames={teamNames}
                   pendingDirectAnswer={state.pendingDirectAnswer ?? null}
+                  checkedResponseResult={checkedResponseResult}
                 />
               ) : activeRound.round_type === 'true_or_false' ? (
                 <TrueOrFalseControls

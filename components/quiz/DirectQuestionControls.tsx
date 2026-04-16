@@ -28,6 +28,7 @@ interface DirectQuestionControlsProps {
   onSkip: () => void
   onJudgeCorrect: () => void
   onJudgeWrong: () => void
+  onCheckResponse: () => void
   onPassDirect: () => void
   onRevealCorrectAnswer: () => void
   busy?: boolean
@@ -40,6 +41,11 @@ interface DirectQuestionControlsProps {
     answer_text: string
     answer_option_label: 'A' | 'B' | 'C' | 'D' | null
     answer_option_text: string | null
+  } | null
+  checkedResponseResult?: {
+    verdict: 'correct' | 'wrong'
+    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | null
+    correctAnswerText: string | null
   } | null
 }
 
@@ -58,6 +64,7 @@ export function DirectQuestionControls({
   onSkip,
   onJudgeCorrect,
   onJudgeWrong,
+  onCheckResponse,
   onPassDirect,
   onRevealCorrectAnswer,
   busy = false,
@@ -66,6 +73,7 @@ export function DirectQuestionControls({
   activeRoundQuestions = null,
   teamDisplayNames,
   pendingDirectAnswer = null,
+  checkedResponseResult = null,
 }: DirectQuestionControlsProps) {
   const isDirectRound = roundType === 'direct_question'
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('')
@@ -185,7 +193,7 @@ export function DirectQuestionControls({
         <>
           <QuestionDisplay
             question={question}
-            showOptions={showLegacyMcq && showOptions}
+            showOptions={Boolean(isAdjudicating) || (showLegacyMcq && showOptions)}
             readOnly
             revealCorrectAnswer={revealCorrect}
           />
@@ -214,6 +222,9 @@ export function DirectQuestionControls({
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      <Button onClick={onCheckResponse} isLoading={busy} disabled={!pendingDirectAnswer}>
+                        Check Response
+                      </Button>
                       <Button onClick={onJudgeCorrect} isLoading={busy}>
                         Check: Correct
                       </Button>
@@ -229,6 +240,26 @@ export function DirectQuestionControls({
 
               <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
                 <p className="text-sm font-semibold text-gray-900">Round controls</p>
+                {checkedResponseResult ? (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950">
+                    <p className="font-semibold">
+                      Checked result: {checkedResponseResult.verdict === 'correct' ? 'Correct' : 'Wrong'}
+                    </p>
+                    <p className="mt-1">
+                      Official answer:{' '}
+                      {checkedResponseResult.correctAnswerLabel ? (
+                        <>
+                          <span className="font-semibold">{checkedResponseResult.correctAnswerLabel}</span>
+                          {checkedResponseResult.correctAnswerText
+                            ? `) ${checkedResponseResult.correctAnswerText}`
+                            : ''}
+                        </>
+                      ) : (
+                        <span>{checkedResponseResult.correctAnswerText || '(not set)'}</span>
+                      )}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={onPassDirect} isLoading={busy}>
                     Pass to next team

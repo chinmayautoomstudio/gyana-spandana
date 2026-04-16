@@ -816,6 +816,165 @@ export async function PATCH(
       })
     }
 
+    if (action === 'check_direct_response') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+
+      const { data: event } = await supabase
+        .from('quiz_question_events')
+        .select('*')
+        .eq('id', questionEventId)
+        .single()
+      if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+      if (event.status !== 'revealed') {
+        return NextResponse.json({ error: 'Question is not open for checking' }, { status: 400 })
+      }
+      if (event.correct_answer_revealed_at) {
+        return NextResponse.json({ error: 'Question is closed' }, { status: 400 })
+      }
+
+      const { data: roundC } = await supabase
+        .from('quiz_rounds')
+        .select('round_type')
+        .eq('id', event.round_id)
+        .single()
+      if (roundC?.round_type !== 'direct_question') {
+        return NextResponse.json({ error: 'Only for direct question rounds' }, { status: 400 })
+      }
+
+      const teamLabel = event.directed_team as TeamLabel
+      if (!teamLabel || !TEAM_LABELS.includes(teamLabel)) {
+        return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
+      }
+
+      const { data: attempt } = await supabase
+        .from('quiz_direct_attempts')
+        .select('*')
+        .eq('question_event_id', questionEventId)
+        .eq('team_label', teamLabel)
+        .maybeSingle()
+
+      if (!attempt) {
+        return NextResponse.json({ error: 'No answer submitted for this team yet' }, { status: 400 })
+      }
+      if (attempt.verdict !== 'pending') {
+        return NextResponse.json({ error: 'Answer already judged' }, { status: 400 })
+      }
+
+      const { data: qAns } = await supabase
+        .from('quiz_questions')
+        .select('correct_answer, option_a, option_b, option_c, option_d')
+        .eq('id', event.question_id)
+        .single()
+
+      const normalizeOptionValue = (input: string | null | undefined) => {
+        const normalized = String(input || '').trim().toUpperCase()
+        const first = normalized.charAt(0)
+        if (first === 'A' || first === 'B' || first === 'C' || first === 'D') return first
+        return normalized
+      }
+
+      const submitted = normalizeOptionValue(String(attempt.answer_text || ''))
+      const correctAnswer = String(qAns?.correct_answer || '').trim().toUpperCase()
+      const normalizedCorrect = normalizeOptionValue(correctAnswer)
+      const verdict: 'correct' | 'wrong' =
+        submitted && normalizedCorrect && submitted === normalizedCorrect ? 'correct' : 'wrong'
+
+      const correctAnswerLabel =
+        normalizedCorrect === 'A' ||
+        normalizedCorrect === 'B' ||
+        normalizedCorrect === 'C' ||
+        normalizedCorrect === 'D'
+          ? (normalizedCorrect as 'A' | 'B' | 'C' | 'D')
+          : null
+      const correctAnswerOptionText = correctAnswerLabel
+        ? (qAns?.[`option_${correctAnswerLabel.toLowerCase()}` as const] as string | null | undefined) || null
+        : null
+
+      const now = new Date().toISOString()
+      if (verdict === 'wrong') {
+        await supabase
+          .from('quiz_direct_attempts')
+          .update({ verdict: 'wrong', updated_at: now })
+          .eq('id', attempt.id)
+        await broadcastDirectVerdictApplied(sessionId, supabase, {
+          questionEventId,
+          teamLabel,
+          verdict: 'wrong',
+        })
+        return NextResponse.json({
+          success: true,
+          verdict: 'wrong',
+          teamLabel,
+          correctAnswer,
+          correctAnswerOptionText,
+        })
+      }
+
+      const { data: sessionC } = await supabase
+        .from('quiz_live_sessions')
+        .select('points_full, points_half')
+        .eq('id', sessionId)
+        .single()
+      const pointsAwarded = resolvePoints(
+        Number(event.attempt_number || 1),
+        Number(sessionC?.points_full || 10),
+        Number(sessionC?.points_half || 5),
+        'direct_question',
+      )
+
+      await supabase
+        .from('quiz_direct_attempts')
+        .update({ verdict: 'correct', updated_at: now })
+        .eq('id', attempt.id)
+
+      await supabase
+        .from('quiz_question_events')
+        .update({
+          status: 'answered',
+          answered_by_team: teamLabel,
+          points_awarded: pointsAwarded,
+        })
+        .eq('id', questionEventId)
+
+      const { data: scoreRowC } = await supabase
+        .from('quiz_session_scores')
+        .select('id,total_score,questions_answered,questions_correct')
+        .eq('session_id', sessionId)
+        .eq('team_label', teamLabel)
+        .single()
+
+      if (!scoreRowC) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
+
+      await supabase
+        .from('quiz_session_scores')
+        .update({
+          total_score: Number(scoreRowC.total_score || 0) + pointsAwarded,
+          questions_answered: Number(scoreRowC.questions_answered || 0) + 1,
+          questions_correct: Number(scoreRowC.questions_correct || 0) + 1,
+          updated_at: now,
+        })
+        .eq('id', scoreRowC.id)
+
+      const updatedScores = await getScoreMap(sessionId, supabase)
+      await broadcastDirectVerdictApplied(sessionId, supabase, {
+        questionEventId,
+        teamLabel,
+        verdict: 'correct',
+      })
+      return NextResponse.json({
+        success: true,
+        verdict: 'correct',
+        teamLabel,
+        pointsAwarded,
+        correctAnswer,
+        correctAnswerOptionText,
+        updatedScores,
+      })
+    }
+
     if (action === 'pass_direct_question') {
       const questionEventId = body?.questionEventId as string | undefined
       if (!questionEventId) {
