@@ -93,6 +93,21 @@ export default function ParticipantPlayPage() {
     return subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
   }, [sessionId, roundIdsKey, fetchState])
 
+  /** When Realtime misses updates, still pick up new questions and host actions. */
+  useEffect(() => {
+    if (!sessionId || loading) return
+    if (!state?.session) return
+    if (state.session.status === 'completed') return
+
+    const POLL_MS = 4000
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      void fetchState()
+    }
+    const id = setInterval(tick, POLL_MS)
+    return () => clearInterval(id)
+  }, [sessionId, loading, state?.session?.id, state?.session?.status, fetchState])
+
   useEffect(() => {
     setSelectedTrueFalse(null)
     setTrueFalseLockedEventId(null)
@@ -159,6 +174,13 @@ export default function ParticipantPlayPage() {
     Boolean(state.currentQuestionEvent) &&
     (evStatus === 'revealed' || (evStatus === 'answered' && hasFinalVerdict))
 
+  const showDirectPostRevealSummary =
+    isDirectRound &&
+    Boolean(state.currentQuestion) &&
+    revealCorrect &&
+    Boolean(state.currentQuestionEvent) &&
+    Boolean(attempt)
+
   const submittedRaw = String(attempt?.answer_text || '').trim().toUpperCase()
   const letterFromAttempt: 'A' | 'B' | 'C' | 'D' | null =
     submittedRaw === 'A' || submittedRaw === 'B' || submittedRaw === 'C' || submittedRaw === 'D'
@@ -173,6 +195,13 @@ export default function ParticipantPlayPage() {
       : null
   const submittedLetter: 'A' | 'B' | 'C' | 'D' | null =
     letterFromAttempt ?? (hasFinalVerdict ? letterFromSelection : null)
+
+  const officialAnswerRaw = String(state.currentQuestion?.correct_answer || '').trim().toUpperCase()
+  const officialChar = officialAnswerRaw.charAt(0)
+  const officialLetter: 'A' | 'B' | 'C' | 'D' | null =
+    officialChar === 'A' || officialChar === 'B' || officialChar === 'C' || officialChar === 'D'
+      ? officialChar
+      : null
 
   const directPhaseOpen =
     isDirectRound &&
@@ -246,6 +275,38 @@ export default function ParticipantPlayPage() {
             revealCorrectAnswer={revealCorrect}
           />
         )}
+
+        {showDirectPostRevealSummary ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+            <p className="text-sm font-medium text-gray-800">Your result (direct question)</p>
+            {!submittedLetter ? (
+              <p className="text-sm text-gray-600">No recorded choice for your team on this question.</p>
+            ) : officialLetter ? (
+              submittedLetter === officialLetter ? (
+                <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-950">
+                  Your answer ({submittedLetter}) matches the correct answer.
+                </p>
+              ) : (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-950">
+                  Your answer ({submittedLetter}) is incorrect. The correct answer was {officialLetter}.
+                </p>
+              )
+            ) : (
+              <p className="text-sm text-gray-700">
+                Your answer: {submittedLetter}. See the question above for the official correct answer.
+              </p>
+            )}
+            {verdict === 'correct' || verdict === 'wrong' ? (
+              <p className="text-xs text-gray-500">
+                Host judgement: {verdict === 'correct' ? 'Marked correct' : 'Marked incorrect'}
+                {verdict === 'wrong' && submittedLetter === officialLetter
+                  ? ' (official answer now shown for reference)'
+                  : ''}
+                .
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {showDirectParticipantPanel ? (
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">

@@ -285,7 +285,7 @@ export async function GET(
       latestEvent &&
       !isHostOrAdmin &&
       activeRound?.round_type === 'direct_question' &&
-      ['revealed', 'answered'].includes(String(ev?.status)) &&
+      ['revealed', 'answered', 'dropped'].includes(String(ev?.status)) &&
       authUser
     ) {
       const { data: participantRow } = await supabase
