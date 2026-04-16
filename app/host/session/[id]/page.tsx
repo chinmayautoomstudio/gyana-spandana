@@ -106,12 +106,14 @@ export default function HostSessionPage() {
     return () => unsub()
   }, [sessionId, fetchState, applyParticipantAnswerOptimistic])
 
+  const roundIdsKey = (state?.rounds ?? []).map((r: { id: string }) => r.id).sort().join(',')
+
   useEffect(() => {
-    if (!sessionId || !state?.rounds?.length) return
-    const roundIds = (state.rounds as { id: string }[]).map((r) => r.id)
+    if (!sessionId || !roundIdsKey) return
+    const roundIds = roundIdsKey.split(',').filter(Boolean)
     const unsub = subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
     return unsub
-  }, [sessionId, state?.rounds, fetchState])
+  }, [sessionId, roundIdsKey, fetchState])
 
   const teamNames = useMemo(() => {
     if (state?.team_display_names) return state.team_display_names

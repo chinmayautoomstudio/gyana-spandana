@@ -118,20 +118,22 @@ export async function POST(
       const channel = supabase.channel(`quiz:session:${sessionId}`, {
         config: { broadcast: { self: true, ack: false } },
       })
-      await channel.send({
-        type: 'broadcast',
-        event: 'quiz_event',
-        payload: {
-          type: 'participant_answer_submitted',
+      void channel
+        .send({
+          type: 'broadcast',
+          event: 'quiz_event',
           payload: {
-            questionEventId,
-            teamLabel: directed,
-            answerText,
-            submittedAt: now,
+            type: 'participant_answer_submitted',
+            payload: {
+              questionEventId,
+              teamLabel: directed,
+              answerText,
+              submittedAt: now,
+            },
+            timestamp: now,
           },
-          timestamp: now,
-        },
-      })
+        })
+        .catch(() => {})
     } catch {
       // Ignore realtime send failures; DB write already succeeded and fallback refresh listeners still apply.
     }

@@ -54,11 +54,13 @@ export default function DisplayBoardPage() {
     return () => unsub()
   }, [sessionId, fetchState])
 
+  const roundIdsKey = (state?.rounds ?? []).map((r: { id: string }) => r.id).sort().join(',')
+
   useEffect(() => {
-    if (!sessionId || !state?.rounds?.length) return
-    const roundIds = (state.rounds as { id: string }[]).map((r) => r.id)
+    if (!sessionId || !roundIdsKey) return
+    const roundIds = roundIdsKey.split(',').filter(Boolean)
     return subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
-  }, [sessionId, state?.rounds, fetchState])
+  }, [sessionId, roundIdsKey, fetchState])
 
   const teamNames = useMemo(() => {
     if (state?.team_display_names) return state.team_display_names

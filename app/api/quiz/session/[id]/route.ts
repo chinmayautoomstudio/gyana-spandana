@@ -22,20 +22,22 @@ async function broadcastDirectVerdictApplied(
     const channel = supabase.channel(`quiz:session:${sessionId}`, {
       config: { broadcast: { self: true, ack: false } },
     })
-    await channel.send({
-      type: 'broadcast',
-      event: 'quiz_event',
-      payload: {
-        type: 'direct_verdict_applied',
+    void channel
+      .send({
+        type: 'broadcast',
+        event: 'quiz_event',
         payload: {
-          questionEventId: args.questionEventId,
-          teamLabel: args.teamLabel,
-          verdict: args.verdict,
-          appliedAt,
+          type: 'direct_verdict_applied',
+          payload: {
+            questionEventId: args.questionEventId,
+            teamLabel: args.teamLabel,
+            verdict: args.verdict,
+            appliedAt,
+          },
+          timestamp: appliedAt,
         },
-        timestamp: appliedAt,
-      },
-    })
+      })
+      .catch(() => {})
   } catch {
     // DB write already succeeded; postgres_changes remains fallback.
   }
