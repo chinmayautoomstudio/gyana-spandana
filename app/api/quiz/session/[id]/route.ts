@@ -270,15 +270,27 @@ export async function GET(
             .eq('verdict', 'pending')
             .maybeSingle()
         : Promise.resolve({ data: null })
+    const fallbackDirectAttemptPromise =
+      needPendingDirectAttempt && ev?.id
+        ? supabase
+            .from('quiz_direct_attempts')
+            .select('team_label, answer_text, verdict')
+            .eq('question_event_id', ev.id)
+            .eq('verdict', 'pending')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null })
 
     const currentQuestionPromise = questionId
       ? supabase.from('quiz_questions').select('*').eq('id', questionId).single()
       : Promise.resolve({ data: null })
 
     // Batch 3: current question row + direct attempt (when host needs pending answer) in parallel
-    const [{ data: questionRow }, { data: att }] = await Promise.all([
+    const [{ data: questionRow }, { data: att }, { data: fallbackAtt }] = await Promise.all([
       currentQuestionPromise,
       directAttemptPromise,
+      fallbackDirectAttemptPromise,
     ])
 
     let currentQuestion: any = questionRow || null
@@ -286,8 +298,9 @@ export async function GET(
     const showCorrectInPayload = revealCorrect || isHostOrAdmin
     currentQuestion = stripCorrectAnswer(currentQuestion, showCorrectInPayload)
 
-    if (att) {
-      const rawAnswer = String(att.answer_text || '').trim().toUpperCase()
+    const chosenAttempt = att || fallbackAtt || null
+    if (chosenAttempt) {
+      const rawAnswer = String(chosenAttempt.answer_text || '').trim().toUpperCase()
       const optionLabel =
         rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
           ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
@@ -300,8 +313,8 @@ export async function GET(
           : (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
         : null
       pendingDirectAnswer = {
-        team_label: att.team_label,
-        answer_text: String(att.answer_text ?? ''),
+        team_label: chosenAttempt.team_label,
+        answer_text: String(chosenAttempt.answer_text ?? ''),
         answer_option_label: optionLabel,
         answer_option_text: optionText,
       }
