@@ -1324,8 +1324,23 @@ export async function PATCH(
         .select('round_type')
         .eq('id', event.round_id)
         .single()
-      if (roundR?.round_type !== 'direct_question') {
-        return NextResponse.json({ error: 'Only for direct question rounds' }, { status: 400 })
+      if (roundR?.round_type !== 'direct_question' && roundR?.round_type !== 'true_or_false') {
+        return NextResponse.json({ error: 'Only for direct question / true or false rounds' }, { status: 400 })
+      }
+
+      if (roundR?.round_type === 'true_or_false') {
+        const revealedAtTf = new Date().toISOString()
+        const { data: updatedTfEvent, error: tfErr } = await supabase
+          .from('quiz_question_events')
+          .update({
+            correct_answer_revealed_at: revealedAtTf,
+            status: 'dropped',
+          })
+          .eq('id', questionEventId)
+          .select('*')
+          .single()
+        if (tfErr) return NextResponse.json({ error: tfErr.message }, { status: 500 })
+        return NextResponse.json({ success: true, event: updatedTfEvent })
       }
 
       const { data: sessionR } = await supabase

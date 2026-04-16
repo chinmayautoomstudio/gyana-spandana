@@ -20,6 +20,7 @@ interface TrueOrFalseControlsProps {
   onMarkCorrect: () => void
   onMarkWrongPass: () => void
   onSkip: () => void
+  onShowAnswer: () => void
   busy?: boolean
   selectableTeams?: TeamLabel[]
   activeRoundQuestions?: ActiveRoundQuestionOption[] | null
@@ -51,6 +52,7 @@ export function TrueOrFalseControls({
   onMarkCorrect,
   onMarkWrongPass,
   onSkip,
+  onShowAnswer,
   busy = false,
   selectableTeams = ['A', 'B', 'C', 'D'],
   activeRoundQuestions = null,
@@ -218,6 +220,11 @@ export function TrueOrFalseControls({
                 Reveal True/False options
               </Button>
             )}
+            {showOptions && !revealCorrect && pendingDirectAnswer ? (
+              <Button variant="outline" onClick={onShowAnswer} isLoading={busy}>
+                Show Answer
+              </Button>
+            ) : null}
             <Button onClick={onMarkCorrect} isLoading={busy}>
               Correct
             </Button>

@@ -535,6 +535,10 @@ export default function HostSessionPage() {
                     state.currentQuestionEvent &&
                     runAction('skip_question', { questionEventId: state.currentQuestionEvent.id })
                   }
+                  onShowAnswer={() =>
+                    state.currentQuestionEvent &&
+                    runAction('reveal_correct_answer', { questionEventId: state.currentQuestionEvent.id })
+                  }
                   busy={busy}
                   selectableTeams={hostSelectableTeams}
                   activeRoundQuestions={state.activeRoundQuestions ?? null}
