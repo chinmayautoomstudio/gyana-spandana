@@ -890,7 +890,13 @@ export async function PATCH(
           ? (normalizedCorrect as 'A' | 'B' | 'C' | 'D')
           : null
       const correctAnswerOptionText = correctAnswerLabel
-        ? (qAns?.[`option_${correctAnswerLabel.toLowerCase()}` as const] as string | null | undefined) || null
+        ? correctAnswerLabel === 'A'
+          ? qAns?.option_a || null
+          : correctAnswerLabel === 'B'
+            ? qAns?.option_b || null
+            : correctAnswerLabel === 'C'
+              ? qAns?.option_c || null
+              : qAns?.option_d || null
         : null
 
       const now = new Date().toISOString()
