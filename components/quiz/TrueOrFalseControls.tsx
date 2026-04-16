@@ -17,10 +17,8 @@ interface TrueOrFalseControlsProps {
   onNextQuestion: (questionId?: string) => void
   onNextSequential: () => void
   onRevealOptions: () => void
-  onMarkCorrect: () => void
-  onMarkWrongPass: () => void
+  onCheckAnswer: () => void
   onSkip: () => void
-  onShowAnswer: () => void
   busy?: boolean
   selectableTeams?: TeamLabel[]
   activeRoundQuestions?: ActiveRoundQuestionOption[] | null
@@ -49,10 +47,8 @@ export function TrueOrFalseControls({
   onNextQuestion,
   onNextSequential,
   onRevealOptions,
-  onMarkCorrect,
-  onMarkWrongPass,
+  onCheckAnswer,
   onSkip,
-  onShowAnswer,
   busy = false,
   selectableTeams = ['A', 'B', 'C', 'D'],
   activeRoundQuestions = null,
@@ -220,21 +216,32 @@ export function TrueOrFalseControls({
                 Reveal True/False options
               </Button>
             )}
-            {showOptions && !revealCorrect && pendingDirectAnswer ? (
-              <Button variant="outline" onClick={onShowAnswer} isLoading={busy}>
-                Show Answer
+            {showOptions && pendingDirectAnswer ? (
+              <Button onClick={onCheckAnswer} isLoading={busy} disabled={Boolean(checkedResponseResult)}>
+                Check Answer
               </Button>
             ) : null}
-            <Button onClick={onMarkCorrect} isLoading={busy}>
-              Correct
-            </Button>
-            <Button variant="secondary" onClick={onMarkWrongPass} isLoading={busy}>
-              Wrong / Pass
-            </Button>
-            <Button variant="ghost" onClick={onSkip} isLoading={busy}>
-              Skip
-            </Button>
+            {!pendingDirectAnswer && showOptions ? (
+              <Button onClick={onCheckAnswer} isLoading={busy} disabled>
+                Check Answer
+              </Button>
+            ) : null}
+            {!showOptions ? null : (
+              <Button variant="ghost" onClick={onSkip} isLoading={busy}>
+                Skip
+              </Button>
+            )}
+            {!showOptions && (
+              <Button variant="ghost" onClick={onSkip} isLoading={busy}>
+                Skip
+              </Button>
+            )}
           </div>
+          {showOptions ? (
+            <p className="text-xs text-gray-600">
+              Check Answer auto-judges and closes this True/False question. No pass-to-next-team is used.
+            </p>
+          ) : null}
         </>
       )}
     </section>

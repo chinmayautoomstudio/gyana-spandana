@@ -981,7 +981,11 @@ export async function PATCH(
         .eq('id', questionEventId)
         .single()
       if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
-      if (event.status !== 'revealed' && event.status !== 'buzzer_open') {
+      if (
+        event.status !== 'revealed' &&
+        event.status !== 'buzzer_open' &&
+        event.status !== 'options_revealed'
+      ) {
         return NextResponse.json({ error: 'Question is not open for checking' }, { status: 400 })
       }
       if (event.correct_answer_revealed_at) {
@@ -993,12 +997,19 @@ export async function PATCH(
         .select('round_type')
         .eq('id', event.round_id)
         .single()
-      if (roundC?.round_type !== 'direct_question' && roundC?.round_type !== 'buzzer') {
-        return NextResponse.json({ error: 'Only for direct question or buzzer rounds' }, { status: 400 })
+      if (
+        roundC?.round_type !== 'direct_question' &&
+        roundC?.round_type !== 'buzzer' &&
+        roundC?.round_type !== 'true_or_false'
+      ) {
+        return NextResponse.json(
+          { error: 'Only for direct question, true or false, or buzzer rounds' },
+          { status: 400 },
+        )
       }
 
       let teamLabel: TeamLabel | null = null
-      if (roundC?.round_type === 'direct_question') {
+      if (roundC?.round_type === 'direct_question' || roundC?.round_type === 'true_or_false') {
         const directedTeam = event.directed_team as TeamLabel
         if (!directedTeam || !TEAM_LABELS.includes(directedTeam)) {
           return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
@@ -1103,21 +1114,52 @@ export async function PATCH(
 
       const now = new Date().toISOString()
       if (verdict === 'wrong') {
+        const isTrueOrFalseRound = roundC?.round_type === 'true_or_false'
         await supabase
           .from('quiz_direct_attempts')
           .update({ verdict: 'wrong', updated_at: now })
           .eq('id', attempt.id)
+
+        if (isTrueOrFalseRound) {
+          await supabase
+            .from('quiz_question_events')
+            .update({
+              status: 'dropped',
+              points_awarded: 0,
+              answered_by_team: teamLabel,
+            })
+            .eq('id', questionEventId)
+
+          const { data: scoreRowW } = await supabase
+            .from('quiz_session_scores')
+            .select('id,questions_answered')
+            .eq('session_id', sessionId)
+            .eq('team_label', teamLabel)
+            .single()
+          if (!scoreRowW) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
+
+          await supabase
+            .from('quiz_session_scores')
+            .update({
+              questions_answered: Number(scoreRowW.questions_answered || 0) + 1,
+              updated_at: now,
+            })
+            .eq('id', scoreRowW.id)
+        }
+
         await broadcastDirectVerdictApplied(sessionId, supabase, {
           questionEventId,
           teamLabel,
           verdict: 'wrong',
         })
+        const updatedScores = roundC?.round_type === 'true_or_false' ? await getScoreMap(sessionId, supabase) : null
         return NextResponse.json({
           success: true,
           verdict: 'wrong',
           teamLabel,
           correctAnswer,
           correctAnswerOptionText,
+          ...(updatedScores ? { updatedScores } : {}),
         })
       }
 

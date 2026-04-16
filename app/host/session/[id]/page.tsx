@@ -517,27 +517,10 @@ export default function HostSessionPage() {
                       directedTeam: state.currentQuestionEvent.directed_team || selectedTeam,
                     })
                   }
-                  onMarkCorrect={() =>
-                    state.currentQuestionEvent &&
-                    runAction('mark_correct', {
-                      questionEventId: state.currentQuestionEvent.id,
-                      teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
-                    })
-                  }
-                  onMarkWrongPass={() =>
-                    state.currentQuestionEvent &&
-                    runAction('mark_wrong_pass', {
-                      questionEventId: state.currentQuestionEvent.id,
-                      teamLabel: state.currentQuestionEvent.directed_team || selectedTeam,
-                    })
-                  }
+                  onCheckAnswer={() => void checkResponse()}
                   onSkip={() =>
                     state.currentQuestionEvent &&
                     runAction('skip_question', { questionEventId: state.currentQuestionEvent.id })
-                  }
-                  onShowAnswer={() =>
-                    state.currentQuestionEvent &&
-                    runAction('reveal_correct_answer', { questionEventId: state.currentQuestionEvent.id })
                   }
                   busy={busy}
                   selectableTeams={hostSelectableTeams}
