@@ -115,7 +115,9 @@ export async function POST(
 
     // Best-effort realtime ping so host UI refreshes immediately when a participant submits.
     try {
-      const channel = supabase.channel(`quiz:session:${sessionId}`)
+      const channel = supabase.channel(`quiz:session:${sessionId}`, {
+        config: { broadcast: { self: true, ack: false } },
+      })
       await channel.send({
         type: 'broadcast',
         event: 'quiz_event',
@@ -124,6 +126,7 @@ export async function POST(
           payload: {
             questionEventId,
             teamLabel: directed,
+            answerText,
             submittedAt: now,
           },
           timestamp: now,

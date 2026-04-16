@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
+import {
+  subscribeQuizDataRefresh,
+  subscribeToSession,
+  type ParticipantAnswerSubmittedPayload,
+} from '@/lib/services/quizSessionService'
 import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
 import { RoundNavigator } from '@/components/quiz/RoundNavigator'
 import { DirectQuestionControls } from '@/components/quiz/DirectQuestionControls'
@@ -49,6 +53,36 @@ export default function HostSessionPage() {
     setState(data)
   }, [sessionId])
 
+  const applyParticipantAnswerOptimistic = useCallback(
+    (payload: ParticipantAnswerSubmittedPayload) => {
+      setState((prev) => {
+        if (!prev?.currentQuestionEvent || prev.activeRound?.round_type !== 'direct_question') {
+          return prev
+        }
+        if (prev.currentQuestionEvent.id !== payload.questionEventId) return prev
+        const raw = String(payload.answerText ?? '').trim().toUpperCase()
+        if (!raw) return prev
+        const optionLabel =
+          raw === 'A' || raw === 'B' || raw === 'C' || raw === 'D' ? (raw as 'A' | 'B' | 'C' | 'D') : null
+        const cq = prev.currentQuestion
+        const optionText = optionLabel
+          ? (String(cq?.[`option_${optionLabel.toLowerCase()}`] ?? '') || null)
+          : null
+        return {
+          ...prev,
+          pendingDirectAnswer: {
+            team_label: payload.teamLabel,
+            answer_text: raw,
+            answer_option_label: optionLabel,
+            answer_option_text: optionText,
+          },
+        }
+      })
+      void fetchState()
+    },
+    [fetchState],
+  )
+
   useEffect(() => {
     let unsub = () => {}
     void (async () => {
@@ -63,13 +97,13 @@ export default function HostSessionPage() {
         onQuestionRevealed: () => void fetchState(),
         onOptionsRevealed: () => void fetchState(),
         onAnswerResult: () => void fetchState(),
-        onParticipantAnswerSubmitted: () => void fetchState(),
+        onParticipantAnswerSubmitted: applyParticipantAnswerOptimistic,
         onScoresUpdated: () => void fetchState(),
         onRoundStarted: () => void fetchState(),
       })
     }
     return () => unsub()
-  }, [sessionId, fetchState])
+  }, [sessionId, fetchState, applyParticipantAnswerOptimistic])
 
   useEffect(() => {
     if (!sessionId || !state?.rounds?.length) return

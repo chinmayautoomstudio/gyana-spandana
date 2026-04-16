@@ -67,6 +67,8 @@ export interface ScoresUpdatedPayload {
 export interface ParticipantAnswerSubmittedPayload {
   questionEventId: string
   teamLabel: string
+  /** Present when emitted from the answer API; omit for legacy broadcasts. */
+  answerText?: string
   submittedAt: string
 }
 
@@ -157,12 +159,22 @@ export function subscribeQuizDataRefresh(
   const channelName = `quiz-pg-refresh:${sessionId}`
   const channel = supabase.channel(channelName)
 
+  const PG_REFRESH_DEBOUNCE_MS = 400
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined
+  const debouncedRefresh = () => {
+    if (debounceTimer !== undefined) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      debounceTimer = undefined
+      onRefresh()
+    }, PG_REFRESH_DEBOUNCE_MS)
+  }
+
   if (roundIds.length > 0) {
     const filter = `round_id=in.(${roundIds.join(',')})`
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'quiz_question_events', filter },
-      () => onRefresh(),
+      () => debouncedRefresh(),
     )
   }
 
@@ -174,12 +186,13 @@ export function subscribeQuizDataRefresh(
       table: 'quiz_direct_attempts',
       filter: `session_id=eq.${sessionId}`,
     },
-    () => onRefresh(),
+    () => debouncedRefresh(),
   )
 
   channel.subscribe()
 
   return () => {
+    if (debounceTimer !== undefined) clearTimeout(debounceTimer)
     supabase.removeChannel(channel)
   }
 }
