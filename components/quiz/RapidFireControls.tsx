@@ -143,7 +143,7 @@ export function RapidFireControls({
               max={60}
               value={durationSeconds}
               onChange={(e) => setDurationSeconds(Math.min(60, Math.max(30, Number(e.target.value || 45))))}
-              className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+              className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#C0392B] focus:outline-none focus:ring-2 focus:ring-[#C0392B]/30 disabled:bg-gray-100 disabled:text-gray-500"
             />
           </div>
           <Button onClick={handleStart} isLoading={busy}>

@@ -490,7 +490,7 @@ export async function PATCH(
 
       const { data: round } = await supabase
         .from('quiz_rounds')
-        .select('id,current_question_index')
+        .select('id,current_question_index,round_type')
         .eq('id', roundId)
         .single()
 
@@ -543,7 +543,7 @@ export async function PATCH(
         .insert({
           round_id: roundId,
           question_id: question.id,
-          status: 'revealed',
+          status: round.round_type === 'buzzer' ? 'buzzer_open' : 'revealed',
           directed_team: directedTeam,
           attempt_number: 1,
         })

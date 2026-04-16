@@ -27,7 +27,6 @@ interface BuzzerControlsProps {
   }>
   busy?: boolean
   onNextQuestion: () => void
-  onOpenBuzzer: () => void
   onCheckResponse: () => void
   onMarkCorrect: () => void
   onMarkWrong: () => void
@@ -43,7 +42,6 @@ export function BuzzerControls({
   buzzEvents,
   busy = false,
   onNextQuestion,
-  onOpenBuzzer,
   onCheckResponse,
   onMarkCorrect,
   onMarkWrong,
@@ -91,13 +89,13 @@ export function BuzzerControls({
         <>
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
             <QuestionDisplay question={question} showOptions readOnly language={questionLanguage} />
-            {!isBuzzerOpen ? (
-              <Button onClick={onOpenBuzzer} isLoading={busy}>
-                Open Buzzer
-              </Button>
-            ) : (
+            {isBuzzerOpen ? (
               <div className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
                 BUZZER OPEN
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                Waiting to open buzzer...
               </div>
             )}
           </div>
