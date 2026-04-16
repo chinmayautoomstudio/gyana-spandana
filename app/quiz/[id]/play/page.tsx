@@ -301,6 +301,17 @@ export default function ParticipantPlayPage() {
     Boolean(myTeamLabel) &&
     !!buzzerEventId &&
     buzzerPressedForEventId !== buzzerEventId
+  const activeBuzzerTeam = (state.currentQuestionEvent?.directed_team || null) as TeamLabel | null
+  const isActiveBuzzerTeam =
+    Boolean(myTeamLabel) &&
+    (activeBuzzerTeam
+      ? activeBuzzerTeam === myTeamLabel
+      : myBuzzOrder === 1)
+  const canSubmitBuzzerAnswer =
+    isBuzzerRound &&
+    state.currentQuestionEvent?.status === 'buzzer_open' &&
+    !canBuzz &&
+    isActiveBuzzerTeam
   const trueFalsePhaseOpen =
     isTrueFalseRound &&
     Boolean(state.currentQuestion) &&
@@ -558,10 +569,44 @@ export default function ParticipantPlayPage() {
               >
                 BUZZ IN!
               </button>
+            ) : canSubmitBuzzerAnswer ? (
+              <>
+                <p className="text-sm font-medium text-gray-800">You buzzed first. Select your answer:</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      { key: 'A' as const, text: state.currentQuestion.option_a },
+                      { key: 'B' as const, text: state.currentQuestion.option_b },
+                      { key: 'C' as const, text: state.currentQuestion.option_c },
+                      { key: 'D' as const, text: state.currentQuestion.option_d },
+                    ] as const
+                  ).map(({ key, text }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                        selectedDirectOption === key
+                          ? 'border-[#C0392B] bg-[#C0392B]/10 text-[#C0392B]'
+                          : 'border-gray-300 bg-white text-gray-800'
+                      }`}
+                      onClick={() => setSelectedDirectOption(key)}
+                    >
+                      <span className="font-semibold">{key}) </span>
+                      <span>{text || '(Not set)'}</span>
+                    </button>
+                  ))}
+                </div>
+                <Button onClick={() => void submitDirectAnswer()} isLoading={answerBusy} disabled={!selectedDirectOption}>
+                  Submit buzzer answer
+                </Button>
+              </>
             ) : (
               <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-6 text-center">
                 <p className="text-lg font-semibold text-gray-800">Buzzed!</p>
                 {myBuzzOrder ? <p className="text-sm text-gray-600">Your order: #{myBuzzOrder}</p> : null}
+                {!isActiveBuzzerTeam && myBuzzOrder ? (
+                  <p className="mt-1 text-xs text-gray-600">Waiting for teams ahead of you to answer.</p>
+                ) : null}
               </div>
             )}
           </div>

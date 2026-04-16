@@ -37,6 +37,12 @@ interface SessionState {
     answer_option_label: 'A' | 'B' | 'C' | 'D' | null
     answer_option_text: string | null
   } | null
+  pendingBuzzerAnswer?: {
+    team_label: string
+    answer_text: string
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_text: string | null
+  } | null
 }
 
 export default function HostSessionPage() {
@@ -527,6 +533,7 @@ export default function HostSessionPage() {
                 <BuzzerControls
                   question={state.currentQuestion}
                   event={state.currentQuestionEvent}
+                  pendingBuzzerAnswer={state.pendingBuzzerAnswer ?? null}
                   buzzEvents={buzzEvents}
                   busy={busy}
                   onNextQuestion={() =>
@@ -547,14 +554,15 @@ export default function HostSessionPage() {
                       teamLabel: getActiveBuzzTeam(),
                     })
                   }
-                  onMarkWrong={() => {
+                  onMarkWrong={async () => {
                     const activeTeam = getActiveBuzzTeam()
                     if (!state.currentQuestionEvent || !activeTeam) return
                     setBuzzEvents((prev) => prev.filter((item) => item.team_label !== activeTeam))
-                    void runAction('mark_wrong_pass', {
+                    await runAction('mark_wrong_pass', {
                       questionEventId: state.currentQuestionEvent.id,
                       teamLabel: activeTeam,
                     })
+                    await fetchState()
                   }}
                   onSkip={() =>
                     state.currentQuestionEvent &&

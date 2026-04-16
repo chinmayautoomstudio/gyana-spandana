@@ -8,6 +8,12 @@ import type { TeamLabel } from '@/lib/utils/teamColors'
 interface BuzzerControlsProps {
   question: any | null
   event: any | null
+  pendingBuzzerAnswer?: {
+    team_label: string
+    answer_text: string
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_text: string | null
+  } | null
   buzzEvents: Array<{
     id: string
     team_label: TeamLabel
@@ -25,6 +31,7 @@ interface BuzzerControlsProps {
 export function BuzzerControls({
   question,
   event,
+  pendingBuzzerAnswer = null,
   buzzEvents,
   busy = false,
   onNextQuestion,
@@ -70,6 +77,23 @@ export function BuzzerControls({
               <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-900">
                 Team {firstResponder} buzzed first
               </div>
+            ) : null}
+            {activeTeam ? (
+              pendingBuzzerAnswer?.team_label === activeTeam ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <p className="font-semibold">
+                    Team {activeTeam} selected{' '}
+                    {pendingBuzzerAnswer.answer_option_label || pendingBuzzerAnswer.answer_text || 'an option'}
+                  </p>
+                  {pendingBuzzerAnswer.answer_option_text ? (
+                    <p className="mt-1 text-xs text-amber-800">{pendingBuzzerAnswer.answer_option_text}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  Waiting for answer from Team {activeTeam}
+                </div>
+              )
             ) : null}
             <BuzzQueue items={buzzEvents} activeTeam={activeTeam || null} />
           </div>

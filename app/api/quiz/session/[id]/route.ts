@@ -188,6 +188,12 @@ export async function GET(
       answer_option_label: 'A' | 'B' | 'C' | 'D' | null
       answer_option_text: string | null
     } | null = null
+    let pendingBuzzerAnswer: {
+      team_label: string
+      answer_text: string
+      answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+      answer_option_text: string | null
+    } | null = null
     let participantDirectAttempt: { answer_text: string; verdict: string } | null = null
 
     const roundId = activeRound?.id
@@ -283,6 +289,59 @@ export async function GET(
 
     if (
       latestEvent &&
+      isHostOrAdmin &&
+      activeRound?.round_type === 'buzzer' &&
+      String(ev?.status) === 'buzzer_open'
+    ) {
+      const [{ data: buzzRows }, { data: passRows }] = await Promise.all([
+        supabase
+          .from('quiz_buzz_events')
+          .select('team_label,buzz_order,buzzed_at,id')
+          .eq('question_event_id', ev.id)
+          .order('buzz_order', { ascending: true })
+          .order('buzzed_at', { ascending: true })
+          .order('id', { ascending: true }),
+        supabase
+          .from('quiz_pass_log')
+          .select('team_label')
+          .eq('question_event_id', ev.id)
+          .eq('passed_or_wrong', true),
+      ])
+
+      const excluded = new Set((passRows || []).map((row: any) => String(row.team_label)))
+      const activeBuzz = (buzzRows || []).find((row: any) => !excluded.has(String(row.team_label)))
+      const activeTeam = String(activeBuzz?.team_label || '').toUpperCase()
+
+      if (activeTeam === 'A' || activeTeam === 'B' || activeTeam === 'C' || activeTeam === 'D') {
+        const { data: bAtt } = await supabase
+          .from('quiz_direct_attempts')
+          .select('team_label,answer_text,verdict')
+          .eq('question_event_id', ev.id)
+          .eq('team_label', activeTeam)
+          .eq('verdict', 'pending')
+          .maybeSingle()
+
+        if (bAtt) {
+          const rawAnswer = String(bAtt.answer_text || '').trim().toUpperCase()
+          const optionLabel =
+            rawAnswer === 'A' || rawAnswer === 'B' || rawAnswer === 'C' || rawAnswer === 'D'
+              ? (rawAnswer as 'A' | 'B' | 'C' | 'D')
+              : null
+          const optionText = optionLabel
+            ? (currentQuestion?.[`option_${optionLabel.toLowerCase()}`] as string | null | undefined) || null
+            : null
+          pendingBuzzerAnswer = {
+            team_label: String(bAtt.team_label),
+            answer_text: String(bAtt.answer_text ?? ''),
+            answer_option_label: optionLabel,
+            answer_option_text: optionText,
+          }
+        }
+      }
+    }
+
+    if (
+      latestEvent &&
       !isHostOrAdmin &&
       activeRound?.round_type === 'direct_question' &&
       ['revealed', 'answered', 'dropped'].includes(String(ev?.status)) &&
@@ -321,6 +380,7 @@ export async function GET(
       team_display_names,
       activeRoundQuestions,
       pendingDirectAnswer,
+      pendingBuzzerAnswer,
       participantDirectAttempt,
     })
   } catch (error: any) {
@@ -612,6 +672,60 @@ export async function PATCH(
         .select('round_type')
         .eq('id', event.round_id)
         .single()
+      if (roundMcq?.round_type === 'buzzer') {
+        const attemptNumber = Number(event.attempt_number || 1)
+        await supabase.from('quiz_pass_log').insert({
+          question_event_id: questionEventId,
+          team_label: teamLabel,
+          attempt_number: attemptNumber,
+          passed_or_wrong: true,
+        })
+
+        await supabase
+          .from('quiz_direct_attempts')
+          .update({ verdict: 'wrong', updated_at: new Date().toISOString() })
+          .eq('question_event_id', questionEventId)
+          .eq('team_label', teamLabel)
+          .eq('verdict', 'pending')
+
+        const [{ data: buzzRows }, { data: passRows }] = await Promise.all([
+          supabase
+            .from('quiz_buzz_events')
+            .select('team_label,buzz_order,buzzed_at,id')
+            .eq('question_event_id', questionEventId)
+            .order('buzz_order', { ascending: true })
+            .order('buzzed_at', { ascending: true })
+            .order('id', { ascending: true }),
+          supabase
+            .from('quiz_pass_log')
+            .select('team_label')
+            .eq('question_event_id', questionEventId)
+            .eq('passed_or_wrong', true),
+        ])
+
+        const excluded = new Set((passRows || []).map((row: any) => String(row.team_label)))
+        const nextBuzz = (buzzRows || []).find((row: any) => !excluded.has(String(row.team_label)))
+        if (!nextBuzz?.team_label) {
+          const { data: updatedEvent } = await supabase
+            .from('quiz_question_events')
+            .update({ status: 'dropped' })
+            .eq('id', questionEventId)
+            .select('*')
+            .single()
+          return NextResponse.json({ success: true, state: 'dropped', event: updatedEvent })
+        }
+
+        const { data: updatedEvent } = await supabase
+          .from('quiz_question_events')
+          .update({
+            status: 'buzzer_open',
+            directed_team: nextBuzz.team_label,
+          })
+          .eq('id', questionEventId)
+          .select('*')
+          .single()
+        return NextResponse.json({ success: true, state: 'pass_next_team', event: updatedEvent })
+      }
       if (roundMcq?.round_type === 'direct_question' && event.status === 'revealed') {
         return NextResponse.json(
           { error: 'Use Pass to next team for direct question rounds' },

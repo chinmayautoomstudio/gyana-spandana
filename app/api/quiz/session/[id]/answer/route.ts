@@ -44,9 +44,6 @@ export async function POST(
       .single()
 
     if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
-    if (event.status !== 'revealed') {
-      return NextResponse.json({ error: 'Question is not open for answers' }, { status: 400 })
-    }
     if (event.correct_answer_revealed_at) {
       return NextResponse.json({ error: 'Question is closed' }, { status: 400 })
     }
@@ -60,8 +57,11 @@ export async function POST(
     if (!round || round.session_id !== sessionId) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 400 })
     }
-    if (round.round_type !== 'direct_question') {
-      return NextResponse.json({ error: 'Text answers are only for direct question rounds' }, { status: 400 })
+    if (round.round_type !== 'direct_question' && round.round_type !== 'buzzer') {
+      return NextResponse.json(
+        { error: 'Answer submission is only allowed in direct question or buzzer rounds' },
+        { status: 400 },
+      )
     }
     if (!TEAM_LABELS.includes(answerText as TeamLabel)) {
       return NextResponse.json({ error: 'Please select a valid option (A, B, C, or D)' }, { status: 400 })
@@ -74,21 +74,68 @@ export async function POST(
       .single()
 
     const slots = (session?.team_slots || {}) as Record<string, string>
-    const directed = event.directed_team as TeamLabel
-    if (!directed || !TEAM_LABELS.includes(directed)) {
-      return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
+    const participantLabel =
+      (TEAM_LABELS.find((label) => slots[label] === participant.team_id) as TeamLabel | undefined) || null
+    if (!participantLabel) {
+      return NextResponse.json({ error: 'Your team is not mapped in this session' }, { status: 403 })
     }
 
-    const slotTeamId = slots[directed]
-    if (!slotTeamId || slotTeamId !== participant.team_id) {
-      return NextResponse.json({ error: 'It is not your team turn to answer' }, { status: 403 })
+    let answeringTeam: TeamLabel | null = null
+    if (round.round_type === 'direct_question') {
+      if (event.status !== 'revealed') {
+        return NextResponse.json({ error: 'Question is not open for answers' }, { status: 400 })
+      }
+      const directed = event.directed_team as TeamLabel
+      if (!directed || !TEAM_LABELS.includes(directed)) {
+        return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
+      }
+      if (participantLabel !== directed) {
+        return NextResponse.json({ error: 'It is not your team turn to answer' }, { status: 403 })
+      }
+      answeringTeam = directed
+    } else {
+      if (event.status !== 'buzzer_open') {
+        return NextResponse.json({ error: 'Buzzer is not open for answers' }, { status: 400 })
+      }
+      const [{ data: buzzes, error: buzzErr }, { data: passRows, error: passErr }] = await Promise.all([
+        supabase
+          .from('quiz_buzz_events')
+          .select('team_label,buzz_order,buzzed_at,id')
+          .eq('question_event_id', questionEventId)
+          .order('buzz_order', { ascending: true })
+          .order('buzzed_at', { ascending: true })
+          .order('id', { ascending: true }),
+        supabase
+          .from('quiz_pass_log')
+          .select('team_label')
+          .eq('question_event_id', questionEventId)
+          .eq('passed_or_wrong', true),
+      ])
+
+      if (buzzErr) return NextResponse.json({ error: buzzErr.message }, { status: 500 })
+      if (passErr) return NextResponse.json({ error: passErr.message }, { status: 500 })
+
+      const excluded = new Set((passRows || []).map((row: any) => String(row.team_label)))
+      const activeBuzz = (buzzes || []).find((row: any) => !excluded.has(String(row.team_label)))
+      const activeTeam = activeBuzz?.team_label as TeamLabel | undefined
+      if (!activeTeam || !TEAM_LABELS.includes(activeTeam)) {
+        return NextResponse.json({ error: 'No active team is available to answer' }, { status: 400 })
+      }
+      if (participantLabel !== activeTeam) {
+        return NextResponse.json({ error: 'It is not your team turn to answer' }, { status: 403 })
+      }
+      answeringTeam = activeTeam
+    }
+
+    if (!answeringTeam) {
+      return NextResponse.json({ error: 'No team available to answer' }, { status: 400 })
     }
 
     const { data: existing } = await supabase
       .from('quiz_direct_attempts')
       .select('id, verdict')
       .eq('question_event_id', questionEventId)
-      .eq('team_label', directed)
+      .eq('team_label', answeringTeam)
       .maybeSingle()
 
     if (existing && existing.verdict !== 'pending') {
@@ -106,7 +153,7 @@ export async function POST(
       const { error: insErr } = await supabase.from('quiz_direct_attempts').insert({
         session_id: sessionId,
         question_event_id: questionEventId,
-        team_label: directed,
+        team_label: answeringTeam,
         answer_text: answerText,
         verdict: 'pending',
       })
@@ -126,7 +173,7 @@ export async function POST(
             type: 'participant_answer_submitted',
             payload: {
               questionEventId,
-              teamLabel: directed,
+              teamLabel: answeringTeam,
               answerText,
               submittedAt: now,
             },
