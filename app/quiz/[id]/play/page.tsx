@@ -655,9 +655,7 @@ export default function ParticipantPlayPage() {
 
         {isBuzzerRound && state.currentQuestion ? (
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-            {state.currentQuestionEvent?.status !== 'buzzer_open' ? (
-              <p className="text-sm text-gray-600">Waiting for host to open buzzer...</p>
-            ) : hasFinalVerdict ? (
+            {hasFinalVerdict ? (
               <>
                 <div
                   className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
@@ -670,6 +668,11 @@ export default function ParticipantPlayPage() {
                     ? 'Your buzzer response has been checked — Correct.'
                     : 'Your buzzer response has been checked — Wrong.'}
                 </div>
+                {verdict === 'wrong' ? (
+                  <p className="text-xs text-gray-600">
+                    The host may pass this question to the next team.
+                  </p>
+                ) : null}
                 {submittedLetter ? (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="list">
                     {(
@@ -703,6 +706,8 @@ export default function ParticipantPlayPage() {
                   <p className="text-sm text-gray-700">Your submitted buzzer option was recorded.</p>
                 )}
               </>
+            ) : state.currentQuestionEvent?.status !== 'buzzer_open' ? (
+              <p className="text-sm text-gray-600">Waiting for host to open buzzer...</p>
             ) : canBuzz ? (
               <button
                 type="button"
