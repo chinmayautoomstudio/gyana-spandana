@@ -216,23 +216,39 @@ export async function GET(
           .eq('round_id', roundId)
           .order('question_order', { ascending: true })
       : Promise.resolve({ data: null })
+    const completedEventsPromise = roundId
+      ? supabase
+          .from('quiz_question_events')
+          .select('question_id')
+          .eq('round_id', roundId)
+          .in('status', ['answered', 'dropped'])
+      : Promise.resolve({ data: null })
 
-    const [{ data: event }, { data: qs }, { isHostOrAdmin }, scores, team_display_names] = await Promise.all([
+    const [{ data: event }, { data: qs }, { data: completedEvents }, { isHostOrAdmin }, scores, team_display_names] =
+      await Promise.all([
       eventPromise,
       qsPromise,
+      completedEventsPromise,
       resolveHostOrAdmin(session.assigned_host_id, authUser, supabase),
       getScoreMap(sessionId, supabase),
       getTeamDisplayNames(session, supabase),
     ])
 
     latestEvent = event || null
+    const completedQuestionIds = new Set(
+      (completedEvents || [])
+        .map((row: any) => String(row?.question_id || '').trim())
+        .filter((id: string) => id.length > 0),
+    )
     activeRoundQuestions = roundId
-      ? (qs || []).map((q: any) => ({
+      ? (qs || [])
+          .filter((q: any) => !completedQuestionIds.has(String(q?.id || '')))
+          .map((q: any) => ({
           id: q.id,
           question_order: q.question_order,
           question_type: q.question_type,
           preview: previewText(q.question_text),
-        }))
+          }))
       : null
 
     const ev = latestEvent as any
