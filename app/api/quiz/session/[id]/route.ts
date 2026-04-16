@@ -1588,6 +1588,9 @@ export async function PATCH(
       if (!roundId || !teamLabel) {
         return NextResponse.json({ error: 'roundId and teamLabel are required' }, { status: 400 })
       }
+      if (!TEAM_LABELS.includes(teamLabel)) {
+        return NextResponse.json({ error: 'teamLabel must be A/B/C/D' }, { status: 400 })
+      }
 
       const { data: activeRapid } = await supabase
         .from('quiz_rapid_fire_sessions')
@@ -1604,9 +1607,34 @@ export async function PATCH(
           .eq('id', activeRapid.id)
       }
 
+      const endedAt = new Date().toISOString()
+      const { data: activeEvent } = await supabase
+        .from('quiz_question_events')
+        .select('id,status')
+        .eq('round_id', roundId)
+        .eq('rapid_fire_team', teamLabel)
+        .in('status', ['revealed', 'options_revealed', 'buzzer_open'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      let endedEvent: any = null
+      if (activeEvent?.id) {
+        const { data: updatedEvent } = await supabase
+          .from('quiz_question_events')
+          .update({
+            status: 'dropped',
+            correct_answer_revealed_at: endedAt,
+          })
+          .eq('id', activeEvent.id)
+          .select('*')
+          .single()
+        endedEvent = updatedEvent || null
+      }
+
       await supabase.from('quiz_rounds').update({ status: 'active' }).eq('id', roundId)
       const updatedScores = await getScoreMap(sessionId, supabase)
-      return NextResponse.json({ success: true, teamLabel, updatedScores })
+      return NextResponse.json({ success: true, teamLabel, updatedScores, endedEvent })
     }
 
     if (action === 'open_buzzer') {

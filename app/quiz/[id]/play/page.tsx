@@ -244,6 +244,11 @@ export default function ParticipantPlayPage() {
     (isRapidFireRound &&
       ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || ''))) ||
     (isBuzzerRound && ['revealed', 'buzzer_open', 'options_revealed'].includes(String(state.currentQuestionEvent?.status || '')))
+  const rapidFireQuestionVisible =
+    isRapidFireRound &&
+    Boolean(state.currentQuestion) &&
+    ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || '')) &&
+    (rapidFireRemaining == null || rapidFireRemaining > 0)
 
   const attempt = state.participantDirectAttempt
   const evStatus = String(state.currentQuestionEvent?.status || '')
@@ -374,9 +379,9 @@ export default function ParticipantPlayPage() {
           )}
         </div>
 
-        {!state.currentQuestion ? (
+        {!state.currentQuestion || (isRapidFireRound && !rapidFireQuestionVisible) ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-600">
-            Questions will be assigned soon.
+            {isRapidFireRound ? 'Rapid Fire turn ended. Waiting for host...' : 'Questions will be assigned soon.'}
           </div>
         ) : (
           <QuestionDisplay

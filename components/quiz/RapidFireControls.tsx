@@ -47,12 +47,24 @@ export function RapidFireControls({
   }, [round?.id, round?.rapid_fire_duration_seconds])
 
   useEffect(() => {
+    if (hasStarted && !isQuestionActive) {
+      setHasStarted(false)
+      setRemainingSeconds(0)
+    }
+  }, [hasStarted, isQuestionActive])
+
+  useEffect(() => {
     if (!isRunning) return
+    let endTriggered = false
     const timer = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(timer)
-          void onEndTurn()
+          if (!endTriggered) {
+            endTriggered = true
+            setHasStarted(false)
+            void onEndTurn()
+          }
           return 0
         }
         return prev - 1
@@ -154,7 +166,15 @@ export function RapidFireControls({
             >
               Wrong
             </Button>
-            <Button variant="outline" onClick={onEndTurn} isLoading={busy}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setHasStarted(false)
+                setRemainingSeconds(0)
+                onEndTurn()
+              }}
+              isLoading={busy}
+            >
               End Turn Early
             </Button>
           </div>
