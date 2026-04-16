@@ -322,6 +322,13 @@ export default function ParticipantPlayPage() {
     isMyTurn &&
     !!trueFalseEventId &&
     trueFalseLockedEventId !== trueFalseEventId
+  const rapidFirePhaseOpen =
+    isRapidFireRound &&
+    Boolean(state.currentQuestion) &&
+    ['revealed', 'options_revealed', 'buzzer_open'].includes(evStatus) &&
+    !revealCorrect &&
+    isMyTurn
+  const questionReadOnly = isTrueFalseRound ? !canChooseTrueFalse : !rapidFirePhaseOpen
 
   const onTrueFalseSelect = (value: 'TRUE' | 'FALSE') => {
     setSelectedTrueFalse(value)
@@ -375,10 +382,14 @@ export default function ParticipantPlayPage() {
           <QuestionDisplay
             question={state.currentQuestion}
             showOptions={showOptions}
-            readOnly={!canChooseTrueFalse}
+            readOnly={questionReadOnly}
             selectedTrueFalse={selectedTrueFalse}
             onTrueFalseSelect={onTrueFalseSelect}
             revealCorrectAnswer={revealCorrect}
+            selectedMcqOption={selectedDirectOption}
+            onMcqOptionSelect={(value) => {
+              if (rapidFirePhaseOpen) setSelectedDirectOption(value)
+            }}
           />
         )}
 

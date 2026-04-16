@@ -18,6 +18,8 @@ interface QuestionDisplayProps {
   onTrueFalseSelect?: (value: 'TRUE' | 'FALSE') => void
   /** When true, show the official correct answer (after host reveal for direct rounds). */
   revealCorrectAnswer?: boolean
+  selectedMcqOption?: 'A' | 'B' | 'C' | 'D' | null
+  onMcqOptionSelect?: (value: 'A' | 'B' | 'C' | 'D') => void
 }
 
 function formatCorrectAnswerLabel(
@@ -46,6 +48,8 @@ export function QuestionDisplay({
   selectedTrueFalse = null,
   onTrueFalseSelect,
   revealCorrectAnswer = false,
+  selectedMcqOption = null,
+  onMcqOptionSelect,
 }: QuestionDisplayProps) {
   if (!question) {
     return (
@@ -134,8 +138,8 @@ export function QuestionDisplay({
         correct_answer: mcqCorrect,
         points: 1,
       }}
-      selectedAnswer={null}
-      onAnswerSelect={() => {}}
+      selectedAnswer={selectedMcqOption}
+      onAnswerSelect={(value) => onMcqOptionSelect?.(value)}
       showCorrectAnswer={revealCorrectAnswer}
       disabled={readOnly}
     />
