@@ -11,12 +11,12 @@ interface BuzzerControlsProps {
   pendingBuzzerAnswer?: {
     team_label: string
     answer_text: string
-    answer_option_label: 'A' | 'B' | 'C' | 'D' | null
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     answer_option_text: string | null
   } | null
   checkedResponseResult?: {
     verdict: 'correct' | 'wrong'
-    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | null
+    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     correctAnswerText: string | null
   } | null
   buzzEvents: Array<{
@@ -32,6 +32,7 @@ interface BuzzerControlsProps {
   onMarkCorrect: () => void
   onMarkWrong: () => void
   onSkip: () => void
+  questionLanguage?: 'en' | 'odia'
 }
 
 export function BuzzerControls({
@@ -47,7 +48,29 @@ export function BuzzerControls({
   onMarkCorrect,
   onMarkWrong,
   onSkip,
+  questionLanguage = 'en',
 }: BuzzerControlsProps) {
+  const pickText = (
+    english: string | null | undefined,
+    odia: string | null | undefined,
+  ) => {
+    const en = String(english || '').trim()
+    const od = String(odia || '').trim()
+    return questionLanguage === 'odia' ? od || en : en || od
+  }
+  const optionTextByLabel = (label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null) => {
+    if (!label || !question) return ''
+    if (label === 'TRUE') return pickText('TRUE', question.option_a_odia)
+    if (label === 'FALSE') return pickText('FALSE', question.option_b_odia)
+    const key = `option_${label.toLowerCase()}` as 'option_a' | 'option_b' | 'option_c' | 'option_d'
+    const keyOdia =
+      `option_${label.toLowerCase()}_odia` as
+        | 'option_a_odia'
+        | 'option_b_odia'
+        | 'option_c_odia'
+        | 'option_d_odia'
+    return pickText(question[key], question[keyOdia])
+  }
   const isIdle = !event || event.status === 'answered' || event.status === 'dropped'
   const isBuzzerOpen = event?.status === 'buzzer_open'
   const activeTeam = buzzEvents
@@ -67,7 +90,7 @@ export function BuzzerControls({
       ) : (
         <>
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-            <QuestionDisplay question={question} showOptions readOnly />
+            <QuestionDisplay question={question} showOptions readOnly language={questionLanguage} />
             {!isBuzzerOpen ? (
               <Button onClick={onOpenBuzzer} isLoading={busy}>
                 Open Buzzer
@@ -93,8 +116,10 @@ export function BuzzerControls({
                     Team {activeTeam} selected{' '}
                     {pendingBuzzerAnswer.answer_option_label || pendingBuzzerAnswer.answer_text || 'an option'}
                   </p>
-                  {pendingBuzzerAnswer.answer_option_text ? (
-                    <p className="mt-1 text-xs text-amber-800">{pendingBuzzerAnswer.answer_option_text}</p>
+                  {optionTextByLabel(pendingBuzzerAnswer.answer_option_label) ? (
+                    <p className="mt-1 text-xs text-amber-800">
+                      {optionTextByLabel(pendingBuzzerAnswer.answer_option_label)}
+                    </p>
                   ) : null}
                 </div>
               ) : (
@@ -120,9 +145,11 @@ export function BuzzerControls({
                     {checkedResponseResult.correctAnswerLabel ? (
                       <>
                         <span className="font-semibold">{checkedResponseResult.correctAnswerLabel}</span>
-                        {checkedResponseResult.correctAnswerText
-                          ? `) ${checkedResponseResult.correctAnswerText}`
-                          : ''}
+                        {optionTextByLabel(checkedResponseResult.correctAnswerLabel)
+                          ? `) ${optionTextByLabel(checkedResponseResult.correctAnswerLabel)}`
+                          : checkedResponseResult.correctAnswerText
+                            ? `) ${checkedResponseResult.correctAnswerText}`
+                            : ''}
                       </>
                     ) : (
                       <span>{checkedResponseResult.correctAnswerText || '(not set)'}</span>

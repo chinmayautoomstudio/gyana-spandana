@@ -47,6 +47,7 @@ interface DirectQuestionControlsProps {
     correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     correctAnswerText: string | null
   } | null
+  questionLanguage?: 'en' | 'odia'
 }
 
 export function DirectQuestionControls({
@@ -74,7 +75,29 @@ export function DirectQuestionControls({
   teamDisplayNames,
   pendingDirectAnswer = null,
   checkedResponseResult = null,
+  questionLanguage = 'en',
 }: DirectQuestionControlsProps) {
+  const pickText = (
+    english: string | null | undefined,
+    odia: string | null | undefined,
+  ) => {
+    const en = String(english || '').trim()
+    const od = String(odia || '').trim()
+    return questionLanguage === 'odia' ? od || en : en || od
+  }
+  const optionTextByLabel = (label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null) => {
+    if (!label || !question) return ''
+    if (label === 'TRUE') return pickText('TRUE', question.option_a_odia)
+    if (label === 'FALSE') return pickText('FALSE', question.option_b_odia)
+    const key = `option_${label.toLowerCase()}` as 'option_a' | 'option_b' | 'option_c' | 'option_d'
+    const keyOdia =
+      `option_${label.toLowerCase()}_odia` as
+        | 'option_a_odia'
+        | 'option_b_odia'
+        | 'option_c_odia'
+        | 'option_d_odia'
+    return pickText(question[key], question[keyOdia])
+  }
   const isDirectRound = roundType === 'direct_question'
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('')
   const effectiveSelectedQuestionId = useMemo(() => {
@@ -211,6 +234,7 @@ export function DirectQuestionControls({
             showOptions={Boolean(isAdjudicating) || (showLegacyMcq && showOptions)}
             readOnly
             revealCorrectAnswer={revealCorrect}
+            language={questionLanguage}
           />
 
           {isAdjudicating ? (
@@ -226,8 +250,8 @@ export function DirectQuestionControls({
                       {pendingDirectAnswer.answer_option_label ? (
                         <p className="mt-1 whitespace-pre-wrap text-gray-700">
                           Selected option: <span className="font-semibold">{pendingDirectAnswer.answer_option_label}</span>
-                          {pendingDirectAnswer.answer_option_text
-                            ? `) ${pendingDirectAnswer.answer_option_text}`
+                          {optionTextByLabel(pendingDirectAnswer.answer_option_label)
+                            ? `) ${optionTextByLabel(pendingDirectAnswer.answer_option_label)}`
                             : ''}
                         </p>
                       ) : (
@@ -265,9 +289,11 @@ export function DirectQuestionControls({
                       {checkedResponseResult.correctAnswerLabel ? (
                         <>
                           <span className="font-semibold">{checkedResponseResult.correctAnswerLabel}</span>
-                          {checkedResponseResult.correctAnswerText
-                            ? `) ${checkedResponseResult.correctAnswerText}`
-                            : ''}
+                          {optionTextByLabel(checkedResponseResult.correctAnswerLabel)
+                            ? `) ${optionTextByLabel(checkedResponseResult.correctAnswerLabel)}`
+                            : checkedResponseResult.correctAnswerText
+                              ? `) ${checkedResponseResult.correctAnswerText}`
+                              : ''}
                         </>
                       ) : (
                         <span>{checkedResponseResult.correctAnswerText || '(not set)'}</span>

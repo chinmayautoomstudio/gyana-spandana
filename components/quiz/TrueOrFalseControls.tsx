@@ -35,6 +35,7 @@ interface TrueOrFalseControlsProps {
     correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     correctAnswerText: string | null
   } | null
+  questionLanguage?: 'en' | 'odia'
 }
 
 export function TrueOrFalseControls({
@@ -56,7 +57,21 @@ export function TrueOrFalseControls({
   teamDisplayNames,
   pendingDirectAnswer = null,
   checkedResponseResult = null,
+  questionLanguage = 'en',
 }: TrueOrFalseControlsProps) {
+  const pickText = (
+    english: string | null | undefined,
+    odia: string | null | undefined,
+  ) => {
+    const en = String(english || '').trim()
+    const od = String(odia || '').trim()
+    return questionLanguage === 'odia' ? od || en : en || od
+  }
+  const tfTextByLabel = (label: 'TRUE' | 'FALSE' | null | undefined) => {
+    if (!label) return ''
+    if (label === 'TRUE') return pickText('TRUE', question?.option_a_odia)
+    return pickText('FALSE', question?.option_b_odia)
+  }
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('')
   const teamChoices = selectableTeams.length > 0 ? selectableTeams : (['A', 'B', 'C', 'D'] as TeamLabel[])
   const isIdle = !event || event.status === 'answered' || event.status === 'dropped'
@@ -151,7 +166,13 @@ export function TrueOrFalseControls({
         </div>
       ) : (
         <>
-          <QuestionDisplay question={question} showOptions={showOptions} readOnly revealCorrectAnswer={revealCorrect} />
+          <QuestionDisplay
+            question={question}
+            showOptions={showOptions}
+            readOnly
+            revealCorrectAnswer={revealCorrect}
+            language={questionLanguage}
+          />
 
           {showOptions && !revealCorrect ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
@@ -160,7 +181,10 @@ export function TrueOrFalseControls({
                 <div className="rounded-lg border border-amber-300 bg-white p-3 text-sm">
                   <p className="font-medium text-gray-800">Team {pendingDirectAnswer.team_label} submitted:</p>
                   <p className="mt-1 text-gray-900 font-semibold">
-                    {pendingDirectAnswer.answer_option_label || pendingDirectAnswer.answer_text || '(empty)'}
+                    {pendingDirectAnswer.answer_option_label === 'TRUE' ||
+                    pendingDirectAnswer.answer_option_label === 'FALSE'
+                      ? tfTextByLabel(pendingDirectAnswer.answer_option_label)
+                      : pendingDirectAnswer.answer_option_label || pendingDirectAnswer.answer_text || '(empty)'}
                   </p>
                 </div>
               ) : (
@@ -175,9 +199,12 @@ export function TrueOrFalseControls({
                   <p className="mt-1">
                     Correct answer:{' '}
                     <span className="font-semibold">
-                      {checkedResponseResult.correctAnswerLabel ||
-                        checkedResponseResult.correctAnswerText ||
-                        '(not set)'}
+                      {checkedResponseResult.correctAnswerLabel === 'TRUE' ||
+                      checkedResponseResult.correctAnswerLabel === 'FALSE'
+                        ? tfTextByLabel(checkedResponseResult.correctAnswerLabel)
+                        : checkedResponseResult.correctAnswerLabel ||
+                          checkedResponseResult.correctAnswerText ||
+                          '(not set)'}
                     </span>
                   </p>
                 </div>

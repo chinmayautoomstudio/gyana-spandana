@@ -53,6 +53,7 @@ export default function HostSessionPage() {
   const [selectedTeam, setSelectedTeam] = useState<TeamLabel>('A')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [questionLanguage, setQuestionLanguage] = useState<'en' | 'odia'>('en')
   const [checkedResponseResult, setCheckedResponseResult] = useState<{
     verdict: 'correct' | 'wrong'
     correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
@@ -341,7 +342,27 @@ export default function HostSessionPage() {
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">{state.session.title}</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white">
+            <button
+              type="button"
+              className={`px-3 py-2 text-sm font-medium ${
+                questionLanguage === 'en' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              onClick={() => setQuestionLanguage('en')}
+            >
+              English
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-2 text-sm font-medium ${
+                questionLanguage === 'odia' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              onClick={() => setQuestionLanguage('odia')}
+            >
+              Odia
+            </button>
+          </div>
           <button
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 disabled:text-gray-400"
             onClick={() => activeRound && runAction('end_round', { roundId: activeRound.id })}
@@ -466,6 +487,7 @@ export default function HostSessionPage() {
                   teamDisplayNames={teamNames}
                   pendingDirectAnswer={state.pendingDirectAnswer ?? null}
                   checkedResponseResult={checkedResponseResult}
+                  questionLanguage={questionLanguage}
                 />
               ) : activeRound.round_type === 'true_or_false' ? (
                 <TrueOrFalseControls
@@ -519,6 +541,7 @@ export default function HostSessionPage() {
                   teamDisplayNames={teamNames}
                   pendingDirectAnswer={state.pendingDirectAnswer ?? null}
                   checkedResponseResult={checkedResponseResult}
+                  questionLanguage={questionLanguage}
                 />
               ) : activeRound.round_type === 'rapid_fire' ? (
                 <RapidFireControls
@@ -554,6 +577,7 @@ export default function HostSessionPage() {
                     })
                   }
                   teamDisplayNames={teamNames}
+                  questionLanguage={questionLanguage}
                 />
               ) : activeRound.round_type === 'buzzer' ? (
                 <BuzzerControls
@@ -596,6 +620,7 @@ export default function HostSessionPage() {
                     state.currentQuestionEvent &&
                     runAction('close_buzzer', { questionEventId: state.currentQuestionEvent.id })
                   }
+                  questionLanguage={questionLanguage}
                 />
               ) : (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">

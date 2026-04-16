@@ -5,10 +5,15 @@ interface QuestionDisplayProps {
   question: {
     id: string
     question_text: string
+    question_text_odia?: string | null
     option_a?: string | null
     option_b?: string | null
     option_c?: string | null
     option_d?: string | null
+    option_a_odia?: string | null
+    option_b_odia?: string | null
+    option_c_odia?: string | null
+    option_d_odia?: string | null
     question_type?: string | null
     correct_answer?: string | null
   } | null
@@ -20,12 +25,25 @@ interface QuestionDisplayProps {
   revealCorrectAnswer?: boolean
   selectedMcqOption?: 'A' | 'B' | 'C' | 'D' | null
   onMcqOptionSelect?: (value: 'A' | 'B' | 'C' | 'D') => void
+  language?: 'en' | 'odia'
+}
+
+function localizedText(
+  language: 'en' | 'odia',
+  english: string | null | undefined,
+  odia: string | null | undefined,
+): string {
+  const en = String(english || '').trim()
+  const od = String(odia || '').trim()
+  if (language === 'odia') return od || en
+  return en || od
 }
 
 function formatCorrectAnswerLabel(
   questionType: string | null | undefined,
   correct: string | null | undefined,
   question: QuestionDisplayProps['question'],
+  language: 'en' | 'odia',
 ): string {
   if (!correct || !question) return ''
   if (questionType === 'true_false') {
@@ -34,8 +52,15 @@ function formatCorrectAnswerLabel(
   const letter = correct.trim().toUpperCase().charAt(0)
   if (letter === 'A' || letter === 'B' || letter === 'C' || letter === 'D') {
     const key = `option_${letter.toLowerCase()}` as keyof typeof question
+    const keyOdia = `option_${letter.toLowerCase()}_odia` as keyof typeof question
     const opt = question[key]
-    if (typeof opt === 'string' && opt.trim()) return `${letter}) ${opt}`
+    const optOdia = question[keyOdia]
+    const localized = localizedText(
+      language,
+      typeof opt === 'string' ? opt : null,
+      typeof optOdia === 'string' ? optOdia : null,
+    )
+    if (localized) return `${letter}) ${localized}`
     return letter
   }
   return correct
@@ -50,6 +75,7 @@ export function QuestionDisplay({
   revealCorrectAnswer = false,
   selectedMcqOption = null,
   onMcqOptionSelect,
+  language = 'en',
 }: QuestionDisplayProps) {
   if (!question) {
     return (
@@ -62,11 +88,11 @@ export function QuestionDisplay({
   if (!showOptions) {
     const highlight =
       revealCorrectAnswer && question.correct_answer
-        ? formatCorrectAnswerLabel(question.question_type, question.correct_answer, question)
+        ? formatCorrectAnswerLabel(question.question_type, question.correct_answer, question, language)
         : ''
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-900 space-y-4">
-        <FormattedQuestionText text={question.question_text} />
+        <FormattedQuestionText text={localizedText(language, question.question_text, question.question_text_odia)} />
         {highlight ? (
           <div className="rounded-lg border-2 border-green-600 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
             Correct answer: {highlight}
@@ -83,9 +109,11 @@ export function QuestionDisplay({
           ? 'TRUE'
           : 'FALSE'
         : null
+    const trueLabel = localizedText(language, 'TRUE', question.option_a_odia)
+    const falseLabel = localizedText(language, 'FALSE', question.option_b_odia)
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-900 space-y-4">
-        <FormattedQuestionText text={question.question_text} />
+        <FormattedQuestionText text={localizedText(language, question.question_text, question.question_text_odia)} />
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
@@ -99,7 +127,7 @@ export function QuestionDisplay({
                   : 'border-gray-200 bg-white text-gray-800'
             } ${readOnly ? 'cursor-not-allowed opacity-70' : 'hover:bg-gray-50'}`}
           >
-            TRUE
+            {trueLabel}
           </button>
           <button
             type="button"
@@ -113,7 +141,7 @@ export function QuestionDisplay({
                   : 'border-gray-200 bg-white text-gray-800'
             } ${readOnly ? 'cursor-not-allowed opacity-70' : 'hover:bg-gray-50'}`}
           >
-            FALSE
+            {falseLabel}
           </button>
         </div>
       </div>
@@ -130,11 +158,11 @@ export function QuestionDisplay({
     <MCQQuestion
       question={{
         id: question.id,
-        question_text: question.question_text,
-        option_a: question.option_a || '',
-        option_b: question.option_b || '',
-        option_c: question.option_c || '',
-        option_d: question.option_d || '',
+        question_text: localizedText(language, question.question_text, question.question_text_odia),
+        option_a: localizedText(language, question.option_a, question.option_a_odia),
+        option_b: localizedText(language, question.option_b, question.option_b_odia),
+        option_c: localizedText(language, question.option_c, question.option_c_odia),
+        option_d: localizedText(language, question.option_d, question.option_d_odia),
         correct_answer: mcqCorrect,
         points: 1,
       }}

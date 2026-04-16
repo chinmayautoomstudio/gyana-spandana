@@ -18,6 +18,7 @@ interface RapidFireControlsProps {
   onWrong: () => void
   onEndTurn: () => void
   teamDisplayNames?: Record<TeamLabel, string>
+  questionLanguage?: 'en' | 'odia'
 }
 
 export function RapidFireControls({
@@ -32,6 +33,7 @@ export function RapidFireControls({
   onWrong,
   onEndTurn,
   teamDisplayNames,
+  questionLanguage = 'en',
 }: RapidFireControlsProps) {
   const [durationSeconds, setDurationSeconds] = useState<number>(Number(round?.rapid_fire_duration_seconds || 45))
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0)
@@ -152,7 +154,13 @@ export function RapidFireControls({
         <>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="mb-2 text-sm text-gray-600">{teamLabelText} is answering</p>
-            <QuestionDisplay question={question} showOptions readOnly revealCorrectAnswer />
+            <QuestionDisplay
+              question={question}
+              showOptions
+              readOnly
+              revealCorrectAnswer
+              language={questionLanguage}
+            />
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleCorrect} isLoading={busy} disabled={!isQuestionActive || remainingSeconds <= 0}>

@@ -33,6 +33,7 @@ export default function ParticipantPlayPage() {
   const [rapidFireRemaining, setRapidFireRemaining] = useState<number | null>(null)
   const [buzzerPressedForEventId, setBuzzerPressedForEventId] = useState<string | null>(null)
   const [myBuzzOrder, setMyBuzzOrder] = useState<number | null>(null)
+  const [questionLanguage, setQuestionLanguage] = useState<'en' | 'odia'>('en')
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
@@ -378,17 +379,57 @@ export default function ParticipantPlayPage() {
   const onTrueFalseSelect = (value: 'TRUE' | 'FALSE') => {
     setSelectedTrueFalse(value)
   }
+  const localizedText = (english: string | null | undefined, odia: string | null | undefined) => {
+    const en = String(english || '').trim()
+    const od = String(odia || '').trim()
+    return questionLanguage === 'odia' ? od || en : en || od
+  }
+  const localizedOptionText = (label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null) => {
+    if (!label || !state?.currentQuestion) return ''
+    if (label === 'TRUE') return localizedText('TRUE', state.currentQuestion.option_a_odia)
+    if (label === 'FALSE') return localizedText('FALSE', state.currentQuestion.option_b_odia)
+    const key = `option_${label.toLowerCase()}` as 'option_a' | 'option_b' | 'option_c' | 'option_d'
+    const keyOdia =
+      `option_${label.toLowerCase()}_odia` as
+        | 'option_a_odia'
+        | 'option_b_odia'
+        | 'option_c_odia'
+        | 'option_d_odia'
+    return localizedText(state.currentQuestion[key], state.currentQuestion[keyOdia])
+  }
 
   return (
     <div className="min-h-screen w-full bg-white px-4 py-6 sm:px-6">
       <div className="mx-auto w-full max-w-4xl space-y-4">
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-        {state.session.is_test_session ? (
+          <div className="mb-3 flex items-center justify-end">
+            <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white">
+              <button
+                type="button"
+                className={`px-3 py-2 text-sm font-medium ${
+                  questionLanguage === 'en' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                onClick={() => setQuestionLanguage('en')}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-2 text-sm font-medium ${
+                  questionLanguage === 'odia' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                onClick={() => setQuestionLanguage('odia')}
+              >
+                Odia
+              </button>
+            </div>
+          </div>
+          {state.session.is_test_session ? (
             <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
             Test session — rehearsal run; not a scored competition round.
             </div>
-        ) : null}
+          ) : null}
           <p className="text-sm text-gray-500">Session</p>
           <h1 className="text-2xl font-bold text-gray-900">{state.session.title}</h1>
           <p className="text-sm text-gray-600">
@@ -427,6 +468,7 @@ export default function ParticipantPlayPage() {
             onTrueFalseSelect={onTrueFalseSelect}
             revealCorrectAnswer={revealCorrect}
             selectedMcqOption={selectedDirectOption}
+            language={questionLanguage}
             onMcqOptionSelect={(value) => {
               if (rapidFirePhaseOpen) setSelectedDirectOption(value)
             }}
@@ -490,10 +532,10 @@ export default function ParticipantPlayPage() {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="list">
                   {(
                     [
-                      { key: 'A' as const, text: state.currentQuestion.option_a },
-                      { key: 'B' as const, text: state.currentQuestion.option_b },
-                      { key: 'C' as const, text: state.currentQuestion.option_c },
-                      { key: 'D' as const, text: state.currentQuestion.option_d },
+                      { key: 'A' as const, text: localizedOptionText('A') },
+                      { key: 'B' as const, text: localizedOptionText('B') },
+                      { key: 'C' as const, text: localizedOptionText('C') },
+                      { key: 'D' as const, text: localizedOptionText('D') },
                     ] as const
                   ).map(({ key, text }) => {
                     const isChosen = key === submittedLetter
@@ -542,10 +584,10 @@ export default function ParticipantPlayPage() {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(
                     [
-                      { key: 'A' as const, text: state.currentQuestion.option_a },
-                      { key: 'B' as const, text: state.currentQuestion.option_b },
-                      { key: 'C' as const, text: state.currentQuestion.option_c },
-                      { key: 'D' as const, text: state.currentQuestion.option_d },
+                      { key: 'A' as const, text: localizedOptionText('A') },
+                      { key: 'B' as const, text: localizedOptionText('B') },
+                      { key: 'C' as const, text: localizedOptionText('C') },
+                      { key: 'D' as const, text: localizedOptionText('D') },
                     ] as const
                   ).map(({ key, text }) => (
                     <button
@@ -632,10 +674,10 @@ export default function ParticipantPlayPage() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="list">
                     {(
                       [
-                        { key: 'A' as const, text: state.currentQuestion.option_a },
-                        { key: 'B' as const, text: state.currentQuestion.option_b },
-                        { key: 'C' as const, text: state.currentQuestion.option_c },
-                        { key: 'D' as const, text: state.currentQuestion.option_d },
+                        { key: 'A' as const, text: localizedOptionText('A') },
+                        { key: 'B' as const, text: localizedOptionText('B') },
+                        { key: 'C' as const, text: localizedOptionText('C') },
+                        { key: 'D' as const, text: localizedOptionText('D') },
                       ] as const
                     ).map(({ key, text }) => {
                       const isChosen = key === submittedLetter
@@ -696,8 +738,7 @@ export default function ParticipantPlayPage() {
                 </div>
                 {selectedDirectOption ? (
                   <p className="text-xs text-gray-600">
-                    Selected: {selectedDirectOption}){' '}
-                    {state.currentQuestion?.[`option_${selectedDirectOption.toLowerCase()}`] || '(Not set)'}
+                    Selected: {selectedDirectOption}) {localizedOptionText(selectedDirectOption) || '(Not set)'}
                   </p>
                 ) : null}
                 <Button onClick={() => void submitDirectAnswer()} isLoading={answerBusy} disabled={!selectedDirectOption}>
