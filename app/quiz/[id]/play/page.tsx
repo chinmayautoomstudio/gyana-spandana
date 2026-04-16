@@ -318,6 +318,17 @@ export default function ParticipantPlayPage() {
               </p>
             ) : hasFinalVerdict && submittedLetter ? (
               <>
+                <div
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                    verdict === 'correct'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                      : 'border-red-200 bg-red-50 text-red-950'
+                  }`}
+                >
+                  {verdict === 'correct'
+                    ? 'Your response has been checked — Correct.'
+                    : 'Your response has been checked — Wrong. The correct answer has not been revealed yet.'}
+                </div>
                 <p className="text-sm font-medium text-gray-800">Your answer (direct question)</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="list">
                   {(
@@ -356,12 +367,6 @@ export default function ParticipantPlayPage() {
                       >
                         <span className="font-semibold">{key}) </span>
                         <span>{text || '(Not set)'}</span>
-                        {correct ? (
-                          <span className="ml-2 text-xs font-semibold text-emerald-700">Correct</span>
-                        ) : null}
-                        {incorrect ? (
-                          <span className="ml-2 text-xs font-semibold text-red-700">Incorrect</span>
-                        ) : null}
                       </div>
                     )
                   })}

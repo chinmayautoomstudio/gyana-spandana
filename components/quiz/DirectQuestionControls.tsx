@@ -191,50 +191,65 @@ export function DirectQuestionControls({
           />
 
           {isAdjudicating ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-              <p className="text-sm font-semibold text-amber-950">Direct question — adjudication</p>
-              {pendingDirectAnswer ? (
-                <div className="rounded-lg border border-amber-300 bg-white p-3 text-sm">
-                  <p className="font-medium text-gray-800">
-                    Team {pendingDirectAnswer.team_label} answer
-                  </p>
-                  {pendingDirectAnswer.answer_option_label ? (
-                    <p className="mt-1 whitespace-pre-wrap text-gray-700">
-                      Selected option: <span className="font-semibold">{pendingDirectAnswer.answer_option_label}</span>
-                      {pendingDirectAnswer.answer_option_text
-                        ? `) ${pendingDirectAnswer.answer_option_text}`
-                        : ''}
-                    </p>
-                  ) : (
-                    <p className="mt-1 whitespace-pre-wrap text-gray-700">
-                      {pendingDirectAnswer.answer_text || '(empty)'}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-amber-900">Waiting for the team to submit an answer…</p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={onJudgeCorrect} isLoading={busy} disabled={!pendingDirectAnswer}>
-                  Correct (award points)
-                </Button>
-                <Button variant="secondary" onClick={onJudgeWrong} isLoading={busy} disabled={!pendingDirectAnswer}>
-                  Wrong
-                </Button>
-                <Button variant="outline" onClick={onPassDirect} isLoading={busy}>
-                  Pass to next team
-                </Button>
-                <Button variant="outline" onClick={onRevealCorrectAnswer} isLoading={busy}>
-                  Reveal correct answer
-                </Button>
-                <Button variant="ghost" onClick={onSkip} isLoading={busy}>
-                  Skip question
-                </Button>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-amber-950">Direct question — check response</p>
+                {pendingDirectAnswer ? (
+                  <>
+                    <div className="rounded-lg border border-amber-300 bg-white p-3 text-sm">
+                      <p className="font-medium text-gray-800">
+                        Team {pendingDirectAnswer.team_label} answer
+                      </p>
+                      {pendingDirectAnswer.answer_option_label ? (
+                        <p className="mt-1 whitespace-pre-wrap text-gray-700">
+                          Selected option: <span className="font-semibold">{pendingDirectAnswer.answer_option_label}</span>
+                          {pendingDirectAnswer.answer_option_text
+                            ? `) ${pendingDirectAnswer.answer_option_text}`
+                            : ''}
+                        </p>
+                      ) : (
+                        <p className="mt-1 whitespace-pre-wrap text-gray-700">
+                          {pendingDirectAnswer.answer_text || '(empty)'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={onJudgeCorrect} isLoading={busy}>
+                        Check: Correct
+                      </Button>
+                      <Button variant="secondary" onClick={onJudgeWrong} isLoading={busy}>
+                        Check: Wrong
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-amber-900">Waiting for the team to submit an answer…</p>
+                )}
               </div>
-              <p className="text-xs text-amber-900">
-                Wrong does not show the answer. Use Pass after Wrong to move to the next team (half marks on a
-                later correct answer). Reveal is only after every team has been marked wrong.
-              </p>
+
+              <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-900">Round controls</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={onPassDirect} isLoading={busy}>
+                    Pass to next team
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={onRevealCorrectAnswer}
+                    isLoading={busy}
+                    disabled={Boolean(pendingDirectAnswer)}
+                  >
+                    Reveal correct answer
+                  </Button>
+                  <Button variant="ghost" onClick={onSkip} isLoading={busy}>
+                    Skip question
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-600">
+                  Check the pending response first, then use Pass/Reveal/Skip. Reveal is only after every team has
+                  been marked wrong.
+                </p>
+              </div>
             </div>
           ) : showLegacyMcq ? (
             <div className="flex flex-wrap gap-2">
