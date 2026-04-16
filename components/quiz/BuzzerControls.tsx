@@ -81,7 +81,37 @@ export function BuzzerControls({
   return (
     <section className="space-y-4">
       {isIdle ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+          {checkedResponseResult ? (
+            <div
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                checkedResponseResult.verdict === 'correct'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                  : 'border-red-200 bg-red-50 text-red-950'
+              }`}
+            >
+              <p className="font-semibold">
+                Checked result: {checkedResponseResult.verdict === 'correct' ? 'Correct' : 'Wrong'}
+              </p>
+              {(checkedResponseResult.correctAnswerLabel || checkedResponseResult.correctAnswerText) && (
+                <p className="mt-1 text-xs">
+                  Official answer:{' '}
+                  {checkedResponseResult.correctAnswerLabel ? (
+                    <>
+                      <span className="font-semibold">{checkedResponseResult.correctAnswerLabel}</span>
+                      {optionTextByLabel(checkedResponseResult.correctAnswerLabel)
+                        ? `) ${optionTextByLabel(checkedResponseResult.correctAnswerLabel)}`
+                        : checkedResponseResult.correctAnswerText
+                          ? `) ${checkedResponseResult.correctAnswerText}`
+                          : ''}
+                    </>
+                  ) : (
+                    <span>{checkedResponseResult.correctAnswerText || '(not set)'}</span>
+                  )}
+                </p>
+              )}
+            </div>
+          ) : null}
           <p className="mb-3 text-sm text-gray-600">Buzzer round is ready for the next question.</p>
           <Button onClick={onNextQuestion} isLoading={busy}>
             Next Question
