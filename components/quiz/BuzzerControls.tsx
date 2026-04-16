@@ -135,7 +135,7 @@ export function BuzzerControls({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={onCheckResponse} isLoading={busy} disabled={!isBuzzerOpen || !activeTeam || !pendingBuzzerAnswer}>
+            <Button onClick={onCheckResponse} isLoading={busy} disabled={!isBuzzerOpen || !activeTeam}>
               Check Response
             </Button>
             <Button onClick={onMarkCorrect} isLoading={busy} disabled={!isBuzzerOpen || !activeTeam}>

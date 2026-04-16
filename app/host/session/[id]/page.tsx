@@ -94,12 +94,23 @@ export default function HostSessionPage() {
             : null
         return {
           ...prev,
-          pendingDirectAnswer: {
-            team_label: payload.teamLabel,
-            answer_text: raw,
-            answer_option_label: optionLabel || tfLabel,
-            answer_option_text: optionText,
-          },
+          ...(prev.activeRound?.round_type === 'buzzer'
+            ? {
+                pendingBuzzerAnswer: {
+                  team_label: payload.teamLabel,
+                  answer_text: raw,
+                  answer_option_label: optionLabel || tfLabel,
+                  answer_option_text: optionText,
+                },
+              }
+            : {
+                pendingDirectAnswer: {
+                  team_label: payload.teamLabel,
+                  answer_text: raw,
+                  answer_option_label: optionLabel || tfLabel,
+                  answer_option_text: optionText,
+                },
+              }),
         }
       })
       void fetchState()
