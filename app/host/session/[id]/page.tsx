@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -62,6 +62,7 @@ export default function HostSessionPage() {
   const [buzzEvents, setBuzzEvents] = useState<
     Array<{ id: string; team_label: TeamLabel; buzz_order: number | null; buzzed_at?: string | null }>
   >([])
+  const lastQuestionEventIdRef = useRef<string | null>(null)
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
@@ -277,15 +278,23 @@ export default function HostSessionPage() {
   }
 
   useEffect(() => {
-    setCheckedResponseResult(null)
+    const currentId = state?.currentQuestionEvent?.id ?? null
+    const previousId = lastQuestionEventIdRef.current
+    if (previousId && currentId && previousId !== currentId) {
+      setCheckedResponseResult(null)
+    }
+    lastQuestionEventIdRef.current = currentId
   }, [state?.currentQuestionEvent?.id])
   useEffect(() => {
     setBuzzEvents([])
   }, [state?.currentQuestionEvent?.id])
 
   useEffect(() => {
-    setCheckedResponseResult(null)
-  }, [state?.currentQuestionEvent?.directed_team])
+    if (!state?.currentQuestionEvent?.directed_team) return
+    if (state.currentQuestionEvent.status === 'revealed' || state.currentQuestionEvent.status === 'options_revealed') {
+      setCheckedResponseResult(null)
+    }
+  }, [state?.currentQuestionEvent?.id, state?.currentQuestionEvent?.directed_team, state?.currentQuestionEvent?.status])
 
   const checkResponse = async () => {
     if (!state?.currentQuestionEvent) return

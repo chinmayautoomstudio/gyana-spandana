@@ -107,6 +107,28 @@ export function TrueOrFalseControls({
 
       {isIdle ? (
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+          {checkedResponseResult ? (
+            <div
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                checkedResponseResult.verdict === 'correct'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                  : 'border-red-200 bg-red-50 text-red-950'
+              }`}
+            >
+              <p className="font-semibold">
+                Checked result: {checkedResponseResult.verdict === 'correct' ? 'Correct' : 'Wrong'}
+              </p>
+              <p className="mt-1">
+                Official answer:{' '}
+                <span className="font-semibold">
+                  {checkedResponseResult.correctAnswerLabel === 'TRUE' ||
+                  checkedResponseResult.correctAnswerLabel === 'FALSE'
+                    ? tfTextByLabel(checkedResponseResult.correctAnswerLabel)
+                    : checkedResponseResult.correctAnswerLabel || checkedResponseResult.correctAnswerText || '(not set)'}
+                </span>
+              </p>
+            </div>
+          ) : null}
           <p className="text-sm font-medium text-gray-700">Choose directed team for the next question</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {teamChoices.map((label) => (
