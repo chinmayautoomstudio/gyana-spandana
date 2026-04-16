@@ -543,7 +543,7 @@ export async function PATCH(
         .insert({
           round_id: roundId,
           question_id: question.id,
-          status: round.round_type === 'buzzer' ? 'buzzer_open' : 'revealed',
+          status: 'revealed',
           directed_team: directedTeam,
           attempt_number: 1,
         })

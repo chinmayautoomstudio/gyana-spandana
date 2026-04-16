@@ -589,6 +589,10 @@ export default function HostSessionPage() {
                       directedTeam: selectedTeam,
                     })
                   }
+                  onOpenBuzzer={() =>
+                    state.currentQuestionEvent &&
+                    runAction('open_buzzer', { questionEventId: state.currentQuestionEvent.id })
+                  }
                   onCheckResponse={() => void checkResponse()}
                   onMarkCorrect={() =>
                     state.currentQuestionEvent &&
