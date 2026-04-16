@@ -28,6 +28,7 @@ export default function PublicSessionLeaderboardPage() {
   const [title, setTitle] = useState('Live Leaderboard')
   const [roundName, setRoundName] = useState('Waiting')
   const [isTestSession, setIsTestSession] = useState(false)
+  const [teamDisplayNames, setTeamDisplayNames] = useState<Partial<Record<TeamLabel, string>>>({})
   const [rows, setRows] = useState<ScoreRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +49,13 @@ export default function PublicSessionLeaderboardPage() {
     if (sessionRes.ok) {
       setTitle(sessionData?.session?.title || 'Live Leaderboard')
       setIsTestSession(Boolean(sessionData?.session?.is_test_session))
+      const names = (sessionData?.team_display_names || {}) as Record<string, string>
+      setTeamDisplayNames({
+        A: String(names.A || '').trim() || 'A',
+        B: String(names.B || '').trim() || 'B',
+        C: String(names.C || '').trim() || 'C',
+        D: String(names.D || '').trim() || 'D',
+      })
       setRoundName(
         sessionData?.activeRound?.title ||
           sessionData?.activeRound?.round_type ||
@@ -140,7 +148,7 @@ export default function PublicSessionLeaderboardPage() {
             >
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-lg font-semibold text-gray-900">
-                  {medal} Team {row.team_label}
+                  {medal} {teamDisplayNames[row.team_label] || row.team_label}
                 </p>
                 <p className="text-2xl font-bold text-[#C0392B]">
                   {row.total_score} pts

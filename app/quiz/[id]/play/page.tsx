@@ -217,6 +217,21 @@ export default function ParticipantPlayPage() {
 
   if (!state) return null
 
+  if (state.session?.status === 'completed') {
+    return (
+      <div className="min-h-screen w-full bg-white px-4 py-6 sm:px-6">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-center">
+          <div className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
+            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">Session Complete</p>
+            <h1 className="mt-2 text-2xl font-bold text-emerald-950">{state.session.title}</h1>
+            <p className="mt-4 text-base text-emerald-900">Thank you for participating in Gyana Spardha.</p>
+            <p className="mt-2 text-sm text-emerald-800">We appreciate your time and enthusiasm.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const directedTeam = (state.currentQuestionEvent?.directed_team || null) as TeamLabel | null
   const isMyTurn = Boolean(directedTeam && myTeamLabel && directedTeam === myTeamLabel)
   const isDirectRound = state.activeRound?.round_type === 'direct_question'

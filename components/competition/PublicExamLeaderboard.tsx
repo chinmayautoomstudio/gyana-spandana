@@ -16,7 +16,7 @@ export interface TeamScoreRow {
   participant2_score: number
   total_team_score: number
   rank: number | null
-  teams: { team_name: string } | null
+  team_name?: string | null
 }
 
 type PublicExamLeaderboardProps = {
@@ -59,14 +59,29 @@ export function PublicExamLeaderboard({
     try {
       const { data, error: qError } = await supabase
         .from('team_scores')
-        .select(
-          'id, team_id, exam_id, participant1_score, participant2_score, total_team_score, rank, teams(team_name)',
-        )
+        .select('id, team_id, exam_id, participant1_score, participant2_score, total_team_score, rank')
         .eq('exam_id', selectedExamId)
         .order('total_team_score', { ascending: false })
 
       if (qError) throw qError
-      setRows((data || []) as unknown as TeamScoreRow[])
+      const rawRows = (data || []) as unknown as TeamScoreRow[]
+      const teamIds = [...new Set(rawRows.map((row) => row.team_id).filter(Boolean))]
+      let nameById = new Map<string, string>()
+
+      if (teamIds.length > 0) {
+        const { data: teamRows } = await supabase.from('teams').select('id,team_name').in('id', teamIds)
+        nameById = new Map(
+          (teamRows || [])
+            .filter((row) => row?.id)
+            .map((row) => [String(row.id), String(row.team_name || '').trim()]),
+        )
+      }
+
+      const normalized = rawRows.map((row) => ({
+        ...row,
+        team_name: nameById.get(String(row.team_id || '')) || null,
+      }))
+      setRows(normalized)
       setLastUpdatedAt(new Date())
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load scores')
@@ -266,7 +281,7 @@ export function PublicExamLeaderboard({
                           {medal} #{rank}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{row.teams?.team_name ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{row.team_name || 'A/B/C'}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-700">{row.participant1_score}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-700">{row.participant2_score}</td>
                       <td className="px-4 py-3 text-right text-lg font-bold tabular-nums text-[#C0392B]">
@@ -291,7 +306,7 @@ export function PublicExamLeaderboard({
                       <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-[#C0392B]">
                         {medal} Rank #{rank}
                       </span>
-                      <p className="mt-2 text-base font-semibold text-gray-900">{row.teams?.team_name ?? 'Team'}</p>
+                      <p className="mt-2 text-base font-semibold text-gray-900">{row.team_name || 'A/B/C'}</p>
                     </div>
                     <p className="text-2xl font-bold text-[#C0392B]">{row.total_team_score}</p>
                   </div>

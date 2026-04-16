@@ -21,12 +21,7 @@ interface TeamScore {
   participant2_score: number
   total_team_score: number
   rank: number | null
-  teams: {
-    team_name: string
-  }
-  exams: {
-    title: string
-  }
+  team_name?: string | null
 }
 
 interface Exam {
@@ -59,6 +54,7 @@ export default function LeaderboardPage() {
     string | null
   >(null)
   const [liveScores, setLiveScores] = useState<LiveScoreRow[]>([])
+  const [liveTeamNames, setLiveTeamNames] = useState<Partial<Record<'A' | 'B' | 'C' | 'D', string>>>({})
   const [loading, setLoading] = useState(true)
 
   const [lastExamUpdatedAt, setLastExamUpdatedAt] = useState<Date | null>(null)
@@ -97,7 +93,7 @@ export default function LeaderboardPage() {
     if (!selectedExamId) return
     const { data, error } = await supabase
       .from('team_scores')
-      .select('*, teams(team_name), exams(title)')
+      .select('id, team_id, exam_id, participant1_score, participant2_score, total_team_score, rank')
       .eq('exam_id', selectedExamId)
       .order('total_team_score', { ascending: false })
       .order('rank', { ascending: true })
@@ -105,10 +101,47 @@ export default function LeaderboardPage() {
     if (error) {
       console.error('Error fetching leaderboard:', error)
     } else {
-      setTeamScores(data || [])
+      const rawRows = (data || []) as TeamScore[]
+      const teamIds = [...new Set(rawRows.map((row) => row.team_id).filter(Boolean))]
+      let nameById = new Map<string, string>()
+      if (teamIds.length > 0) {
+        const { data: teams } = await supabase.from('teams').select('id,team_name').in('id', teamIds)
+        nameById = new Map(
+          (teams || [])
+            .filter((row) => row?.id)
+            .map((row) => [String(row.id), String(row.team_name || '').trim()]),
+        )
+      }
+      setTeamScores(
+        rawRows.map((row) => ({
+          ...row,
+          team_name: nameById.get(String(row.team_id || '')) || null,
+        })),
+      )
     }
     setLastExamUpdatedAt(new Date())
   }, [selectedExamId, supabase])
+
+  const fetchLiveTeamNames = useCallback(async () => {
+    if (!selectedLiveSessionId) {
+      setLiveTeamNames({})
+      return
+    }
+    try {
+      const res = await fetch(`/api/quiz/session/${selectedLiveSessionId}`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return
+      const names = (data?.team_display_names || {}) as Record<string, string>
+      setLiveTeamNames({
+        A: String(names.A || '').trim() || 'A',
+        B: String(names.B || '').trim() || 'B',
+        C: String(names.C || '').trim() || 'C',
+        D: String(names.D || '').trim() || 'D',
+      })
+    } catch {
+      setLiveTeamNames({})
+    }
+  }, [selectedLiveSessionId])
 
   const fetchLiveLeaderboard = useCallback(async () => {
     if (!selectedLiveSessionId) return
@@ -135,6 +168,11 @@ export default function LeaderboardPage() {
     if (!selectedLiveSessionId) return
     void fetchLiveLeaderboard()
   }, [selectedLiveSessionId, fetchLiveLeaderboard])
+
+  useEffect(() => {
+    if (!selectedLiveSessionId) return
+    void fetchLiveTeamNames()
+  }, [selectedLiveSessionId, fetchLiveTeamNames])
 
   const { status: examRealtimeStatus, usePollFallback: examPollFallback } =
     usePostgresLeaderboardRealtime({
@@ -208,7 +246,7 @@ export default function LeaderboardPage() {
 
   const examExportData = teamScores.map((ts, index) => ({
     Rank: ts.rank || index + 1,
-    'Team Name': ts.teams?.team_name || 'N/A',
+    'Team Name': ts.team_name || 'A/B/C',
     'Participant 1 Score': ts.participant1_score,
     'Participant 2 Score': ts.participant2_score,
     'Total Score': ts.total_team_score,
@@ -216,7 +254,7 @@ export default function LeaderboardPage() {
 
   const liveExportData = liveScores.map((row, index) => ({
     Rank: index + 1,
-    Team: row.team_label,
+    Team: liveTeamNames[row.team_label] || row.team_label,
     'Total Score': row.total_score,
     'Questions Correct': row.questions_correct,
   }))
@@ -405,7 +443,7 @@ export default function LeaderboardPage() {
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                      {teamScore.teams?.team_name || 'N/A'}
+                      {teamScore.team_name || 'A/B/C'}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
                       {teamScore.participant1_score}
@@ -458,7 +496,7 @@ export default function LeaderboardPage() {
                       {index + 1}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                      Team {row.team_label}
+                      {liveTeamNames[row.team_label] || row.team_label}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-lg font-bold text-[#C0392B]">
                       {row.total_score}
