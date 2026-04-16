@@ -534,6 +534,7 @@ export default function HostSessionPage() {
                   question={state.currentQuestion}
                   event={state.currentQuestionEvent}
                   pendingBuzzerAnswer={state.pendingBuzzerAnswer ?? null}
+                  checkedResponseResult={checkedResponseResult}
                   buzzEvents={buzzEvents}
                   busy={busy}
                   onNextQuestion={() =>
@@ -546,6 +547,7 @@ export default function HostSessionPage() {
                     state.currentQuestionEvent &&
                     runAction('open_buzzer', { questionEventId: state.currentQuestionEvent.id })
                   }
+                  onCheckResponse={() => void checkResponse()}
                   onMarkCorrect={() =>
                     state.currentQuestionEvent &&
                     getActiveBuzzTeam() &&

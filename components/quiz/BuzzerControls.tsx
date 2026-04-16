@@ -14,6 +14,11 @@ interface BuzzerControlsProps {
     answer_option_label: 'A' | 'B' | 'C' | 'D' | null
     answer_option_text: string | null
   } | null
+  checkedResponseResult?: {
+    verdict: 'correct' | 'wrong'
+    correctAnswerLabel: 'A' | 'B' | 'C' | 'D' | null
+    correctAnswerText: string | null
+  } | null
   buzzEvents: Array<{
     id: string
     team_label: TeamLabel
@@ -23,6 +28,7 @@ interface BuzzerControlsProps {
   busy?: boolean
   onNextQuestion: () => void
   onOpenBuzzer: () => void
+  onCheckResponse: () => void
   onMarkCorrect: () => void
   onMarkWrong: () => void
   onSkip: () => void
@@ -32,10 +38,12 @@ export function BuzzerControls({
   question,
   event,
   pendingBuzzerAnswer = null,
+  checkedResponseResult = null,
   buzzEvents,
   busy = false,
   onNextQuestion,
   onOpenBuzzer,
+  onCheckResponse,
   onMarkCorrect,
   onMarkWrong,
   onSkip,
@@ -95,10 +103,41 @@ export function BuzzerControls({
                 </div>
               )
             ) : null}
+            {checkedResponseResult ? (
+              <div
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  checkedResponseResult.verdict === 'correct'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                    : 'border-red-200 bg-red-50 text-red-950'
+                }`}
+              >
+                <p className="font-semibold">
+                  Checked result: {checkedResponseResult.verdict === 'correct' ? 'Correct' : 'Wrong'}
+                </p>
+                {checkedResponseResult.correctAnswerLabel || checkedResponseResult.correctAnswerText ? (
+                  <p className="mt-1 text-xs">
+                    Official answer:{' '}
+                    {checkedResponseResult.correctAnswerLabel ? (
+                      <>
+                        <span className="font-semibold">{checkedResponseResult.correctAnswerLabel}</span>
+                        {checkedResponseResult.correctAnswerText
+                          ? `) ${checkedResponseResult.correctAnswerText}`
+                          : ''}
+                      </>
+                    ) : (
+                      <span>{checkedResponseResult.correctAnswerText || '(not set)'}</span>
+                    )}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <BuzzQueue items={buzzEvents} activeTeam={activeTeam || null} />
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Button onClick={onCheckResponse} isLoading={busy} disabled={!isBuzzerOpen || !activeTeam || !pendingBuzzerAnswer}>
+              Check Response
+            </Button>
             <Button onClick={onMarkCorrect} isLoading={busy} disabled={!isBuzzerOpen || !activeTeam}>
               Correct
             </Button>

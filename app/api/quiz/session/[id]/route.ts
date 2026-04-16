@@ -343,8 +343,8 @@ export async function GET(
     if (
       latestEvent &&
       !isHostOrAdmin &&
-      activeRound?.round_type === 'direct_question' &&
-      ['revealed', 'answered', 'dropped'].includes(String(ev?.status)) &&
+      (activeRound?.round_type === 'direct_question' || activeRound?.round_type === 'buzzer') &&
+      ['revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status)) &&
       authUser
     ) {
       const { data: participantRow } = await supabase
@@ -942,7 +942,7 @@ export async function PATCH(
         .eq('id', questionEventId)
         .single()
       if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
-      if (event.status !== 'revealed') {
+      if (event.status !== 'revealed' && event.status !== 'buzzer_open') {
         return NextResponse.json({ error: 'Question is not open for checking' }, { status: 400 })
       }
       if (event.correct_answer_revealed_at) {
@@ -954,13 +954,50 @@ export async function PATCH(
         .select('round_type')
         .eq('id', event.round_id)
         .single()
-      if (roundC?.round_type !== 'direct_question') {
-        return NextResponse.json({ error: 'Only for direct question rounds' }, { status: 400 })
+      if (roundC?.round_type !== 'direct_question' && roundC?.round_type !== 'buzzer') {
+        return NextResponse.json({ error: 'Only for direct question or buzzer rounds' }, { status: 400 })
       }
 
-      const teamLabel = event.directed_team as TeamLabel
+      let teamLabel: TeamLabel | null = null
+      if (roundC?.round_type === 'direct_question') {
+        const directedTeam = event.directed_team as TeamLabel
+        if (!directedTeam || !TEAM_LABELS.includes(directedTeam)) {
+          return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
+        }
+        teamLabel = directedTeam
+      } else {
+        if (event.status !== 'buzzer_open') {
+          return NextResponse.json({ error: 'Buzzer is not open for checking' }, { status: 400 })
+        }
+        const [{ data: buzzRows, error: buzzErr }, { data: passRows, error: passErr }] = await Promise.all([
+          supabase
+            .from('quiz_buzz_events')
+            .select('team_label,buzz_order,buzzed_at,id')
+            .eq('question_event_id', questionEventId)
+            .order('buzz_order', { ascending: true })
+            .order('buzzed_at', { ascending: true })
+            .order('id', { ascending: true }),
+          supabase
+            .from('quiz_pass_log')
+            .select('team_label')
+            .eq('question_event_id', questionEventId)
+            .eq('passed_or_wrong', true),
+        ])
+
+        if (buzzErr) return NextResponse.json({ error: buzzErr.message }, { status: 500 })
+        if (passErr) return NextResponse.json({ error: passErr.message }, { status: 500 })
+
+        const excluded = new Set((passRows || []).map((row: any) => String(row.team_label)))
+        const activeBuzz = (buzzRows || []).find((row: any) => !excluded.has(String(row.team_label)))
+        const activeTeam = String(activeBuzz?.team_label || '').toUpperCase()
+        if (activeTeam !== 'A' && activeTeam !== 'B' && activeTeam !== 'C' && activeTeam !== 'D') {
+          return NextResponse.json({ error: 'No active team is available to answer' }, { status: 400 })
+        }
+        teamLabel = activeTeam as TeamLabel
+      }
+
       if (!teamLabel || !TEAM_LABELS.includes(teamLabel)) {
-        return NextResponse.json({ error: 'Invalid directed team' }, { status: 400 })
+        return NextResponse.json({ error: 'Invalid team to check' }, { status: 400 })
       }
 
       const { data: attempt } = await supabase
@@ -1042,7 +1079,7 @@ export async function PATCH(
         Number(event.attempt_number || 1),
         Number(sessionC?.points_full || 10),
         Number(sessionC?.points_half || 5),
-        'direct_question',
+        roundC?.round_type === 'buzzer' ? 'buzzer' : 'direct_question',
       )
 
       await supabase

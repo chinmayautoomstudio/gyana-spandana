@@ -557,6 +557,52 @@ export default function ParticipantPlayPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
             {state.currentQuestionEvent?.status !== 'buzzer_open' ? (
               <p className="text-sm text-gray-600">Waiting for host to open buzzer...</p>
+            ) : hasFinalVerdict ? (
+              <>
+                <div
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                    verdict === 'correct'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                      : 'border-red-200 bg-red-50 text-red-950'
+                  }`}
+                >
+                  {verdict === 'correct'
+                    ? 'Your buzzer response has been checked — Correct.'
+                    : 'Your buzzer response has been checked — Wrong.'}
+                </div>
+                {submittedLetter ? (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="list">
+                    {(
+                      [
+                        { key: 'A' as const, text: state.currentQuestion.option_a },
+                        { key: 'B' as const, text: state.currentQuestion.option_b },
+                        { key: 'C' as const, text: state.currentQuestion.option_c },
+                        { key: 'D' as const, text: state.currentQuestion.option_d },
+                      ] as const
+                    ).map(({ key, text }) => {
+                      const isChosen = key === submittedLetter
+                      const correct = verdict === 'correct' && isChosen
+                      const incorrect = verdict === 'wrong' && isChosen
+                      const ring =
+                        correct
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-500/40'
+                          : incorrect
+                            ? 'border-red-600 bg-red-50 text-red-950 ring-2 ring-red-500/40'
+                            : isChosen
+                              ? 'border-gray-400 bg-gray-50 text-gray-800'
+                              : 'border-gray-200 bg-white text-gray-500 opacity-70'
+                      return (
+                        <div key={key} role="listitem" className={`rounded-lg border px-3 py-2 text-left text-sm ${ring}`}>
+                          <span className="font-semibold">{key}) </span>
+                          <span>{text || '(Not set)'}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700">Your submitted buzzer option was recorded.</p>
+                )}
+              </>
             ) : canBuzz ? (
               <button
                 type="button"
@@ -571,31 +617,31 @@ export default function ParticipantPlayPage() {
               </button>
             ) : canSubmitBuzzerAnswer ? (
               <>
-                <p className="text-sm font-medium text-gray-800">You buzzed first. Select your answer:</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {(
-                    [
-                      { key: 'A' as const, text: state.currentQuestion.option_a },
-                      { key: 'B' as const, text: state.currentQuestion.option_b },
-                      { key: 'C' as const, text: state.currentQuestion.option_c },
-                      { key: 'D' as const, text: state.currentQuestion.option_d },
-                    ] as const
-                  ).map(({ key, text }) => (
+                <p className="text-sm font-medium text-gray-800">
+                  You buzzed first. Select one option from the choices shown above:
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['A', 'B', 'C', 'D'] as const).map((key) => (
                     <button
                       key={key}
                       type="button"
-                      className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                      className={`rounded-lg border px-3 py-2 text-center text-sm font-semibold ${
                         selectedDirectOption === key
                           ? 'border-[#C0392B] bg-[#C0392B]/10 text-[#C0392B]'
                           : 'border-gray-300 bg-white text-gray-800'
                       }`}
                       onClick={() => setSelectedDirectOption(key)}
                     >
-                      <span className="font-semibold">{key}) </span>
-                      <span>{text || '(Not set)'}</span>
+                      {key}
                     </button>
                   ))}
                 </div>
+                {selectedDirectOption ? (
+                  <p className="text-xs text-gray-600">
+                    Selected: {selectedDirectOption}){' '}
+                    {state.currentQuestion?.[`option_${selectedDirectOption.toLowerCase()}`] || '(Not set)'}
+                  </p>
+                ) : null}
                 <Button onClick={() => void submitDirectAnswer()} isLoading={answerBusy} disabled={!selectedDirectOption}>
                   Submit buzzer answer
                 </Button>
