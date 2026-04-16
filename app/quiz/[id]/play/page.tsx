@@ -81,8 +81,8 @@ export default function ParticipantPlayPage() {
           setRapidFireRemaining(Number.isFinite(seconds) && seconds > 0 ? seconds : null)
           void fetchState()
         },
-        onBuzzerOpen: (payload) => {
-          setBuzzerPressedForEventId(payload?.questionEventId || null)
+        onBuzzerOpen: (_payload) => {
+          setBuzzerPressedForEventId(null)
           setMyBuzzOrder(null)
           void fetchState()
         },

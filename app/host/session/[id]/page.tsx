@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import {
   subscribeQuizDataRefresh,
   subscribeToSession,
@@ -155,6 +156,47 @@ export default function HostSessionPage() {
     const unsub = subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
     return unsub
   }, [sessionId, roundIdsKey, fetchState])
+
+  useEffect(() => {
+    const questionEventId = state?.currentQuestionEvent?.id
+    if (!sessionId || !questionEventId) return
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`quiz-buzzes:${questionEventId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'quiz_buzz_events',
+          filter: `question_event_id=eq.${questionEventId}`,
+        },
+        (change) => {
+          const row = change.new as {
+            id: string
+            team_label: TeamLabel
+            buzz_order: number | null
+            buzzed_at?: string | null
+          }
+
+          setBuzzEvents((prev) => {
+            if (prev.some((item) => item.team_label === row.team_label)) return prev
+
+            return [...prev, row].sort(
+              (a, b) => Number(a.buzz_order || 999) - Number(b.buzz_order || 999),
+            )
+          })
+
+          void fetchState()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [sessionId, state?.currentQuestionEvent?.id, fetchState])
 
   const teamNames = useMemo(() => {
     if (state?.team_display_names) return state.team_display_names

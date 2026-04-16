@@ -38,6 +38,7 @@ export function BuzzerControls({
   const activeTeam = buzzEvents
     ?.slice()
     ?.sort((a, b) => Number(a.buzz_order || 999) - Number(b.buzz_order || 999))?.[0]?.team_label
+  const firstResponder = activeTeam || null
 
   return (
     <section className="space-y-4">
@@ -65,6 +66,11 @@ export function BuzzerControls({
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
             <p className="text-sm font-medium text-gray-700">Buzz Queue</p>
+            {firstResponder ? (
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-900">
+                Team {firstResponder} buzzed first
+              </div>
+            ) : null}
             <BuzzQueue items={buzzEvents} activeTeam={activeTeam || null} />
           </div>
 

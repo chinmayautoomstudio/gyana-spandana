@@ -87,15 +87,24 @@ export async function POST(
       }
     }
 
-    const me = ordered.find((row) => row.team_label === teamLabel)
-    const buzzOrder = Number(me?.buzz_order || 0) || null
+    const myIndex = ordered.findIndex((row) => row.team_label === teamLabel)
+    const buzzOrder = myIndex >= 0 ? myIndex + 1 : null
 
     try {
       const now = new Date().toISOString()
       const channel = supabase.channel(`quiz:session:${sessionId}`, {
         config: { broadcast: { self: true, ack: false } },
       })
-      void channel.send({
+      await new Promise<void>((resolve) => {
+        const fallback = setTimeout(() => resolve(), 1500)
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            clearTimeout(fallback)
+            resolve()
+          }
+        })
+      })
+      await channel.send({
         type: 'broadcast',
         event: 'quiz_event',
         payload: {
@@ -108,6 +117,7 @@ export async function POST(
           timestamp: now,
         },
       })
+      void supabase.removeChannel(channel)
     } catch {
       // Best-effort broadcast only; caller still gets accepted response.
     }
