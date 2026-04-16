@@ -74,6 +74,8 @@ export default function ParticipantPlayPage() {
         onQuestionRevealed: () => void fetchState(),
         onOptionsRevealed: () => void fetchState(),
         onAnswerResult: () => void fetchState(),
+        onParticipantAnswerSubmitted: () => void fetchState(),
+        onDirectVerdictApplied: () => void fetchState(),
         onScoresUpdated: () => void fetchState(),
         onRoundEnded: () => void fetchState(),
         onSessionEnded: () => void fetchState(),
@@ -144,15 +146,39 @@ export default function ParticipantPlayPage() {
   const showOptions = isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed'
 
   const attempt = state.participantDirectAttempt
+  const evStatus = String(state.currentQuestionEvent?.status || '')
+  const verdict = attempt?.verdict
+  const hasFinalVerdict =
+    Boolean(attempt) && verdict !== 'pending' && (verdict === 'correct' || verdict === 'wrong')
+  const showDirectParticipantPanel =
+    isDirectRound &&
+    Boolean(state.currentQuestion) &&
+    !revealCorrect &&
+    Boolean(state.currentQuestionEvent) &&
+    (evStatus === 'revealed' || (evStatus === 'answered' && hasFinalVerdict))
+
+  const submittedRaw = String(attempt?.answer_text || '').trim().toUpperCase()
+  const letterFromAttempt: 'A' | 'B' | 'C' | 'D' | null =
+    submittedRaw === 'A' || submittedRaw === 'B' || submittedRaw === 'C' || submittedRaw === 'D'
+      ? (submittedRaw as 'A' | 'B' | 'C' | 'D')
+      : null
+  const letterFromSelection: 'A' | 'B' | 'C' | 'D' | null =
+    selectedDirectOption === 'A' ||
+    selectedDirectOption === 'B' ||
+    selectedDirectOption === 'C' ||
+    selectedDirectOption === 'D'
+      ? selectedDirectOption
+      : null
+  const submittedLetter: 'A' | 'B' | 'C' | 'D' | null =
+    letterFromAttempt ?? (hasFinalVerdict ? letterFromSelection : null)
+
   const directPhaseOpen =
     isDirectRound &&
-    state.currentQuestionEvent?.status === 'revealed' &&
+    evStatus === 'revealed' &&
     !revealCorrect &&
     isMyTurn
   const canEditDirectAnswer =
-    directPhaseOpen && (!attempt || attempt.verdict === 'pending')
-  const blockedAfterJudgment =
-    directPhaseOpen && attempt && attempt.verdict !== 'pending'
+    directPhaseOpen && (!attempt || verdict === 'pending')
   const trueFalseEventId = state.currentQuestionEvent?.id || null
   const trueFalsePhaseOpen =
     isTrueFalseRound &&
@@ -219,26 +245,82 @@ export default function ParticipantPlayPage() {
           />
         )}
 
-        {isDirectRound && state.currentQuestion && !revealCorrect && state.currentQuestionEvent?.status === 'revealed' ? (
+        {showDirectParticipantPanel ? (
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-            {!isMyTurn ? (
-              <p className="text-sm text-gray-600">Waiting for the directed team to answer…</p>
-            ) : blockedAfterJudgment ? (
+            {hasFinalVerdict && !submittedLetter ? (
               <p className="text-sm text-gray-700">
-                {attempt?.verdict === 'wrong'
-                  ? 'Your answer was marked incorrect. The host may pass the question to another team.'
-                  : 'Waiting for the host…'}
+                {verdict === 'correct'
+                  ? 'Your answer was marked correct.'
+                  : 'Your answer was marked incorrect. The correct answer is not shown here.'}
               </p>
+            ) : hasFinalVerdict && submittedLetter ? (
+              <>
+                <p className="text-sm font-medium text-gray-800">Your answer (direct question)</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="list">
+                  {(
+                    [
+                      { key: 'A' as const, text: state.currentQuestion.option_a },
+                      { key: 'B' as const, text: state.currentQuestion.option_b },
+                      { key: 'C' as const, text: state.currentQuestion.option_c },
+                      { key: 'D' as const, text: state.currentQuestion.option_d },
+                    ] as const
+                  ).map(({ key, text }) => {
+                    const isChosen = key === submittedLetter
+                    const correct = verdict === 'correct' && isChosen
+                    const incorrect = verdict === 'wrong' && isChosen
+                    const ring =
+                      correct
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-500/40'
+                        : incorrect
+                          ? 'border-red-600 bg-red-50 text-red-950 ring-2 ring-red-500/40'
+                          : isChosen
+                            ? 'border-gray-400 bg-gray-50 text-gray-800'
+                            : 'border-gray-200 bg-white text-gray-500 opacity-70'
+                    return (
+                      <div
+                        key={key}
+                        role="listitem"
+                        className={`rounded-lg border px-3 py-2 text-left text-sm ${ring}`}
+                        aria-label={
+                          isChosen
+                            ? verdict === 'correct'
+                              ? 'Your choice — correct'
+                              : verdict === 'wrong'
+                                ? 'Your choice — incorrect'
+                                : `Option ${key}`
+                            : `Option ${key}`
+                        }
+                      >
+                        <span className="font-semibold">{key}) </span>
+                        <span>{text || '(Not set)'}</span>
+                        {correct ? (
+                          <span className="ml-2 text-xs font-semibold text-emerald-700">Correct</span>
+                        ) : null}
+                        {incorrect ? (
+                          <span className="ml-2 text-xs font-semibold text-red-700">Incorrect</span>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+                {verdict === 'wrong' ? (
+                  <p className="text-xs text-gray-600">
+                    The correct answer is not shown here. The host may pass the question to another team.
+                  </p>
+                ) : null}
+              </>
+            ) : !isMyTurn ? (
+              <p className="text-sm text-gray-600">Waiting for the directed team to answer…</p>
             ) : canEditDirectAnswer ? (
               <>
                 <p className="text-sm font-medium text-gray-800">Select your answer (direct question)</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(
                     [
-                      { key: 'A', text: state.currentQuestion.option_a },
-                      { key: 'B', text: state.currentQuestion.option_b },
-                      { key: 'C', text: state.currentQuestion.option_c },
-                      { key: 'D', text: state.currentQuestion.option_d },
+                      { key: 'A' as const, text: state.currentQuestion.option_a },
+                      { key: 'B' as const, text: state.currentQuestion.option_b },
+                      { key: 'C' as const, text: state.currentQuestion.option_c },
+                      { key: 'D' as const, text: state.currentQuestion.option_d },
                     ] as const
                   ).map(({ key, text }) => (
                     <button

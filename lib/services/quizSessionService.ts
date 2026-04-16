@@ -18,6 +18,7 @@ export type QuizEventType =
   | 'session_ended'
   | 'rapid_fire_team_change'
   | 'participant_answer_submitted'
+  | 'direct_verdict_applied'
 
 export interface QuizEvent {
   type: QuizEventType
@@ -72,6 +73,14 @@ export interface ParticipantAnswerSubmittedPayload {
   submittedAt: string
 }
 
+/** Emitted after host judges a direct question; no correct answer in payload. */
+export interface DirectVerdictAppliedPayload {
+  questionEventId: string
+  teamLabel: string
+  verdict: 'correct' | 'wrong'
+  appliedAt: string
+}
+
 export interface RoundEndedPayload {
   roundId: string
   roundType: string
@@ -91,6 +100,7 @@ export interface QuizEventHandlers {
   onOptionsRevealed?: (payload: OptionsRevealedPayload) => void
   onAnswerResult?: (payload: AnswerResultPayload) => void
   onParticipantAnswerSubmitted?: (payload: ParticipantAnswerSubmittedPayload) => void
+  onDirectVerdictApplied?: (payload: DirectVerdictAppliedPayload) => void
   onScoresUpdated?: (payload: ScoresUpdatedPayload) => void
   onRoundEnded?: (payload: RoundEndedPayload) => void
   onSessionEnded?: () => void
@@ -121,6 +131,11 @@ export function subscribeToSession(sessionId: string, handlers: QuizEventHandler
         case 'participant_answer_submitted':
           handlers.onParticipantAnswerSubmitted?.(
             payload.payload as unknown as ParticipantAnswerSubmittedPayload,
+          )
+          break
+        case 'direct_verdict_applied':
+          handlers.onDirectVerdictApplied?.(
+            payload.payload as unknown as DirectVerdictAppliedPayload,
           )
           break
         case 'scores_updated':

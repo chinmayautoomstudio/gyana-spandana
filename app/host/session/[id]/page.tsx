@@ -98,6 +98,7 @@ export default function HostSessionPage() {
         onOptionsRevealed: () => void fetchState(),
         onAnswerResult: () => void fetchState(),
         onParticipantAnswerSubmitted: applyParticipantAnswerOptimistic,
+        onDirectVerdictApplied: () => void fetchState(),
         onScoresUpdated: () => void fetchState(),
         onRoundStarted: () => void fetchState(),
       })

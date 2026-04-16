@@ -11,6 +11,36 @@ function nextTeam(current: TeamLabel): TeamLabel {
   return TEAM_LABELS[(idx + 1) % TEAM_LABELS.length]
 }
 
+/** Best-effort: notify subscribers so participant/host UIs refetch without waiting on postgres debounce. */
+async function broadcastDirectVerdictApplied(
+  sessionId: string,
+  supabase: any,
+  args: { questionEventId: string; teamLabel: string; verdict: 'correct' | 'wrong' },
+) {
+  const appliedAt = new Date().toISOString()
+  try {
+    const channel = supabase.channel(`quiz:session:${sessionId}`, {
+      config: { broadcast: { self: true, ack: false } },
+    })
+    await channel.send({
+      type: 'broadcast',
+      event: 'quiz_event',
+      payload: {
+        type: 'direct_verdict_applied',
+        payload: {
+          questionEventId: args.questionEventId,
+          teamLabel: args.teamLabel,
+          verdict: args.verdict,
+          appliedAt,
+        },
+        timestamp: appliedAt,
+      },
+    })
+  } catch {
+    // DB write already succeeded; postgres_changes remains fallback.
+  }
+}
+
 async function assertHostOrAdmin(sessionId: string, supabase: any) {
   const {
     data: { user },
@@ -253,7 +283,7 @@ export async function GET(
       latestEvent &&
       !isHostOrAdmin &&
       activeRound?.round_type === 'direct_question' &&
-      String(ev?.status) === 'revealed' &&
+      ['revealed', 'answered'].includes(String(ev?.status)) &&
       authUser
     ) {
       const { data: participantRow } = await supabase
@@ -263,8 +293,7 @@ export async function GET(
         .maybeSingle()
       const slotsPart = (session.team_slots || {}) as Record<string, string>
       const myLabel = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id)
-      const dirEv = ev.directed_team as TeamLabel
-      if (myLabel && myLabel === dirEv) {
+      if (myLabel) {
         const { data: pAtt } = await supabase
           .from('quiz_direct_attempts')
           .select('answer_text, verdict')
@@ -711,6 +740,11 @@ export async function PATCH(
           .from('quiz_direct_attempts')
           .update({ verdict: 'wrong', updated_at: now })
           .eq('id', attempt.id)
+        await broadcastDirectVerdictApplied(sessionId, supabase, {
+          questionEventId,
+          teamLabel,
+          verdict: 'wrong',
+        })
         return NextResponse.json({ success: true, verdict: 'wrong', event })
       }
 
@@ -765,6 +799,11 @@ export async function PATCH(
         .eq('id', event.question_id)
         .single()
       const updatedScores = await getScoreMap(sessionId, supabase)
+      await broadcastDirectVerdictApplied(sessionId, supabase, {
+        questionEventId,
+        teamLabel,
+        verdict: 'correct',
+      })
       return NextResponse.json({
         success: true,
         verdict: 'correct',
