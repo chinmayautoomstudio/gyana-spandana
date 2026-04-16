@@ -36,11 +36,10 @@ export function QuestionSelectionModal({
     setLoading(true)
     const supabase = createClient()
 
-    // Fetch only questions from question bank (exam_id is NULL)
+    // Fetch all questions so question sets can include exam-linked items too.
     const { data, error } = await supabase
       .from('questions')
       .select('*')
-      .is('exam_id', null)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -242,7 +241,7 @@ export function QuestionSelectionModal({
                 <div className="text-center py-12">
                   <p className="text-gray-500">
                     {questions.length === 0
-                      ? 'No questions in question bank. Add questions first.'
+                      ? 'No questions available. Add questions first.'
                       : 'No questions match your filters.'}
                   </p>
                 </div>
