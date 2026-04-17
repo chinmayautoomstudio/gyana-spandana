@@ -4,9 +4,9 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  PublicExamLeaderboard,
-  type PublishedExamOption,
-} from '@/components/competition/PublicExamLeaderboard'
+  CompetitionLeaderboardPanel,
+  type LeaderboardExamOption,
+} from '@/components/leaderboard/CompetitionLeaderboardPanel'
 
 function CompetitionLeaderboardExamInner() {
   const params = useParams()
@@ -14,7 +14,7 @@ function CompetitionLeaderboardExamInner() {
   const raw = params?.examId
   const examIdParam = Array.isArray(raw) ? raw[0] : raw
   const supabase = useMemo(() => createClient(), [])
-  const [exams, setExams] = useState<PublishedExamOption[]>([])
+  const [exams, setExams] = useState<LeaderboardExamOption[]>([])
   const [examsLoading, setExamsLoading] = useState(true)
 
   useEffect(() => {
@@ -52,13 +52,23 @@ function CompetitionLeaderboardExamInner() {
     [router],
   )
 
+  const controlledExams = useMemo(
+    () => ({
+      exams,
+      selectedExamId,
+      onSelectExamId,
+      loading: examsLoading,
+    }),
+    [exams, selectedExamId, onSelectExamId, examsLoading],
+  )
+
   return (
     <div className="p-4 lg:p-8" style={{ marginTop: '80px' }}>
-      <PublicExamLeaderboard
-        selectedExamId={selectedExamId}
-        exams={exams}
-        examsLoading={examsLoading}
-        onSelectExamId={onSelectExamId}
+      <CompetitionLeaderboardPanel
+        variant="public"
+        controlledExams={controlledExams}
+        showHeading
+        headingText="Leaderboard"
       />
     </div>
   )
