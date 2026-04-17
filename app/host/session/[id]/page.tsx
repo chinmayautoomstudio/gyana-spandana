@@ -16,6 +16,7 @@ import { RapidFireControls } from '@/components/quiz/RapidFireControls'
 import { BuzzerControls } from '@/components/quiz/BuzzerControls'
 import { getOccupiedLabels } from '@/lib/quiz/teamSlots'
 import type { TeamLabel } from '@/lib/utils/teamColors'
+import { useHostLeaveGuard } from '@/components/host/HostDashboardShell'
 
 interface SessionState {
   session: any
@@ -66,6 +67,7 @@ interface FinalScoreboardPayload {
 export default function HostSessionPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
+  const { setIsBlocking, registerEndSessionRequestHandler } = useHostLeaveGuard()
   const sessionId = params?.id
 
   const [state, setState] = useState<SessionState | null>(null)
@@ -299,6 +301,17 @@ export default function HostSessionPage() {
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    const shouldBlock = Boolean(state?.session?.id && !isSessionCompleted)
+    setIsBlocking(shouldBlock)
+    return () => setIsBlocking(false)
+  }, [isSessionCompleted, setIsBlocking, state?.session?.id])
+
+  useEffect(() => {
+    registerEndSessionRequestHandler(() => () => setShowEndSessionConfirm(true))
+    return () => registerEndSessionRequestHandler(null)
+  }, [registerEndSessionRequestHandler])
 
   useEffect(() => {
     const currentId = state?.currentQuestionEvent?.id ?? null
