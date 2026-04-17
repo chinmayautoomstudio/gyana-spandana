@@ -148,10 +148,6 @@ export async function POST(
             <td style="padding: 5px 0; color: #666; width: 40%;">Duration:</td>
             <td style="padding: 5px 0; color: #333; font-weight: bold;">${exam.duration_minutes} minutes</td>
           </tr>
-          <tr>
-            <td style="padding: 5px 0; color: #666;">Total Questions:</td>
-            <td style="padding: 5px 0; color: #333; font-weight: bold;">${exam.total_questions} questions</td>
-          </tr>
           ${exam.scheduled_start ? `
           <tr>
             <td style="padding: 5px 0; color: #666;">Start Time:</td>
@@ -239,7 +235,6 @@ You have been invited to take the following exam individually. Each participant 
 
 Exam: ${exam.title}
 Duration: ${exam.duration_minutes} minutes
-Total Questions: ${exam.total_questions} questions
 ${exam.scheduled_start ? `Start Time: ${formatDate(exam.scheduled_start)}` : ''}
 ${exam.scheduled_end ? `End Time: ${formatDate(exam.scheduled_end)}` : ''}
 

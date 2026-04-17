@@ -42,6 +42,7 @@ export default function ExamDetailsPage() {
   const [showInvitationModal, setShowInvitationModal] = useState(false)
   const [assignedParticipants, setAssignedParticipants] = useState<any[]>([])
   const [assignedParticipantsCount, setAssignedParticipantsCount] = useState(0)
+  const [postCreateInviteNotice, setPostCreateInviteNotice] = useState<string | null>(null)
 
   useEffect(() => {
     if (!examId) return
@@ -126,6 +127,14 @@ export default function ExamDetailsPage() {
         averageTime,
         totalTeams,
       })
+
+      if (typeof window !== 'undefined') {
+        const inviteMsg = sessionStorage.getItem('examInviteWarning')
+        if (inviteMsg) {
+          sessionStorage.removeItem('examInviteWarning')
+          setPostCreateInviteNotice(inviteMsg)
+        }
+      }
 
       setLoading(false)
     }
@@ -221,6 +230,23 @@ export default function ExamDetailsPage() {
 
   return (
     <div className="space-y-6">
+      {postCreateInviteNotice && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <div className="flex justify-between gap-3">
+            <p>{postCreateInviteNotice}</p>
+            <button
+              type="button"
+              onClick={() => setPostCreateInviteNotice(null)}
+              className="shrink-0 font-medium text-amber-800 underline hover:text-amber-950"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       <div>
         <Link
           href="/admin/exams"

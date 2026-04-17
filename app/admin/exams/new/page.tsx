@@ -383,6 +383,47 @@ export default function NewExamPage() {
           if (skippedCount > 0) {
             console.info(`${skippedCount} participant(s) were already assigned to this exam`)
           }
+
+          const participantIdsForInvite = [
+            ...new Set(participants.map((p: { id: string }) => p.id)),
+          ]
+          try {
+            const inviteRes = await fetch(
+              `/api/admin/exams/${exam.id}/send-invitations`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ participantIds: participantIdsForInvite }),
+              }
+            )
+            const inviteJson = (await inviteRes.json().catch(() => ({}))) as {
+              error?: string
+              failed?: number
+              errors?: string[]
+              success?: boolean
+            }
+            if (!inviteRes.ok) {
+              const detail = inviteJson.error || `HTTP ${inviteRes.status}`
+              sessionStorage.setItem(
+                'examInviteWarning',
+                `Exam created, but invitation emails could not be sent: ${detail}. Use Send invitations on the exam page to retry.`
+              )
+            } else if ((inviteJson.failed ?? 0) > 0 || inviteJson.success === false) {
+              const detail =
+                inviteJson.errors?.join('; ') ||
+                `${inviteJson.failed ?? 0} failed`
+              sessionStorage.setItem(
+                'examInviteWarning',
+                `Exam created, but some invitation emails failed (${detail}). Use Send invitations on the exam page to retry.`
+              )
+            }
+          } catch (inviteErr) {
+            console.error('Auto-send exam invitations failed:', inviteErr)
+            sessionStorage.setItem(
+              'examInviteWarning',
+              'Exam created, but invitation emails could not be sent. Use Send invitations on the exam page to retry.'
+            )
+          }
         } catch (teamAssignError: unknown) {
           if (!teamAssignErrorAlreadyRolledBack(teamAssignError)) {
             await rollbackExamAfterFailedTeamAssignment(
