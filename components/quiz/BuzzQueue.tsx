@@ -8,6 +8,22 @@ interface BuzzQueueItem {
   team_label: TeamLabel
   buzz_order: number | null
   buzzed_at?: string | null
+  /** Epoch ms at physical press (client); used for ordering and precise display. */
+  client_pressed_at_ms?: number | null
+}
+
+function formatClientPressTime(clientMs: number | null | undefined): string {
+  if (clientMs == null || !Number.isFinite(clientMs)) return ''
+  try {
+    return new Date(clientMs).toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      fractionalSecondDigits: 3,
+    })
+  } catch {
+    return ''
+  }
 }
 
 interface BuzzQueueProps {
@@ -38,8 +54,9 @@ export function BuzzQueue({ items, activeTeam = null }: BuzzQueueProps) {
               <span className="text-sm font-semibold text-gray-700">#{item.buzz_order ?? '-'}</span>
               <TeamBadge label={item.team_label} text={activeTeam === item.team_label ? 'Answering' : 'Queued'} />
             </div>
-            <span className="text-xs text-gray-500">
-              {item.buzzed_at ? new Date(item.buzzed_at).toLocaleTimeString() : ''}
+            <span className="text-xs text-gray-500 tabular-nums" title="Press time (local, with ms)">
+              {formatClientPressTime(item.client_pressed_at_ms) ||
+                (item.buzzed_at ? new Date(item.buzzed_at).toLocaleTimeString() : '')}
             </span>
           </div>
         ))}

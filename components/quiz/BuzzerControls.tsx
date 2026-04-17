@@ -24,6 +24,7 @@ interface BuzzerControlsProps {
     team_label: TeamLabel
     buzz_order: number | null
     buzzed_at?: string | null
+    client_pressed_at_ms?: number | null
   }>
   busy?: boolean
   onNextQuestion: () => void

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
@@ -32,6 +32,7 @@ export default function ParticipantPlayPage() {
   const [answerBusy, setAnswerBusy] = useState(false)
   const [rapidFireRemaining, setRapidFireRemaining] = useState<number | null>(null)
   const [buzzerPressedForEventId, setBuzzerPressedForEventId] = useState<string | null>(null)
+  const buzzAttemptLockEventRef = useRef<string | null>(null)
   const [myBuzzOrder, setMyBuzzOrder] = useState<number | null>(null)
   const [questionLanguage, setQuestionLanguage] = useState<'en' | 'odia'>('en')
 
@@ -225,11 +226,14 @@ export default function ParticipantPlayPage() {
     }
   }
 
-  const submitBuzz = async () => {
+  const submitBuzz = async (clientPressedAtMs: number) => {
     if (!sessionId || !state?.currentQuestionEvent?.id || !myTeamLabel) return
-    if (buzzerPressedForEventId === state.currentQuestionEvent.id) return
+    const eventId = state.currentQuestionEvent.id
+    if (buzzerPressedForEventId === eventId) return
+    if (buzzAttemptLockEventRef.current === eventId) return
+    buzzAttemptLockEventRef.current = eventId
     setError(null)
-    setBuzzerPressedForEventId(state.currentQuestionEvent.id)
+    setBuzzerPressedForEventId(eventId)
     try {
       const res = await fetch(`/api/quiz/session/${sessionId}/buzz`, {
         method: 'POST',
@@ -237,6 +241,7 @@ export default function ParticipantPlayPage() {
         body: JSON.stringify({
           questionEventId: state.currentQuestionEvent.id,
           teamLabel: myTeamLabel,
+          clientPressedAtMs,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -244,6 +249,7 @@ export default function ParticipantPlayPage() {
       setMyBuzzOrder(Number(data?.buzzOrder || 0) || null)
     } catch (e: any) {
       setError(e.message)
+      buzzAttemptLockEventRef.current = null
       setBuzzerPressedForEventId(null)
     }
   }
@@ -713,9 +719,10 @@ export default function ParticipantPlayPage() {
                 type="button"
                 onTouchStart={(e) => {
                   e.preventDefault()
-                  void submitBuzz()
+                  const t = Date.now()
+                  void submitBuzz(t)
                 }}
-                onClick={() => void submitBuzz()}
+                onClick={() => void submitBuzz(Date.now())}
                 className="w-full rounded-2xl bg-[#C0392B] px-4 py-8 text-3xl font-bold text-white active:scale-[0.99]"
               >
                 BUZZ IN!

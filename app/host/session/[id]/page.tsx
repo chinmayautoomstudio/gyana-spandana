@@ -81,7 +81,13 @@ export default function HostSessionPage() {
     correctAnswerText: string | null
   } | null>(null)
   const [buzzEvents, setBuzzEvents] = useState<
-    Array<{ id: string; team_label: TeamLabel; buzz_order: number | null; buzzed_at?: string | null }>
+    Array<{
+      id: string
+      team_label: TeamLabel
+      buzz_order: number | null
+      buzzed_at?: string | null
+      client_pressed_at_ms?: number | null
+    }>
   >([])
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false)
   const [showEndRoundConfirm, setShowEndRoundConfirm] = useState(false)
@@ -229,6 +235,7 @@ export default function HostSessionPage() {
             team_label: TeamLabel
             buzz_order: number | null
             buzzed_at?: string | null
+            client_pressed_at_ms?: number | null
           }
 
           setBuzzEvents((prev) => {

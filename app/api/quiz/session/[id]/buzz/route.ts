@@ -10,6 +10,17 @@ function normalizeTeamLabel(value: unknown): TeamLabel | null {
   return null
 }
 
+/** Epoch ms from client at physical press; used to order buzzes before server arrival time. */
+function parseClientPressedAtMs(body: unknown, serverNowMs: number): number | null {
+  const raw = (body as { clientPressedAtMs?: unknown })?.clientPressedAtMs
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null
+  const n = Math.trunc(raw)
+  if (!Number.isSafeInteger(n)) return null
+  if (n > serverNowMs + 120_000) return null
+  if (n < serverNowMs - 600_000) return null
+  return n
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } },
@@ -22,9 +33,17 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const questionEventId = typeof body?.questionEventId === 'string' ? body.questionEventId : ''
     const teamLabel = normalizeTeamLabel(body?.teamLabel)
+    const serverNowMs = Date.now()
+    const clientPressedAtMs = parseClientPressedAtMs(body, serverNowMs)
 
     if (!questionEventId || !teamLabel) {
       return NextResponse.json({ error: 'questionEventId and teamLabel are required' }, { status: 400 })
+    }
+    if (clientPressedAtMs === null) {
+      return NextResponse.json(
+        { error: 'clientPressedAtMs is required (epoch milliseconds at button press)' },
+        { status: 400 },
+      )
     }
 
     const { data: event } = await supabase
@@ -49,6 +68,7 @@ export async function POST(
     const { error: insertError } = await supabase.from('quiz_buzz_events').insert({
       question_event_id: questionEventId,
       team_label: teamLabel,
+      client_pressed_at_ms: clientPressedAtMs,
     })
 
     if (insertError) {
@@ -70,8 +90,9 @@ export async function POST(
 
     const { data: allBuzzes, error: allBuzzesError } = await supabase
       .from('quiz_buzz_events')
-      .select('id,team_label,buzzed_at,buzz_order')
+      .select('id,team_label,buzzed_at,buzz_order,client_pressed_at_ms')
       .eq('question_event_id', questionEventId)
+      .order('client_pressed_at_ms', { ascending: true })
       .order('buzzed_at', { ascending: true })
       .order('id', { ascending: true })
 
