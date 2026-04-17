@@ -554,6 +554,27 @@ export default function TakeExamPage() {
     await submitExam(true)
   }
 
+  const formatSubmitError = (err: unknown): string => {
+    if (err == null) return 'Unknown error'
+    if (typeof err === 'string') return err
+    if (err instanceof Error) return err.message
+    if (typeof err === 'object') {
+      const o = err as Record<string, unknown>
+      const msg = o.message != null ? String(o.message) : ''
+      const details = o.details != null ? String(o.details) : ''
+      const hint = o.hint != null ? String(o.hint) : ''
+      const code = o.code != null ? String(o.code) : ''
+      const parts = [msg, details, hint, code && `code=${code}`].filter(Boolean)
+      if (parts.length) return parts.join(' — ')
+      try {
+        return JSON.stringify(err)
+      } catch {
+        return String(err)
+      }
+    }
+    return String(err)
+  }
+
   const submitExam = async (isTimeout = false) => {
     if (!attemptId || !exam || !participantId) return
 
@@ -563,21 +584,33 @@ export default function TakeExamPage() {
       const supabase = createClient()
 
       // Get questions for this participant's attempt (from question_ids stored in attempt)
-      const { data: attemptDataWithQuestions } = await supabase
+      const { data: attemptDataWithQuestions, error: attemptFetchError } = await supabase
         .from('exam_attempts')
         .select('question_ids, started_at')
         .eq('id', attemptId)
         .single()
 
+      if (attemptFetchError) {
+        throw new Error(formatSubmitError(attemptFetchError))
+      }
+
       const participantQuestionIds = attemptDataWithQuestions?.question_ids as string[] | null || questions.map(q => q.id)
 
+      if (!participantQuestionIds.length) {
+        throw new Error('No questions found for this attempt')
+      }
+
       // Get all questions with correct answers for scoring (only participant's questions)
-      const { data: questionsWithAnswers } = await supabase
+      const { data: questionsWithAnswers, error: questionsError } = await supabase
         .from('questions')
         .select('id, correct_answer, points')
         .in('id', participantQuestionIds)
 
-      if (!questionsWithAnswers) {
+      if (questionsError) {
+        throw new Error(formatSubmitError(questionsError))
+      }
+
+      if (!questionsWithAnswers?.length) {
         throw new Error('Failed to fetch questions for scoring')
       }
 
@@ -595,7 +628,7 @@ export default function TakeExamPage() {
         }
 
         // Save/update answer with scoring
-        await supabase
+        const { error: upsertError } = await supabase
           .from('exam_answers')
           .upsert({
             attempt_id: attemptId,
@@ -606,6 +639,10 @@ export default function TakeExamPage() {
           }, {
             onConflict: 'attempt_id,question_id'
           })
+
+        if (upsertError) {
+          throw new Error(`Saving answer for question ${question.id}: ${formatSubmitError(upsertError)}`)
+        }
       }
 
       // Get attempt start time (already fetched above)
@@ -625,14 +662,7 @@ export default function TakeExamPage() {
         .eq('id', attemptId)
 
       if (updateError) {
-        // Enhanced error logging
-        console.error('Error submitting exam:', {
-          message: updateError.message,
-          details: updateError.details,
-          hint: updateError.hint,
-          code: updateError.code,
-          fullError: JSON.stringify(updateError, Object.getOwnPropertyNames(updateError))
-        })
+        console.error('Error submitting exam (update attempt):', formatSubmitError(updateError), updateError)
 
         // User-friendly error message
         let errorMessage = 'Failed to submit exam. '
@@ -669,16 +699,10 @@ export default function TakeExamPage() {
       // Trigger team score calculation (handled by database trigger)
       // Navigate to results
       router.push(`/exams/${examId}/results`)
-    } catch (error: any) {
-      console.error('Error submitting exam:', {
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
-        code: error?.code,
-        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
-      })
+    } catch (error: unknown) {
+      const errorMessage = formatSubmitError(error)
+      console.error('Error submitting exam:', errorMessage, error)
 
-      const errorMessage = error?.message || 'An unexpected error occurred. Please try again.'
       setSubmitError(`Error submitting exam: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)

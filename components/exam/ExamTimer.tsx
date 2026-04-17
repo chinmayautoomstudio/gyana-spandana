@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 
 interface ExamTimerProps {
   durationSeconds: number
@@ -25,6 +25,28 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
   const [isWarning, setIsWarning] = useState(false)
   const [isCritical, setIsCritical] = useState(false)
 
+  const timeRemainingRef = useRef(durationSeconds)
+  const prevDurationPropRef = useRef(durationSeconds)
+  const onTickRef = useRef(onTick)
+  const onWarningRef = useRef(onWarning)
+  const onTimeUpRef = useRef(onTimeUp)
+
+  useEffect(() => {
+    onTickRef.current = onTick
+  }, [onTick])
+
+  useEffect(() => {
+    onWarningRef.current = onWarning
+  }, [onWarning])
+
+  useEffect(() => {
+    onTimeUpRef.current = onTimeUp
+  }, [onTimeUp])
+
+  useEffect(() => {
+    timeRemainingRef.current = timeRemaining
+  }, [timeRemaining])
+
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60)
@@ -46,33 +68,31 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
     return 'bg-[#C0392B]/10 border-[#C0392B]'
   }
 
-  // Update timer
+  // Never call parent callbacks inside setTimeRemaining — that triggers "setState during render"
   const updateTimer = useCallback(() => {
-    if (!isActive || timeRemaining <= 0) return
+    if (!isActive) return
 
-    setTimeRemaining(prev => {
-      const newTime = prev - 1
+    const prev = timeRemainingRef.current
+    if (prev <= 0) return
 
-      onTick?.(newTime)
+    const newTime = prev - 1
+    timeRemainingRef.current = newTime
+    setTimeRemaining(newTime)
 
-      // Check for warnings
-      if (newTime === 300 && prev > 300) { // 5 minutes remaining
-        setIsWarning(true)
-        onWarning?.(300)
-      } else if (newTime === 60 && prev > 60) { // 1 minute remaining
-        setIsCritical(true)
-        onWarning?.(60)
-      }
+    onTickRef.current?.(newTime)
 
-      // Time's up
-      if (newTime <= 0) {
-        onTimeUp?.()
-        return 0
-      }
+    if (newTime === 300 && prev > 300) {
+      setIsWarning(true)
+      onWarningRef.current?.(300)
+    } else if (newTime === 60 && prev > 60) {
+      setIsCritical(true)
+      onWarningRef.current?.(60)
+    }
 
-      return newTime
-    })
-  }, [isActive, timeRemaining, onTimeUp, onWarning, onTick])
+    if (newTime <= 0) {
+      onTimeUpRef.current?.()
+    }
+  }, [isActive])
 
   // Timer effect
   useEffect(() => {
@@ -82,14 +102,22 @@ export const ExamTimer: React.FC<ExamTimerProps> = ({
     return () => clearInterval(interval)
   }, [isActive, updateTimer])
 
-  // Reset timer when duration changes
+  // Sync from prop (resume / parent echo). Only reset warning UI on real resync jumps, not every tick.
   useEffect(() => {
+    const prev = prevDurationPropRef.current
+    prevDurationPropRef.current = durationSeconds
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimeRemaining(durationSeconds)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsWarning(false)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsCritical(false)
+    timeRemainingRef.current = durationSeconds
+
+    const looksLikeResync = Math.abs(durationSeconds - prev) > 1
+    if (looksLikeResync) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsWarning(false)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsCritical(false)
+    }
   }, [durationSeconds])
 
   // Calculate progress percentage
