@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { QuestionSelectionModal } from '@/components/admin/QuestionSelectionModal'
 import { QuestionSetSelector } from '@/components/admin/QuestionSetSelector'
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
 
 interface Team {
   id: string
@@ -58,6 +59,7 @@ type ExamFormData = z.infer<typeof examSchema>
 
 export default function NewExamPage() {
   const router = useRouter()
+  const { setIsBlocking, confirmOrRun } = useUnsavedChangesGuard()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showQuestionModal, setShowQuestionModal] = useState(false)
@@ -83,12 +85,38 @@ export default function NewExamPage() {
     register,
     handleSubmit,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ExamFormData>({
     resolver: zodResolver(examSchema),
   })
 
+  const watchedValues = watch()
   const questionsPerParticipant = watch('questions_per_participant')
+  const hasUnsavedChanges = useMemo(() => {
+    const hasFormContent = Boolean(
+      watchedValues.title?.trim() ||
+        watchedValues.description?.trim() ||
+        watchedValues.duration_minutes ||
+        watchedValues.passing_score ||
+        watchedValues.scheduled_start ||
+        watchedValues.scheduled_end ||
+        watchedValues.questions_per_participant
+    )
+
+    return (
+      isDirty ||
+      hasFormContent ||
+      selectedQuestionIds.length > 0 ||
+      selectedTeamIds.length > 0 ||
+      Boolean(selectedSetId) ||
+      availabilityMode !== 'now'
+    )
+  }, [availabilityMode, isDirty, selectedQuestionIds.length, selectedSetId, selectedTeamIds.length, watchedValues])
+
+  useEffect(() => {
+    setIsBlocking(hasUnsavedChanges && !isSubmitting)
+    return () => setIsBlocking(false)
+  }, [hasUnsavedChanges, isSubmitting, setIsBlocking])
 
   // Update selectedSetId when URL changes
   useEffect(() => {
@@ -180,6 +208,7 @@ export default function NewExamPage() {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
+        setIsBlocking(false)
         router.push('/login')
         return
       }
@@ -194,6 +223,7 @@ export default function NewExamPage() {
       const role = profile?.role || user.user_metadata?.role || 'participant'
       if (role !== 'admin') {
         setError('Unauthorized: Only admins can create exams')
+        setIsBlocking(false)
         router.push('/dashboard')
         return
       }
@@ -436,6 +466,7 @@ export default function NewExamPage() {
         }
       }
 
+      setIsBlocking(false)
       router.push(`/admin/exams/${exam.id}`)
     } catch (err: any) {
       setError(err.message || 'Failed to create exam')
@@ -449,6 +480,10 @@ export default function NewExamPage() {
       <div className="mb-6">
         <Link
           href="/admin/exams"
+          onClick={(event) => {
+            event.preventDefault()
+            confirmOrRun(() => router.push('/admin/exams'))
+          }}
           className="text-[#C0392B] hover:text-[#A93226] flex items-center gap-2 mb-4"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -615,6 +650,10 @@ export default function NewExamPage() {
               if (selectedSetId) {
                 setSelectedQuestionIds(questionIds)
               }
+            }}
+            onCreateQuestionSetClick={(event) => {
+              event.preventDefault()
+              confirmOrRun(() => router.push('/admin/question-sets'))
             }}
           />
 
@@ -801,11 +840,14 @@ export default function NewExamPage() {
           >
             Create Exam
           </Button>
-          <Link href="/admin/exams">
-            <Button variant="outline" size="md">
-              Cancel
-            </Button>
-          </Link>
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            onClick={() => confirmOrRun(() => router.push('/admin/exams'))}
+          >
+            Cancel
+          </Button>
         </div>
       </form>
 

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useRouter } from 'next/navigation'
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
 
 type TeamLabel = 'A' | 'B' | 'C' | 'D'
 
@@ -36,6 +37,7 @@ interface RoundConfig {
 
 export default function NewQuizSessionPage() {
   const router = useRouter()
+  const { setIsBlocking, confirmOrRun } = useUnsavedChangesGuard()
   const supabase = useMemo(() => createClient(), [])
 
   const [loading, setLoading] = useState(true)
@@ -60,6 +62,29 @@ export default function NewQuizSessionPage() {
     { round_type: 'direct_question', title: 'Direct Question Round', question_set_id: '' },
   ])
   const [isTestSession, setIsTestSession] = useState(false)
+
+  const hasUnsavedChanges = useMemo(() => {
+    const defaultRounds: RoundConfig[] = [
+      { round_type: 'direct_question', title: 'Direct Question Round', question_set_id: '' },
+    ]
+    const hasTeamSelection = Object.values(teamSlots).some(Boolean)
+    const roundsChanged = JSON.stringify(rounds) !== JSON.stringify(defaultRounds)
+
+    return (
+      Boolean(title.trim()) ||
+      Boolean(hostId) ||
+      hasTeamSelection ||
+      pointsFull !== 10 ||
+      pointsHalf !== 5 ||
+      roundsChanged ||
+      isTestSession
+    )
+  }, [hostId, isTestSession, pointsFull, pointsHalf, rounds, teamSlots, title])
+
+  useEffect(() => {
+    setIsBlocking(hasUnsavedChanges && !saving)
+    return () => setIsBlocking(false)
+  }, [hasUnsavedChanges, saving, setIsBlocking])
 
   useEffect(() => {
     const load = async () => {
@@ -156,6 +181,7 @@ export default function NewQuizSessionPage() {
 
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || 'Failed to create session')
+      setIsBlocking(false)
       router.push('/admin/quiz')
       router.refresh()
     } catch (e: any) {
@@ -388,7 +414,11 @@ export default function NewQuizSessionPage() {
           <Button type="submit" isLoading={saving}>
             Create session
           </Button>
-          <Button type="button" variant="outline" onClick={() => router.push('/admin/quiz')}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => confirmOrRun(() => router.push('/admin/quiz'))}
+          >
             Cancel
           </Button>
         </div>

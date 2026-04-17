@@ -5,6 +5,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { AdminHeader } from '@/components/admin/AdminHeader'
+import {
+  UnsavedChangesGuardProvider,
+  useUnsavedChangesGuard,
+} from '@/components/admin/UnsavedChangesGuardProvider'
 
 interface AdminLayoutClientProps {
   children: React.ReactNode
@@ -42,9 +46,25 @@ export default function AdminLayoutClient({
   userEmail,
   userRole,
 }: AdminLayoutClientProps) {
+  return (
+    <UnsavedChangesGuardProvider>
+      <AdminLayoutScaffold userName={userName} userEmail={userEmail} userRole={userRole}>
+        {children}
+      </AdminLayoutScaffold>
+    </UnsavedChangesGuardProvider>
+  )
+}
+
+function AdminLayoutScaffold({
+  children,
+  userName,
+  userEmail,
+  userRole,
+}: AdminLayoutClientProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { confirmOrRun } = useUnsavedChangesGuard()
 
   useEffect(() => {
     navItems.forEach((item) => {
@@ -91,6 +111,11 @@ export default function AdminLayoutClient({
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      setSidebarOpen(false)
+                      confirmOrRun(() => router.push(item.href))
+                    }}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
                       isActive
                         ? 'bg-[#C0392B]/10 text-[#C0392B]'

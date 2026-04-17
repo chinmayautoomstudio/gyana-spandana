@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 
@@ -15,12 +15,14 @@ interface QuestionSetSelectorProps {
   selectedSetId: string | null
   onSelectSet: (setId: string | null) => void
   onQuestionsLoaded: (questionIds: string[]) => void
+  onCreateQuestionSetClick?: (event: MouseEvent<HTMLAnchorElement>) => void
 }
 
 export function QuestionSetSelector({
   selectedSetId,
   onSelectSet,
   onQuestionsLoaded,
+  onCreateQuestionSetClick,
 }: QuestionSetSelectorProps) {
   const [questionSets, setQuestionSets] = useState<QuestionSet[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,7 +113,11 @@ export function QuestionSetSelector({
       {!loading && questionSets.length === 0 && (
         <p className="text-sm text-gray-500">
           No question sets available.{' '}
-          <Link href="/admin/question-sets" className="text-[#C0392B] hover:underline">
+          <Link
+            href="/admin/question-sets"
+            onClick={onCreateQuestionSetClick}
+            className="text-[#C0392B] hover:underline"
+          >
             Create one
           </Link>
         </p>
