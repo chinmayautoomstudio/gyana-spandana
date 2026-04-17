@@ -651,6 +651,21 @@ export default function TakeExamPage() {
       const { examSecurityService } = await import('@/lib/services/examSecurityService')
       examSecurityService.stopSecurityForExamCompletion()
 
+      // Best-effort fallback to ensure team leaderboard scores are recalculated
+      // even if database trigger is unavailable in a given environment.
+      try {
+        await fetch('/api/quiz/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'recalculate_exam_team_scores',
+            examId,
+          }),
+        })
+      } catch (recalcError) {
+        console.warn('Failed to trigger fallback team score recalculation:', recalcError)
+      }
+
       // Trigger team score calculation (handled by database trigger)
       // Navigate to results
       router.push(`/exams/${examId}/results`)

@@ -13,10 +13,74 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { sessionId, teamLabel, pointsDelta } = body as {
+    const { sessionId, teamLabel, pointsDelta, action, examId } = body as {
       sessionId?: string
       teamLabel?: 'A' | 'B' | 'C' | 'D'
       pointsDelta?: number
+      action?: 'recalculate_exam_team_scores'
+      examId?: string
+    }
+
+    if (action === 'recalculate_exam_team_scores') {
+      if (!examId) {
+        return NextResponse.json({ error: 'examId is required' }, { status: 400 })
+      }
+
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single()
+
+      const role = profile?.role || user.user_metadata?.role || 'participant'
+      let canRecalculate = role === 'admin'
+
+      if (!canRecalculate) {
+        const { data: participant } = await supabase
+          .from('participants')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (participant?.id) {
+          const { data: submittedAttempt } = await supabase
+            .from('exam_attempts')
+            .select('id')
+            .eq('exam_id', examId)
+            .eq('participant_id', participant.id)
+            .eq('status', 'submitted')
+            .maybeSingle()
+
+          canRecalculate = Boolean(submittedAttempt?.id)
+        }
+      }
+
+      if (!canRecalculate) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      const { error: recalcError } = await supabase.rpc('calculate_team_scores', {
+        exam_uuid: examId,
+      })
+
+      if (recalcError) {
+        return NextResponse.json({ error: recalcError.message }, { status: 500 })
+      }
+
+      const { data: rows, error: rowsError } = await supabase
+        .from('team_scores')
+        .select('id')
+        .eq('exam_id', examId)
+
+      if (rowsError) {
+        return NextResponse.json({ error: rowsError.message }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        examId,
+        recalculatedRows: rows?.length || 0,
+      })
     }
 
     if (!sessionId || !teamLabel || typeof pointsDelta !== 'number') {
