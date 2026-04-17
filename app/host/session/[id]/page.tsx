@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   subscribeQuizDataRefresh,
@@ -45,8 +45,27 @@ interface SessionState {
   } | null
 }
 
+interface FinalScoreboardRound {
+  id: string
+  title: string
+  roundOrder: number
+}
+
+interface FinalScoreboardTeam {
+  teamLabel: TeamLabel
+  teamName: string
+  total: number
+  rounds: Record<string, number>
+}
+
+interface FinalScoreboardPayload {
+  rounds: FinalScoreboardRound[]
+  teams: FinalScoreboardTeam[]
+}
+
 export default function HostSessionPage() {
   const params = useParams<{ id: string }>()
+  const router = useRouter()
   const sessionId = params?.id
 
   const [state, setState] = useState<SessionState | null>(null)
@@ -62,6 +81,10 @@ export default function HostSessionPage() {
   const [buzzEvents, setBuzzEvents] = useState<
     Array<{ id: string; team_label: TeamLabel; buzz_order: number | null; buzzed_at?: string | null }>
   >([])
+  const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false)
+  const [showEndRoundConfirm, setShowEndRoundConfirm] = useState(false)
+  const [showFinalScoreboard, setShowFinalScoreboard] = useState(false)
+  const [finalScoreboard, setFinalScoreboard] = useState<FinalScoreboardPayload | null>(null)
   const lastQuestionEventIdRef = useRef<string | null>(null)
 
   const fetchState = useCallback(async () => {
@@ -334,6 +357,21 @@ export default function HostSessionPage() {
     return <div className="rounded-xl border border-gray-200 bg-white p-6 text-gray-600">Loading host panel...</div>
   }
 
+  const handleConfirmEndRound = async () => {
+    if (!activeRound) return
+    setShowEndRoundConfirm(false)
+    await runAction('end_round', { roundId: activeRound.id })
+  }
+
+  const handleConfirmEndSession = async () => {
+    setShowEndSessionConfirm(false)
+    const data = await runAction('end_session')
+    if (data?.finalScoreboard) {
+      setFinalScoreboard(data.finalScoreboard as FinalScoreboardPayload)
+      setShowFinalScoreboard(true)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {state.session.is_test_session ? (
@@ -374,14 +412,14 @@ export default function HostSessionPage() {
           </div>
           <button
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 disabled:text-gray-400"
-            onClick={() => activeRound && runAction('end_round', { roundId: activeRound.id })}
+            onClick={() => setShowEndRoundConfirm(true)}
             disabled={!activeRound || busy}
           >
             End Round
           </button>
           <button
             className="rounded-lg bg-[#C0392B] px-3 py-2 text-sm font-medium text-white"
-            onClick={() => runAction('end_session')}
+            onClick={() => setShowEndSessionConfirm(true)}
             disabled={busy || isSessionCompleted}
           >
             {isSessionCompleted ? 'Session Completed' : 'End Session'}
@@ -633,6 +671,110 @@ export default function HostSessionPage() {
           onSelectRound={(roundId) => runAction('start_round', { roundId })}
         />
       </div>
+
+      {showEndRoundConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">End this round?</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              This will close the active round and return the session to lobby state.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                onClick={() => setShowEndRoundConfirm(false)}
+              >
+                Continue round
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-[#C0392B] px-4 py-2 text-sm font-medium text-white hover:bg-[#A93226]"
+                onClick={handleConfirmEndRound}
+                disabled={busy}
+              >
+                End round
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showEndSessionConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">End this session?</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              This action completes the quiz session. A final scoreboard will be shown after confirmation.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                onClick={() => setShowEndSessionConfirm(false)}
+              >
+                Continue session
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-[#C0392B] px-4 py-2 text-sm font-medium text-white hover:bg-[#A93226]"
+                onClick={handleConfirmEndSession}
+                disabled={busy}
+              >
+                End session
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showFinalScoreboard && finalScoreboard ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-6xl rounded-xl bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-gray-900">Final Scoreboard</h2>
+            <p className="mt-1 text-sm text-gray-600">Session complete. Final scores by round are shown below.</p>
+
+            <div className="mt-4 max-h-[60vh] overflow-auto rounded-lg border border-gray-200">
+              <table className="w-full min-w-[720px]">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Team</th>
+                    {finalScoreboard.rounds.map((round) => (
+                      <th key={round.id} className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
+                        {round.title}
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {finalScoreboard.teams.map((team) => (
+                    <tr key={team.teamLabel} className="border-t border-gray-100">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{team.teamName}</td>
+                      {finalScoreboard.rounds.map((round) => (
+                        <td key={`${team.teamLabel}-${round.id}`} className="px-4 py-3 text-sm text-gray-700">
+                          {team.rounds[round.id] ?? 0}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-sm font-semibold text-[#C0392B]">{team.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="rounded-lg bg-[#C0392B] px-4 py-2 text-sm font-medium text-white hover:bg-[#A93226]"
+                onClick={() => router.push('/host')}
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

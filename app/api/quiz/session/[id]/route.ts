@@ -5,6 +5,12 @@ import { getOccupiedLabels, nextOccupiedLabel } from '@/lib/quiz/teamSlots'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
+type ScoreboardTeamRow = {
+  teamLabel: TeamLabel
+  teamName: string
+  total: number
+  rounds: Record<string, number>
+}
 
 function nextTeam(current: TeamLabel): TeamLabel {
   const idx = TEAM_LABELS.indexOf(current)
@@ -109,6 +115,83 @@ async function getTeamDisplayNames(session: { team_slots?: Record<string, string
     }
     return acc
   }, {} as Record<TeamLabel, string>)
+}
+
+async function buildFinalScoreboard(
+  sessionId: string,
+  session: { team_slots?: Record<string, string> | null; is_test_session?: boolean | null },
+  supabase: any,
+) {
+  const [teamDisplayNames, roundsRes, totalsRes] = await Promise.all([
+    getTeamDisplayNames(session, supabase),
+    supabase
+      .from('quiz_rounds')
+      .select('id,title,round_order')
+      .eq('session_id', sessionId)
+      .order('round_order', { ascending: true }),
+    supabase
+      .from('quiz_session_scores')
+      .select('team_label,total_score')
+      .eq('session_id', sessionId),
+  ])
+
+  const rounds = roundsRes.data || []
+  const roundIds = rounds.map((r: any) => r.id)
+
+  let perRoundEvents: Array<{ round_id: string; answered_by_team: TeamLabel; points_awarded: number | null }> = []
+  if (roundIds.length > 0) {
+    const { data } = await supabase
+      .from('quiz_question_events')
+      .select('round_id,answered_by_team,points_awarded')
+      .in('round_id', roundIds)
+      .in('status', ['answered', 'dropped'])
+      .not('answered_by_team', 'is', null)
+    perRoundEvents = (data || []) as typeof perRoundEvents
+  }
+
+  const slots = (session?.team_slots || {}) as Record<string, string>
+  const occupiedLabels = TEAM_LABELS.filter((label) => Boolean(slots[label]))
+  const participatingLabels = session?.is_test_session
+    ? occupiedLabels
+    : TEAM_LABELS
+
+  const totalsByLabel = TEAM_LABELS.reduce((acc, label) => {
+    const row = (totalsRes.data || []).find((r: any) => r.team_label === label)
+    acc[label] = Number(row?.total_score || 0)
+    return acc
+  }, {} as Record<TeamLabel, number>)
+
+  const perRoundByTeam: Record<TeamLabel, Record<string, number>> = TEAM_LABELS.reduce((acc, label) => {
+    acc[label] = {}
+    return acc
+  }, {} as Record<TeamLabel, Record<string, number>>)
+
+  for (const event of perRoundEvents) {
+    const label = String(event.answered_by_team || '').toUpperCase() as TeamLabel
+    if (!TEAM_LABELS.includes(label)) continue
+    const roundId = String(event.round_id || '')
+    if (!roundId) continue
+    perRoundByTeam[label][roundId] =
+      Number(perRoundByTeam[label][roundId] || 0) + Number(event.points_awarded || 0)
+  }
+
+  const teams: ScoreboardTeamRow[] = participatingLabels
+    .map((label) => ({
+      teamLabel: label,
+      teamName: teamDisplayNames[label] || `Team ${label}`,
+      total: totalsByLabel[label] || 0,
+      rounds: perRoundByTeam[label] || {},
+    }))
+    .sort((a, b) => b.total - a.total)
+
+  return {
+    rounds: rounds.map((round: any) => ({
+      id: round.id,
+      title: round.title || `Round ${round.round_order || ''}`.trim(),
+      roundOrder: Number(round.round_order || 0),
+    })),
+    teams,
+  }
 }
 
 function previewText(text: string | null | undefined, maxLen = 72): string {
@@ -1826,17 +1909,20 @@ export async function PATCH(
         .from('quiz_live_sessions')
         .update({ status: 'completed', current_round_id: null, updated_at: now })
         .eq('id', sessionId)
-        .select('id, status, current_round_id, updated_at')
+        .select('id, status, current_round_id, updated_at, team_slots, is_test_session')
         .single()
 
       if (sessionError) {
         return NextResponse.json({ error: sessionError.message }, { status: 500 })
       }
 
+      const finalScoreboard = await buildFinalScoreboard(sessionId, updatedSession, supabase)
+
       return NextResponse.json({
         success: true,
         session: updatedSession,
         roundsCompletedCount: (updatedRounds || []).length,
+        finalScoreboard,
       })
     }
 
