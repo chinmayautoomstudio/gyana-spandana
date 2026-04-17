@@ -115,10 +115,21 @@ export function QuestionSelectionModal({
   }
 
   const handleSelectAll = () => {
-    if (selectedQuestions.size === filteredQuestions.length) {
-      setSelectedQuestions(new Set())
+    const visibleIds = filteredQuestions.map((q) => q.id)
+    const allVisibleSelected =
+      visibleIds.length > 0 && visibleIds.every((id) => selectedQuestions.has(id))
+    if (allVisibleSelected) {
+      setSelectedQuestions((prev) => {
+        const next = new Set(prev)
+        visibleIds.forEach((id) => next.delete(id))
+        return next
+      })
     } else {
-      setSelectedQuestions(new Set(filteredQuestions.map((q) => q.id)))
+      setSelectedQuestions((prev) => {
+        const next = new Set(prev)
+        visibleIds.forEach((id) => next.add(id))
+        return next
+      })
     }
   }
 
@@ -128,6 +139,9 @@ export function QuestionSelectionModal({
   }
 
   const categories = Array.from(new Set(questions.map((q) => q.category).filter(Boolean) as string[]))
+
+  const allVisibleSelected =
+    filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedQuestions.has(q.id))
 
   if (!isOpen) return null
 
@@ -221,7 +235,7 @@ export function QuestionSelectionModal({
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={selectedQuestions.size === filteredQuestions.length && filteredQuestions.length > 0}
+                  checked={allVisibleSelected}
                   onChange={handleSelectAll}
                   className="w-4 h-4 text-[#C0392B] border-gray-300 rounded focus:ring-[#C0392B]"
                 />
