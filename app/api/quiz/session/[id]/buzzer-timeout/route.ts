@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { runBuzzerAnswerTimeout } from '@/lib/services/buzzerAnswerTimeout'
 
@@ -112,7 +113,8 @@ export async function POST(
       return NextResponse.json({ error: 'Only the team that may answer can request a timeout' }, { status: 403 })
     }
 
-    const result = await runBuzzerAnswerTimeout(supabase, sessionId, questionEventId)
+    const supabaseAdmin = createAdminClient()
+    const result = await runBuzzerAnswerTimeout(supabaseAdmin, sessionId, questionEventId)
     if (!result.ok) {
       if (result.error === 'Answer period has not expired yet') {
         return NextResponse.json({ error: result.error }, { status: 400 })

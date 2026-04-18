@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
@@ -30,6 +31,7 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient()
+    const supabaseAdmin = createAdminClient()
     const resolvedParams = params instanceof Promise ? await params : params
     const sessionId = resolvedParams.id
 
@@ -101,7 +103,7 @@ export async function POST(
     for (let i = 0; i < ordered.length; i++) {
       const desiredOrder = i + 1
       if (Number(ordered[i].buzz_order || 0) !== desiredOrder) {
-        await supabase.from('quiz_buzz_events').update({ buzz_order: desiredOrder }).eq('id', ordered[i].id)
+        await supabaseAdmin.from('quiz_buzz_events').update({ buzz_order: desiredOrder }).eq('id', ordered[i].id)
       }
     }
 
@@ -117,7 +119,7 @@ export async function POST(
     const firstActive = ordered.find((row) => !excludedBuzz.has(String(row.team_label)))
     if (firstActive?.team_label === teamLabel) {
       const deadlineIso = new Date(serverNowMs + 30_000).toISOString()
-      await supabase
+      await supabaseAdmin
         .from('quiz_question_events')
         .update({ directed_team: teamLabel, buzzer_answer_deadline_at: deadlineIso })
         .eq('id', questionEventId)
