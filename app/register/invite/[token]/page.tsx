@@ -1,8 +1,8 @@
 'use client'
 
-import { Suspense, use, useEffect, useMemo, useState, useRef, type ReactNode } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
+import { Suspense, useEffect, useState, useRef, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
+import { useResolvedParams, useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
@@ -57,11 +57,7 @@ function PreviewField({ label, children }: { label: string; children: ReactNode 
 type InviteRouteParams = Record<string, string | string[] | undefined>
 
 function RegisterInvitePageContent() {
-  const rawParams = useParams() as InviteRouteParams | Promise<InviteRouteParams>
-  const resolvedParams = use(
-    rawParams instanceof Promise ? rawParams : Promise.resolve(rawParams)
-  ) as InviteRouteParams
-  const routeParams = useMemo(() => ({ ...resolvedParams }), [resolvedParams])
+  const routeParams = useResolvedParams<InviteRouteParams>()
   const router = useRouter()
   const searchParams = useStableSearchParams()
   const rawToken = routeParams.token
