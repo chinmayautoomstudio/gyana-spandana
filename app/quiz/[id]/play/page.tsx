@@ -18,6 +18,8 @@ interface SessionState {
   participantDirectAttempt?: { answer_text: string; verdict: string } | null
   /** From GET: server-backed Rapid Fire turn countdown (started_at + duration_seconds). */
   rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
+  /** From GET: server epoch ms at response time — used to correct buzzer deadline vs client clock skew. */
+  serverTimestampMs?: number
 }
 
 export default function ParticipantPlayPage() {
@@ -37,6 +39,8 @@ export default function ParticipantPlayPage() {
   const [buzzerPressedForEventId, setBuzzerPressedForEventId] = useState<string | null>(null)
   const buzzAttemptLockEventRef = useRef<string | null>(null)
   const buzzerTimeoutSentForEventRef = useRef<string | null>(null)
+  /** client ms - server ms (subtract from Date.now()/buzzerClock for server-equivalent time). */
+  const clockOffsetMsRef = useRef(0)
   const [myBuzzOrder, setMyBuzzOrder] = useState<number | null>(null)
   const [questionLanguage, setQuestionLanguage] = useState<'en' | 'odia'>('en')
   const [buzzerClock, setBuzzerClock] = useState(() => Date.now())
@@ -48,6 +52,9 @@ export default function ParticipantPlayPage() {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data?.error || 'Failed to load session')
     setState(data)
+    if (typeof data?.serverTimestampMs === 'number') {
+      clockOffsetMsRef.current = Date.now() - data.serverTimestampMs
+    }
     return data as SessionState
   }, [sessionId])
 
@@ -266,10 +273,11 @@ export default function ParticipantPlayPage() {
     const deadlineAt = ev.buzzer_answer_deadline_at as string | undefined
     if (!deadlineAt) return
     const deadlineMs = new Date(deadlineAt).getTime()
-    if (!Number.isFinite(deadlineMs) || buzzerClock < deadlineMs) return
+    const serverSyncedNowLocal = buzzerClock - clockOffsetMsRef.current
+    if (!Number.isFinite(deadlineMs) || serverSyncedNowLocal < deadlineMs) return
 
     const buzzerEventId = ev.id
-    const buzzerTimeExpiredLocal = buzzerClock >= deadlineMs
+    const buzzerTimeExpiredLocal = serverSyncedNowLocal >= deadlineMs
     const canBuzzLocal =
       state.activeRound?.round_type === 'buzzer' &&
       ev.status === 'buzzer_open' &&
@@ -460,11 +468,12 @@ export default function ParticipantPlayPage() {
   const buzzerEventId = state.currentQuestionEvent?.id || null
   const buzzerDeadlineAt = state.currentQuestionEvent?.buzzer_answer_deadline_at as string | undefined
   const buzzerDeadlineMs = buzzerDeadlineAt ? new Date(buzzerDeadlineAt).getTime() : NaN
+  const serverSyncedNow = buzzerClock - clockOffsetMsRef.current
   const buzzerTimeExpired =
-    Number.isFinite(buzzerDeadlineMs) && buzzerClock >= buzzerDeadlineMs
+    Number.isFinite(buzzerDeadlineMs) && serverSyncedNow >= buzzerDeadlineMs
   const buzzerSecondsLeft =
     buzzerDeadlineAt && Number.isFinite(buzzerDeadlineMs)
-      ? Math.max(0, Math.ceil((buzzerDeadlineMs - buzzerClock) / 1000))
+      ? Math.max(0, Math.ceil((buzzerDeadlineMs - serverSyncedNow) / 1000))
       : null
   const canBuzz =
     isBuzzerRound &&

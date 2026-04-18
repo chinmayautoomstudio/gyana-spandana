@@ -572,6 +572,7 @@ export async function GET(
       pendingBuzzerAnswer,
       participantDirectAttempt,
       rapidFireTimer,
+      serverTimestampMs: Date.now(),
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
