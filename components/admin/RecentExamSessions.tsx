@@ -9,8 +9,22 @@ interface ExamSession {
   exam_title: string
   status: string
   score: number | null
+  total_questions: number | null
+  exam_total_questions: number | null
   started_at: string
   exam_id: string
+}
+
+function formatSessionScore(session: ExamSession): string {
+  if (session.status !== 'submitted' || session.score === null) {
+    return '-'
+  }
+  const denominator =
+    session.total_questions ?? session.exam_total_questions ?? null
+  if (denominator === null || denominator === 0) {
+    return String(session.score)
+  }
+  return `${session.score} / ${denominator}`
 }
 
 export async function RecentExamSessions() {
@@ -36,10 +50,11 @@ export async function RecentExamSessions() {
       id,
       status,
       score,
+      total_questions,
       started_at,
       exam_id,
       participant:participants(name, email),
-      exam:exams(title)
+      exam:exams(title, total_questions)
     `)
     .order('started_at', { ascending: false })
     .limit(10)
@@ -55,6 +70,8 @@ export async function RecentExamSessions() {
     exam_title: attempt.exam?.title || 'Unknown Exam',
     status: attempt.status,
     score: attempt.score,
+    total_questions: attempt.total_questions ?? null,
+    exam_total_questions: attempt.exam?.total_questions ?? null,
     started_at: attempt.started_at,
     exam_id: attempt.exam_id,
   }))
@@ -132,9 +149,7 @@ export async function RecentExamSessions() {
                     {getStatusBadge(session.status)}
                   </td>
                   <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {session.status === 'submitted' && session.score !== null
-                      ? `${session.score}%`
-                      : '-'}
+                    {formatSessionScore(session)}
                   </td>
                   <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
                     {format(new Date(session.started_at), 'dd/MM/yyyy')}
