@@ -1,8 +1,8 @@
 'use client'
 
-import { Suspense, useEffect, useState, useRef, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
-import { useResolvedParams, useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
+import { Suspense, use, useEffect, useMemo, useState, useRef, type ReactNode } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
@@ -54,11 +54,23 @@ function PreviewField({ label, children }: { label: string; children: ReactNode 
   )
 }
 
+type InviteRouteParams = Record<string, string | string[] | undefined>
+
 function RegisterInvitePageContent() {
-  const params = useResolvedParams()
+  const rawParams = useParams() as InviteRouteParams | Promise<InviteRouteParams>
+  const resolvedParams = use(
+    rawParams instanceof Promise ? rawParams : Promise.resolve(rawParams)
+  ) as InviteRouteParams
+  const routeParams = useMemo(() => ({ ...resolvedParams }), [resolvedParams])
   const router = useRouter()
   const searchParams = useStableSearchParams()
-  const token = typeof params.token === 'string' ? params.token : ''
+  const rawToken = routeParams.token
+  const token =
+    typeof rawToken === 'string'
+      ? rawToken
+      : Array.isArray(rawToken)
+        ? rawToken[0] ?? ''
+        : ''
   const [invitation, setInvitation] = useState<Awaited<ReturnType<typeof getInvitationByToken>> | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
