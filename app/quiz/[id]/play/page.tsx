@@ -344,6 +344,7 @@ export default function ParticipantPlayPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || 'Failed to buzz in')
       setMyBuzzOrder(Number(data?.buzzOrder || 0) || null)
+      await fetchState()
     } catch (e: any) {
       setError(e.message)
       buzzAttemptLockEventRef.current = null
