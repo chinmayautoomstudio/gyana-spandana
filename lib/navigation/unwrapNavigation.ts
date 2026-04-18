@@ -1,24 +1,22 @@
 'use client'
 
-import { use, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 
 /**
- * Next.js 15/16 instruments dynamic `params` as an async Promise-like proxy in dev mode.
+ * Next.js 15/16 may instrument dynamic `params` as a Proxy in dev mode.
  * Accessing properties on the proxy directly (e.g. via React DevTools' Object.keys())
- * triggers the "params is a Promise" warning.
+ * can trigger the "params is a Promise" warning.
  *
- * Fix: unwrap via `use(Promise.resolve(...))` AND then shallow-copy the result into a
- * brand-new plain object so the instrumented proxy never escapes this hook.
+ * Fix: shallow-copy `useParams()` into a plain object so the instrumented proxy never escapes.
+ * Do not use React's `use()` here — it requires a Suspense boundary and a stable Promise identity;
+ * `Promise.resolve(raw)` on every render breaks that contract (React error #482).
  */
 export function useResolvedParams<
   T extends Record<string, string | string[] | undefined> = Record<string, string | string[] | undefined>,
 >(): T {
-  const raw = useParams() as T | Promise<T>
-  const resolved = use(Promise.resolve(raw)) as T
-  // Shallow-copy into a plain object to strip the Proxy trap.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return useMemo(() => ({ ...resolved }) as T, [resolved])
+  const raw = useParams() as T
+  return useMemo(() => ({ ...raw }) as T, [raw])
 }
 
 /**
