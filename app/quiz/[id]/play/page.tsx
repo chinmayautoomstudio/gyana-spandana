@@ -173,6 +173,8 @@ export default function ParticipantPlayPage() {
     if (state?.currentQuestionEvent?.status !== 'buzzer_open') return
     const deadline = state?.currentQuestionEvent?.buzzer_answer_deadline_at as string | undefined
     if (!deadline) return
+    const ans = String(state?.participantDirectAttempt?.answer_text || '').trim().toUpperCase()
+    if (ans === 'A' || ans === 'B' || ans === 'C' || ans === 'D') return
     const t = setInterval(() => setBuzzerClock(Date.now()), 500)
     return () => clearInterval(t)
   }, [
@@ -180,6 +182,7 @@ export default function ParticipantPlayPage() {
     state?.currentQuestionEvent?.status,
     state?.currentQuestionEvent?.buzzer_answer_deadline_at,
     state?.currentQuestionEvent?.id,
+    state?.participantDirectAttempt?.answer_text,
   ])
 
   useEffect(() => {
@@ -297,6 +300,11 @@ export default function ParticipantPlayPage() {
       Boolean(deadlineAt)
 
     if (!isBuzzerActiveResponderLocal) return
+
+    const submittedMcq = String(state?.participantDirectAttempt?.answer_text || '')
+      .trim()
+      .toUpperCase()
+    if (submittedMcq === 'A' || submittedMcq === 'B' || submittedMcq === 'C' || submittedMcq === 'D') return
 
     const eventId = ev.id
     if (buzzerTimeoutSentForEventRef.current === eventId) return
@@ -450,6 +458,12 @@ export default function ParticipantPlayPage() {
   const submittedLetter: 'A' | 'B' | 'C' | 'D' | null =
     letterFromAttempt ?? (hasFinalVerdict ? letterFromSelection : null)
 
+  const buzzerMcqSubmittedPending =
+    isBuzzerRound &&
+    evStatus === 'buzzer_open' &&
+    Boolean(letterFromAttempt) &&
+    verdict === 'pending'
+
   const officialAnswerRaw = String(state.currentQuestion?.correct_answer || '').trim().toUpperCase()
   const officialChar = officialAnswerRaw.charAt(0)
   const officialLetter: 'A' | 'B' | 'C' | 'D' | null =
@@ -494,7 +508,8 @@ export default function ParticipantPlayPage() {
     !canBuzz &&
     isActiveBuzzerTeam &&
     Boolean(buzzerDeadlineAt)
-  const canSubmitBuzzerAnswer = isBuzzerActiveResponder && !buzzerTimeExpired
+  const canSubmitBuzzerAnswer =
+    isBuzzerActiveResponder && !buzzerTimeExpired && !buzzerMcqSubmittedPending
   const buzzerPenaltyPts = buzzerWrongPenaltyPoints(Number(state.session?.points_full ?? 10))
   const trueFalsePhaseOpen =
     isTrueFalseRound &&
@@ -595,7 +610,14 @@ export default function ParticipantPlayPage() {
         Boolean(state.currentQuestion) ? (
           <div className="rounded-2xl border-2 border-[#C0392B] bg-[#C0392B]/5 px-4 py-4 text-center shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#C0392B]">Buzzer round</p>
-            {buzzerSecondsLeft !== null ? (
+            {buzzerMcqSubmittedPending && isMyTurn ? (
+              <>
+                <p className="mt-2 text-lg font-medium text-gray-900">
+                  Team <span className="font-bold">{directedTeam || myTeamLabel}</span> — answer submitted
+                </p>
+                <p className="mt-2 text-sm text-gray-700">Waiting for the host…</p>
+              </>
+            ) : buzzerSecondsLeft !== null ? (
               <>
                 <p className="mt-2 text-lg font-medium text-gray-900">
                   {directedTeam ? (
@@ -903,6 +925,10 @@ export default function ParticipantPlayPage() {
               >
                 BUZZ IN!
               </button>
+            ) : buzzerMcqSubmittedPending && isActiveBuzzerTeam ? (
+              <p className="text-sm font-medium text-gray-800">
+                Your answer was submitted. Waiting for the host…
+              </p>
             ) : canSubmitBuzzerAnswer ? (
               <>
                 <div className="rounded-xl border-2 border-[#C0392B] bg-[#C0392B]/5 px-4 py-4 text-center">
