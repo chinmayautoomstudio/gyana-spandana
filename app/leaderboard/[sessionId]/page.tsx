@@ -7,7 +7,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import { createClient } from '@/lib/supabase/client'
 import { usePostgresLeaderboardRealtime } from '@/lib/hooks/usePostgresLeaderboardRealtime'
 import { LiveLeaderboardMeta } from '@/components/leaderboard/LiveLeaderboardMeta'
@@ -20,8 +20,8 @@ interface ScoreRow {
 }
 
 export default function PublicSessionLeaderboardPage() {
-  const params = useParams<{ sessionId: string }>()
-  const rawId = params?.sessionId
+  const resolvedParams = useResolvedParams()
+  const rawId = resolvedParams?.sessionId
   const sessionId = Array.isArray(rawId) ? rawId[0] : rawId
   const supabase = useMemo(() => createClient(), [])
 

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { QuestionSetForm } from '@/components/admin/QuestionSetForm'
@@ -24,9 +25,8 @@ interface SetQuestion {
 }
 
 export default function QuestionSetDetailsPage() {
-  const params = useParams()
   const router = useRouter()
-  const resolvedParams = params instanceof Promise ? use(params) : params
+  const resolvedParams = useResolvedParams()
   const setId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [questionSet, setQuestionSet] = useState<QuestionSet | null>(null)
   const [questions, setQuestions] = useState<SetQuestion[]>([])

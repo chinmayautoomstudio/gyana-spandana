@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { useParams } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ExportButton } from '@/components/admin/ExportButton'
@@ -26,8 +26,7 @@ interface Attempt {
 }
 
 export default function ExamReportPage() {
-  const params = useParams()
-  const resolvedParams = params instanceof Promise ? use(params) : params
+  const resolvedParams = useResolvedParams()
   const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<Exam | null>(null)
   const [attempts, setAttempts] = useState<Attempt[]>([])

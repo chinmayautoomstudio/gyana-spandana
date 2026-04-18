@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
@@ -25,9 +26,8 @@ interface Exam {
 }
 
 export default function ExamDetailsPage() {
-  const params = useParams()
   const router = useRouter()
-  const resolvedParams = params instanceof Promise ? use(params) : params
+  const resolvedParams = useResolvedParams()
   const examId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
   const [exam, setExam] = useState<Exam | null>(null)
   const [stats, setStats] = useState({

@@ -1,7 +1,8 @@
 'use client'
 
 import { Suspense, useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,7 +13,7 @@ import { Button } from '@/components/ui/Button'
 
 function ResetPasswordContent() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = useStableSearchParams()
   const code = searchParams.get('code')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -10,9 +10,9 @@ type SearchParams = { type?: string; q?: string; page?: string }
 export default async function EmailLogPage({
   searchParams,
 }: {
-  searchParams: Promise<SearchParams> | SearchParams
+  searchParams: Promise<SearchParams>
 }) {
-  const sp = searchParams instanceof Promise ? await searchParams : searchParams
+  const sp = await searchParams
   const page = Math.max(1, parseInt(sp.page || '1', 10) || 1)
   const typeFilter =
     sp.type && ALL_SENT_EMAIL_TYPES.includes(sp.type as SentEmailType)

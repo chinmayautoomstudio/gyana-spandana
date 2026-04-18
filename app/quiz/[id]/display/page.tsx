@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
 import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
@@ -18,8 +18,13 @@ interface SessionState {
 }
 
 export default function DisplayBoardPage() {
-  const params = useParams<{ id: string }>()
-  const sessionId = params?.id
+  const resolvedParams = useResolvedParams()
+  const sessionId =
+    typeof resolvedParams?.id === 'string'
+      ? resolvedParams.id
+      : Array.isArray(resolvedParams?.id)
+        ? resolvedParams.id[0]
+        : undefined
 
   const [state, setState] = useState<SessionState | null>(null)
   const [error, setError] = useState<string | null>(null)

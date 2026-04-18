@@ -1,7 +1,8 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   CompetitionLeaderboardPanel,
@@ -10,7 +11,7 @@ import {
 
 function CompetitionLeaderboardInner() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = useStableSearchParams()
   const examFromQuery = searchParams.get('exam')
   const supabase = useMemo(() => createClient(), [])
   const [exams, setExams] = useState<LeaderboardExamOption[]>([])

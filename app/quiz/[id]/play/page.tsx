@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import { createClient } from '@/lib/supabase/client'
 import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
@@ -23,8 +23,13 @@ interface SessionState {
 }
 
 export default function ParticipantPlayPage() {
-  const params = useParams<{ id: string }>()
-  const sessionId = params?.id
+  const resolvedParams = useResolvedParams()
+  const sessionId =
+    typeof resolvedParams?.id === 'string'
+      ? resolvedParams.id
+      : Array.isArray(resolvedParams?.id)
+        ? resolvedParams.id[0]
+        : undefined
   const supabase = useMemo(() => createClient(), [])
 
   const [state, setState] = useState<SessionState | null>(null)

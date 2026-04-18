@@ -1,7 +1,8 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   CompetitionLeaderboardPanel,
@@ -9,9 +10,9 @@ import {
 } from '@/components/leaderboard/CompetitionLeaderboardPanel'
 
 function CompetitionLeaderboardExamInner() {
-  const params = useParams()
+  const resolvedParams = useResolvedParams()
   const router = useRouter()
-  const raw = params?.examId
+  const raw = resolvedParams?.examId
   const examIdParam = Array.isArray(raw) ? raw[0] : raw
   const supabase = useMemo(() => createClient(), [])
   const [exams, setExams] = useState<LeaderboardExamOption[]>([])

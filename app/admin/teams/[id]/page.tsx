@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
@@ -40,9 +41,8 @@ interface ParticipantSummary {
 }
 
 export default function AdminTeamDetailPage() {
-  const params = useParams()
   const router = useRouter()
-  const resolvedParams = params instanceof Promise ? use(params) : params
+  const resolvedParams = useResolvedParams()
   const teamId = typeof resolvedParams?.id === 'string' ? resolvedParams.id : undefined
 
   const [team, setTeam] = useState<TeamDetail | null>(null)

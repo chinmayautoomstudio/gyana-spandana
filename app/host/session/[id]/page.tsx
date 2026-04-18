@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   subscribeQuizDataRefresh,
@@ -65,10 +66,15 @@ interface FinalScoreboardPayload {
 }
 
 export default function HostSessionPage() {
-  const params = useParams<{ id: string }>()
+  const resolvedParams = useResolvedParams()
   const router = useRouter()
   const { setIsBlocking, registerEndSessionRequestHandler } = useHostLeaveGuard()
-  const sessionId = params?.id
+  const sessionId =
+    typeof resolvedParams?.id === 'string'
+      ? resolvedParams.id
+      : Array.isArray(resolvedParams?.id)
+        ? resolvedParams.id[0]
+        : undefined
 
   const [state, setState] = useState<SessionState | null>(null)
   const [selectedTeam, setSelectedTeam] = useState<TeamLabel>('A')

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { ExamCalendar } from '@/components/admin/ExamCalendar'
@@ -19,7 +19,7 @@ interface ScheduledExam {
 }
 
 function SchedulePageContent() {
-  const searchParams = useSearchParams()
+  const searchParams = useStableSearchParams()
   const openedForExamIdRef = useRef<string | null>(null)
   const [allExams, setAllExams] = useState<ScheduledExam[]>([])
   const [loading, setLoading] = useState(true)

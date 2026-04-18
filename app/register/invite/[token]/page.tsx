@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, useRef, type ReactNode } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState, useRef, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
+import { useResolvedParams, useStableSearchParams } from '@/lib/navigation/unwrapNavigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
@@ -53,10 +54,10 @@ function PreviewField({ label, children }: { label: string; children: ReactNode 
   )
 }
 
-export default function RegisterInvitePage() {
-  const params = useParams()
+function RegisterInvitePageContent() {
+  const params = useResolvedParams()
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = useStableSearchParams()
   const token = typeof params.token === 'string' ? params.token : ''
   const [invitation, setInvitation] = useState<Awaited<ReturnType<typeof getInvitationByToken>> | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -739,5 +740,21 @@ export default function RegisterInvitePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function RegisterInvitePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+            <p className="text-gray-600">Loading…</p>
+          </div>
+        </div>
+      }
+    >
+      <RegisterInvitePageContent />
+    </Suspense>
   )
 }
