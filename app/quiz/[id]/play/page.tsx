@@ -15,6 +15,8 @@ interface SessionState {
   currentQuestionEvent: any | null
   currentQuestion: any | null
   participantDirectAttempt?: { answer_text: string; verdict: string } | null
+  /** From GET: server-backed Rapid Fire turn countdown (started_at + duration_seconds). */
+  rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
 }
 
 export default function ParticipantPlayPage() {
@@ -35,6 +37,8 @@ export default function ParticipantPlayPage() {
   const buzzAttemptLockEventRef = useRef<string | null>(null)
   const [myBuzzOrder, setMyBuzzOrder] = useState<number | null>(null)
   const [questionLanguage, setQuestionLanguage] = useState<'en' | 'odia'>('en')
+  const [buzzerClock, setBuzzerClock] = useState(() => Date.now())
+  const [rapidFireClock, setRapidFireClock] = useState(() => Date.now())
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
@@ -153,6 +157,31 @@ export default function ParticipantPlayPage() {
     }, 1000)
     return () => clearInterval(timer)
   }, [rapidFireRemaining])
+
+  useEffect(() => {
+    if (state?.activeRound?.round_type !== 'buzzer') return
+    if (state?.currentQuestionEvent?.status !== 'buzzer_open') return
+    const deadline = state?.currentQuestionEvent?.buzzer_answer_deadline_at as string | undefined
+    if (!deadline) return
+    const t = setInterval(() => setBuzzerClock(Date.now()), 500)
+    return () => clearInterval(t)
+  }, [
+    state?.activeRound?.round_type,
+    state?.currentQuestionEvent?.status,
+    state?.currentQuestionEvent?.buzzer_answer_deadline_at,
+    state?.currentQuestionEvent?.id,
+  ])
+
+  useEffect(() => {
+    if (state?.activeRound?.round_type !== 'rapid_fire') return
+    if (!state?.rapidFireTimer?.startedAt) return
+    const t = setInterval(() => setRapidFireClock(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [
+    state?.activeRound?.round_type,
+    state?.rapidFireTimer?.startedAt,
+    state?.rapidFireTimer?.durationSeconds,
+  ])
 
   useEffect(() => {
     const answer = String(state?.participantDirectAttempt?.answer_text || '').trim().toUpperCase()
@@ -286,6 +315,19 @@ export default function ParticipantPlayPage() {
   const isRapidFireRound = state.activeRound?.round_type === 'rapid_fire'
   const isBuzzerRound = state.activeRound?.round_type === 'buzzer'
   const revealCorrect = Boolean(state.currentQuestionEvent?.correct_answer_revealed_at)
+
+  const rt = state.rapidFireTimer
+  let rapidFireSecondsFromServer: number | null = null
+  if (rt?.startedAt != null && rt.durationSeconds != null) {
+    const startedMs = new Date(rt.startedAt).getTime()
+    if (Number.isFinite(startedMs)) {
+      const elapsed = Math.floor((rapidFireClock - startedMs) / 1000)
+      rapidFireSecondsFromServer = Math.max(0, Number(rt.durationSeconds) - elapsed)
+    }
+  }
+  const rapidFireSecondsDisplay =
+    rapidFireSecondsFromServer !== null ? rapidFireSecondsFromServer : rapidFireRemaining
+
   const showOptions =
     (isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed') ||
     (isRapidFireRound &&
@@ -295,7 +337,7 @@ export default function ParticipantPlayPage() {
     isRapidFireRound &&
     Boolean(state.currentQuestion) &&
     ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || '')) &&
-    (rapidFireRemaining == null || rapidFireRemaining > 0)
+    (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0)
 
   const attempt = state.participantDirectAttempt
   const evStatus = String(state.currentQuestionEvent?.status || '')
@@ -348,12 +390,6 @@ export default function ParticipantPlayPage() {
   const trueFalseEventId = state.currentQuestionEvent?.id || null
   const buzzerEventId = state.currentQuestionEvent?.id || null
   const buzzerDeadlineAt = state.currentQuestionEvent?.buzzer_answer_deadline_at as string | undefined
-  const [buzzerClock, setBuzzerClock] = useState(() => Date.now())
-  useEffect(() => {
-    if (!isBuzzerRound || state.currentQuestionEvent?.status !== 'buzzer_open' || !buzzerDeadlineAt) return
-    const t = setInterval(() => setBuzzerClock(Date.now()), 500)
-    return () => clearInterval(t)
-  }, [isBuzzerRound, state.currentQuestionEvent?.status, buzzerDeadlineAt, state.currentQuestionEvent?.id])
   const buzzerDeadlineMs = buzzerDeadlineAt ? new Date(buzzerDeadlineAt).getTime() : NaN
   const buzzerTimeExpired =
     Number.isFinite(buzzerDeadlineMs) && buzzerClock >= buzzerDeadlineMs
@@ -395,7 +431,8 @@ export default function ParticipantPlayPage() {
     Boolean(state.currentQuestion) &&
     ['revealed', 'options_revealed', 'buzzer_open'].includes(evStatus) &&
     !revealCorrect &&
-    isMyTurn
+    isMyTurn &&
+    (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0)
   const questionReadOnly = isTrueFalseRound ? !canChooseTrueFalse : !rapidFirePhaseOpen
 
   const onTrueFalseSelect = (value: 'TRUE' | 'FALSE') => {
@@ -470,12 +507,57 @@ export default function ParticipantPlayPage() {
               {isMyTurn ? ' (Your turn)' : ''}
             </p>
           )}
-          {isRapidFireRound && (
-            <p className="mt-1 text-sm font-medium text-gray-700">
-              Rapid Fire timer: {rapidFireRemaining != null ? `${rapidFireRemaining}s` : 'Waiting for timer...'}
-            </p>
-          )}
         </div>
+
+        {isBuzzerRound &&
+        evStatus === 'buzzer_open' &&
+        Boolean(buzzerDeadlineAt) &&
+        Boolean(state.currentQuestion) ? (
+          <div className="rounded-2xl border-2 border-[#C0392B] bg-[#C0392B]/5 px-4 py-4 text-center shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#C0392B]">Buzzer round</p>
+            {buzzerSecondsLeft !== null ? (
+              <>
+                <p className="mt-2 text-lg font-medium text-gray-900">
+                  {directedTeam ? (
+                    <>
+                      Team <span className="font-bold">{directedTeam}</span> may answer
+                    </>
+                  ) : (
+                    <>First buzzer may answer</>
+                  )}
+                </p>
+                <p className="mt-2 text-4xl font-bold tabular-nums text-[#C0392B]">
+                  {buzzerTimeExpired ? 0 : buzzerSecondsLeft}
+                  <span className="text-xl font-semibold text-gray-800">s</span>
+                </p>
+                {buzzerTimeExpired ? (
+                  <p className="mt-1 text-sm text-gray-700">Answer window closed. Waiting for host…</p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-600">Shared countdown for all teams</p>
+                )}
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-gray-800">Buzzer is open — press Buzz In! to respond.</p>
+            )}
+          </div>
+        ) : null}
+
+        {isRapidFireRound &&
+        ['revealed', 'options_revealed', 'buzzer_open'].includes(evStatus) &&
+        Boolean(state.currentQuestion) &&
+        (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0) ? (
+          <div className="rounded-2xl border-2 border-orange-400 bg-orange-50/90 px-4 py-5 text-center shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-900">Rapid Fire</p>
+            {rapidFireSecondsDisplay != null && rapidFireSecondsDisplay > 0 ? (
+              <p className="mt-2 text-5xl font-bold tabular-nums tracking-tight text-orange-950">
+                {rapidFireSecondsDisplay}
+                <span className="ml-1 text-2xl font-semibold text-orange-900">s</span>
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-orange-900">Syncing timer…</p>
+            )}
+          </div>
+        ) : null}
 
         {!state.currentQuestion || (isRapidFireRound && !rapidFireQuestionVisible) ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-600">
@@ -746,11 +828,6 @@ export default function ParticipantPlayPage() {
                 <p className="text-sm font-medium text-gray-800">
                   You buzzed first. Select one option from the choices shown above:
                 </p>
-                {buzzerSecondsLeft !== null ? (
-                  <p className="text-sm text-amber-900">
-                    Time remaining: <span className="font-bold tabular-nums">{buzzerSecondsLeft}s</span>
-                  </p>
-                ) : null}
                 <div className="grid grid-cols-4 gap-2">
                   {(['A', 'B', 'C', 'D'] as const).map((key) => (
                     <button

@@ -7,22 +7,26 @@ const Statistics = dynamic(
   () =>
     import("@/components/home/Statistics").then((mod) => ({ default: mod.Statistics })),
   {
+    ssr: false,
     loading: () => (
       <div className="min-h-[280px] bg-[#ECF0F1]" aria-hidden="true" />
     ),
   }
 );
 
-const Features = dynamic(() =>
-  import("@/components/home/Features").then((mod) => ({ default: mod.Features }))
+const Features = dynamic(
+  () => import("@/components/home/Features").then((mod) => ({ default: mod.Features })),
+  { ssr: false },
 );
 
-const HowItWorks = dynamic(() =>
-  import("@/components/home/HowItWorks").then((mod) => ({ default: mod.HowItWorks }))
+const HowItWorks = dynamic(
+  () => import("@/components/home/HowItWorks").then((mod) => ({ default: mod.HowItWorks })),
+  { ssr: false },
 );
 
-const Testimonials = dynamic(() =>
-  import("@/components/home/Testimonials").then((mod) => ({ default: mod.Testimonials }))
+const Testimonials = dynamic(
+  () => import("@/components/home/Testimonials").then((mod) => ({ default: mod.Testimonials })),
+  { ssr: false },
 );
 
 const FAQ = dynamic(() =>

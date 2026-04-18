@@ -50,6 +50,45 @@ async function broadcastDirectVerdictApplied(
   }
 }
 
+/** Best-effort: participants subscribe for `timer_started` to sync Rapid Fire countdown. */
+async function broadcastTimerStarted(
+  sessionId: string,
+  supabase: any,
+  args: { questionEventId: string; durationSeconds: number; team: string },
+) {
+  const now = new Date().toISOString()
+  try {
+    const channel = supabase.channel(`quiz:session:${sessionId}`, {
+      config: { broadcast: { self: true, ack: false } },
+    })
+    await new Promise<void>((resolve) => {
+      const fallback = setTimeout(() => resolve(), 1500)
+      channel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          clearTimeout(fallback)
+          resolve()
+        }
+      })
+    })
+    await channel.send({
+      type: 'broadcast',
+      event: 'quiz_event',
+      payload: {
+        type: 'timer_started',
+        payload: {
+          questionEventId: args.questionEventId,
+          durationSeconds: args.durationSeconds,
+          team: args.team,
+        },
+        timestamp: now,
+      },
+    })
+    void supabase.removeChannel(channel)
+  } catch {
+    // DB write already succeeded; polling + GET rapidFireTimer remain fallback.
+  }
+}
+
 async function assertHostOrAdmin(sessionId: string, supabase: any) {
   const {
     data: { user },
@@ -493,6 +532,32 @@ export async function GET(
       }
     }
 
+    let rapidFireTimer: { startedAt: string; durationSeconds: number } | null = null
+    if (
+      activeRound?.round_type === 'rapid_fire' &&
+      latestEvent &&
+      ['revealed', 'options_revealed', 'buzzer_open'].includes(String((latestEvent as any)?.status || ''))
+    ) {
+      const evRf = latestEvent as { rapid_fire_team?: string }
+      const rfTeam = String(evRf?.rapid_fire_team || '').trim().toUpperCase()
+      if (TEAM_LABELS.includes(rfTeam as TeamLabel)) {
+        const { data: rfSess } = await supabase
+          .from('quiz_rapid_fire_sessions')
+          .select('started_at, duration_seconds')
+          .eq('team_label', rfTeam)
+          .is('ended_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (rfSess?.started_at != null && rfSess.duration_seconds != null) {
+          rapidFireTimer = {
+            startedAt: String(rfSess.started_at),
+            durationSeconds: Number(rfSess.duration_seconds),
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       session,
       rounds: rounds || [],
@@ -505,6 +570,7 @@ export async function GET(
       pendingDirectAnswer,
       pendingBuzzerAnswer,
       participantDirectAttempt,
+      rapidFireTimer,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -1675,6 +1741,12 @@ export async function PATCH(
         .select('*')
         .single()
       if (rfErr) return NextResponse.json({ error: rfErr.message }, { status: 500 })
+
+      void broadcastTimerStarted(sessionId, supabase, {
+        questionEventId: event.id,
+        durationSeconds,
+        team: teamLabel,
+      })
 
       return NextResponse.json({
         success: true,
