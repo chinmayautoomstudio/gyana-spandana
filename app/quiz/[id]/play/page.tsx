@@ -347,12 +347,27 @@ export default function ParticipantPlayPage() {
     directPhaseOpen && (!attempt || verdict === 'pending')
   const trueFalseEventId = state.currentQuestionEvent?.id || null
   const buzzerEventId = state.currentQuestionEvent?.id || null
+  const buzzerDeadlineAt = state.currentQuestionEvent?.buzzer_answer_deadline_at as string | undefined
+  const [buzzerClock, setBuzzerClock] = useState(() => Date.now())
+  useEffect(() => {
+    if (!isBuzzerRound || state.currentQuestionEvent?.status !== 'buzzer_open' || !buzzerDeadlineAt) return
+    const t = setInterval(() => setBuzzerClock(Date.now()), 500)
+    return () => clearInterval(t)
+  }, [isBuzzerRound, state.currentQuestionEvent?.status, buzzerDeadlineAt, state.currentQuestionEvent?.id])
+  const buzzerDeadlineMs = buzzerDeadlineAt ? new Date(buzzerDeadlineAt).getTime() : NaN
+  const buzzerTimeExpired =
+    Number.isFinite(buzzerDeadlineMs) && buzzerClock >= buzzerDeadlineMs
+  const buzzerSecondsLeft =
+    buzzerDeadlineAt && Number.isFinite(buzzerDeadlineMs)
+      ? Math.max(0, Math.ceil((buzzerDeadlineMs - buzzerClock) / 1000))
+      : null
   const canBuzz =
     isBuzzerRound &&
     state.currentQuestionEvent?.status === 'buzzer_open' &&
     Boolean(myTeamLabel) &&
     !!buzzerEventId &&
-    buzzerPressedForEventId !== buzzerEventId
+    buzzerPressedForEventId !== buzzerEventId &&
+    !buzzerTimeExpired
   const activeBuzzerTeam = (state.currentQuestionEvent?.directed_team || null) as TeamLabel | null
   const isActiveBuzzerTeam =
     Boolean(myTeamLabel) &&
@@ -363,7 +378,8 @@ export default function ParticipantPlayPage() {
     isBuzzerRound &&
     state.currentQuestionEvent?.status === 'buzzer_open' &&
     !canBuzz &&
-    isActiveBuzzerTeam
+    isActiveBuzzerTeam &&
+    !buzzerTimeExpired
   const trueFalsePhaseOpen =
     isTrueFalseRound &&
     Boolean(state.currentQuestion) &&
@@ -675,9 +691,7 @@ export default function ParticipantPlayPage() {
                     : 'Your buzzer response has been checked — Wrong.'}
                 </div>
                 {verdict === 'wrong' ? (
-                  <p className="text-xs text-gray-600">
-                    The host may pass this question to the next team.
-                  </p>
+                  <p className="text-xs text-gray-600">This question is closed. A wrong-answer penalty may apply.</p>
                 ) : null}
                 {submittedLetter ? (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="list">
@@ -732,6 +746,11 @@ export default function ParticipantPlayPage() {
                 <p className="text-sm font-medium text-gray-800">
                   You buzzed first. Select one option from the choices shown above:
                 </p>
+                {buzzerSecondsLeft !== null ? (
+                  <p className="text-sm text-amber-900">
+                    Time remaining: <span className="font-bold tabular-nums">{buzzerSecondsLeft}s</span>
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-4 gap-2">
                   {(['A', 'B', 'C', 'D'] as const).map((key) => (
                     <button
@@ -757,6 +776,8 @@ export default function ParticipantPlayPage() {
                   Submit buzzer answer
                 </Button>
               </>
+            ) : buzzerTimeExpired && state.currentQuestionEvent?.status === 'buzzer_open' ? (
+              <p className="text-sm text-gray-700">Answer time expired. Waiting for host…</p>
             ) : (
               <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-6 text-center">
                 <p className="text-lg font-semibold text-gray-800">Buzzed!</p>

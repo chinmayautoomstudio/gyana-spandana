@@ -119,6 +119,16 @@ export async function POST(
       if (event.status !== 'buzzer_open') {
         return NextResponse.json({ error: 'Buzzer is not open for answers' }, { status: 400 })
       }
+      const deadlineRaw = (event as { buzzer_answer_deadline_at?: string | null }).buzzer_answer_deadline_at
+      if (deadlineRaw) {
+        const deadlineMs = new Date(String(deadlineRaw)).getTime()
+        if (Number.isFinite(deadlineMs) && Date.now() >= deadlineMs) {
+          return NextResponse.json(
+            { error: 'The answer period for this buzz has expired' },
+            { status: 400 },
+          )
+        }
+      }
       const [{ data: buzzes, error: buzzErr }, { data: passRows, error: passErr }] = await Promise.all([
         supabase
           .from('quiz_buzz_events')

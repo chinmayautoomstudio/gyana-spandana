@@ -1,8 +1,10 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
 import { BuzzQueue } from '@/components/quiz/BuzzQueue'
+import { buzzerWrongPenaltyPoints } from '@/lib/services/scoringService'
 import type { TeamLabel } from '@/lib/utils/teamColors'
 
 interface BuzzerControlsProps {
@@ -34,6 +36,10 @@ interface BuzzerControlsProps {
   onMarkWrong: () => void
   onSkip: () => void
   questionLanguage?: 'en' | 'odia'
+  /** Session full points (for wrong-answer penalty hint). */
+  pointsFull?: number
+  /** When the buzzer answer period expires, host auto-applies timeout (once per question). */
+  onBuzzerTimeout?: () => void | Promise<void>
 }
 
 export function BuzzerControls({
@@ -50,6 +56,8 @@ export function BuzzerControls({
   onMarkWrong,
   onSkip,
   questionLanguage = 'en',
+  pointsFull = 10,
+  onBuzzerTimeout,
 }: BuzzerControlsProps) {
   const pickText = (
     english: string | null | undefined,
@@ -72,8 +80,38 @@ export function BuzzerControls({
         | 'option_d_odia'
     return pickText(question[key], question[keyOdia])
   }
+  const penaltyPreview = buzzerWrongPenaltyPoints(pointsFull)
+  const deadlineIso = event?.buzzer_answer_deadline_at as string | undefined
+  const [tick, setTick] = useState(0)
+  const timeoutFiredRef = useRef<string | null>(null)
+
   const isIdle = !event || event.status === 'answered' || event.status === 'dropped'
   const isBuzzerOpen = event?.status === 'buzzer_open'
+
+  useEffect(() => {
+    timeoutFiredRef.current = null
+  }, [event?.id])
+
+  useEffect(() => {
+    if (!isBuzzerOpen || !deadlineIso) return
+    const id = setInterval(() => setTick((n) => n + 1), 500)
+    return () => clearInterval(id)
+  }, [isBuzzerOpen, deadlineIso])
+
+  useEffect(() => {
+    if (!isBuzzerOpen || !deadlineIso || !onBuzzerTimeout || !event?.id) return
+    const deadlineMs = new Date(deadlineIso).getTime()
+    if (!Number.isFinite(deadlineMs)) return
+    if (Date.now() < deadlineMs) return
+    if (timeoutFiredRef.current === event.id) return
+    timeoutFiredRef.current = event.id
+    void onBuzzerTimeout()
+  }, [isBuzzerOpen, deadlineIso, event?.id, onBuzzerTimeout, tick])
+
+  const secondsLeft =
+    deadlineIso && Number.isFinite(new Date(deadlineIso).getTime())
+      ? Math.max(0, Math.ceil((new Date(deadlineIso).getTime() - Date.now()) / 1000))
+      : null
   const activeTeam = buzzEvents
     ?.slice()
     ?.sort((a, b) => Number(a.buzz_order || 999) - Number(b.buzz_order || 999))?.[0]?.team_label
@@ -127,8 +165,20 @@ export function BuzzerControls({
                 Open Buzzer
               </Button>
             ) : (
-              <div className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
-                BUZZER OPEN
+              <div className="space-y-2">
+                <div className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
+                  BUZZER OPEN
+                </div>
+                {secondsLeft !== null ? (
+                  <p className="text-sm text-gray-700">
+                    Answer window: <span className="font-semibold tabular-nums">{secondsLeft}s</span> remaining
+                    {activeTeam ? ` (Team ${activeTeam})` : ''}
+                  </p>
+                ) : null}
+                <p className="text-xs text-gray-600">
+                  Wrong answer or timeout: <span className="font-semibold">{penaltyPreview}</span> pts (50% of full
+                  value). Question ends; no pass to next buzzer.
+                </p>
               </div>
             )}
           </div>
@@ -200,7 +250,7 @@ export function BuzzerControls({
               Correct
             </Button>
             <Button variant="secondary" onClick={onMarkWrong} isLoading={busy} disabled={!isBuzzerOpen || !activeTeam}>
-              Wrong / Next
+              Wrong ({penaltyPreview} pts)
             </Button>
             <Button variant="ghost" onClick={onSkip} isLoading={busy}>
               Skip Question

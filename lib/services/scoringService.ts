@@ -17,6 +17,12 @@ export function resolvePoints(
   return attemptNumber === 1 ? pointsFull : pointsHalf
 }
 
+/** Negative points for a wrong buzzer answer or buzzer timeout (50% of full question value, rounded). */
+export function buzzerWrongPenaltyPoints(pointsFull: number): number {
+  const full = Math.max(0, Math.floor(Number(pointsFull) || 0))
+  return -Math.round(full / 2)
+}
+
 export async function applyScoreUpdate(update: ScoreUpdate): Promise<void> {
   const response = await fetch('/api/quiz/score', {
     method: 'POST',

@@ -641,6 +641,13 @@ export default function HostSessionPage() {
                   checkedResponseResult={checkedResponseResult}
                   buzzEvents={buzzEvents}
                   busy={busy}
+                  pointsFull={Number(state.session?.points_full ?? 10)}
+                  onBuzzerTimeout={async () => {
+                    if (!state.currentQuestionEvent?.id) return
+                    await runAction('buzzer_answer_timeout', {
+                      questionEventId: state.currentQuestionEvent.id,
+                    })
+                  }}
                   onNextQuestion={() =>
                     runAction('reveal_question', {
                       roundId: activeRound.id,

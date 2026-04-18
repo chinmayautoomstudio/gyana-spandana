@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePoints } from '@/lib/services/scoringService'
+import { applyBuzzerWrongOutcome } from '@/lib/services/buzzerRoundService'
 import { getOccupiedLabels, nextOccupiedLabel } from '@/lib/quiz/teamSlots'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
@@ -556,7 +557,7 @@ export async function PATCH(
 
       const { data: sessionReveal } = await supabase
         .from('quiz_live_sessions')
-        .select('is_test_session, team_slots')
+        .select('is_test_session, team_slots, buzzer_next_directed_team')
         .eq('id', sessionId)
         .single()
 
@@ -566,10 +567,6 @@ export async function PATCH(
       const rawDir = body?.directedTeam
       const hasDirected =
         typeof rawDir === 'string' && TEAM_LABELS.includes(rawDir.trim() as TeamLabel)
-      let directedTeam: TeamLabel = hasDirected ? (rawDir.trim() as TeamLabel) : 'A'
-      if (!hasDirected && sessionReveal?.is_test_session && occupiedReveal.length >= 1) {
-        directedTeam = occupiedReveal[0]
-      }
 
       const { data: round } = await supabase
         .from('quiz_rounds')
@@ -578,6 +575,20 @@ export async function PATCH(
         .single()
 
       if (!round) return NextResponse.json({ error: 'Round not found' }, { status: 404 })
+
+      let directedTeam: TeamLabel = 'A'
+      if (hasDirected) {
+        directedTeam = (rawDir as string).trim() as TeamLabel
+      } else if (round.round_type === 'buzzer') {
+        const hint = String(sessionReveal?.buzzer_next_directed_team || '').trim().toUpperCase()
+        if (TEAM_LABELS.includes(hint as TeamLabel)) {
+          directedTeam = hint as TeamLabel
+        } else if (sessionReveal?.is_test_session && occupiedReveal.length >= 1) {
+          directedTeam = occupiedReveal[0]
+        }
+      } else if (sessionReveal?.is_test_session && occupiedReveal.length >= 1) {
+        directedTeam = occupiedReveal[0]
+      }
 
       const requestedQuestionId = typeof body?.questionId === 'string' ? body.questionId.trim() : ''
       let question: any = null
@@ -639,6 +650,13 @@ export async function PATCH(
 
       const newIndex = Math.max(Number(round.current_question_index || 0), Number(question.question_order || 0))
       await supabase.from('quiz_rounds').update({ current_question_index: newIndex }).eq('id', roundId)
+
+      if (round.round_type === 'buzzer') {
+        await supabase
+          .from('quiz_live_sessions')
+          .update({ buzzer_next_directed_team: null, updated_at: new Date().toISOString() })
+          .eq('id', sessionId)
+      }
 
       return NextResponse.json({
         success: true,
@@ -732,12 +750,14 @@ export async function PATCH(
         round?.round_type || 'direct_question',
       )
 
+      const buzzerExtras = round?.round_type === 'buzzer' ? { buzzer_answer_deadline_at: null as string | null } : {}
       await supabase
         .from('quiz_question_events')
         .update({
           status: 'answered',
           answered_by_team: teamLabel,
           points_awarded: pointsAwarded,
+          ...buzzerExtras,
         })
         .eq('id', questionEventId)
 
@@ -774,6 +794,89 @@ export async function PATCH(
       })
     }
 
+    if (action === 'buzzer_answer_timeout') {
+      const questionEventId = body?.questionEventId as string | undefined
+      if (!questionEventId) {
+        return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
+      }
+
+      const { data: evTimeout } = await supabase
+        .from('quiz_question_events')
+        .select('*')
+        .eq('id', questionEventId)
+        .single()
+      if (!evTimeout) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+      if (evTimeout.status !== 'buzzer_open') {
+        return NextResponse.json({ error: 'Buzzer is not open for this question' }, { status: 400 })
+      }
+      if (!evTimeout.buzzer_answer_deadline_at) {
+        return NextResponse.json({ error: 'No answer deadline is set for this question' }, { status: 400 })
+      }
+      const deadlineMs = new Date(String(evTimeout.buzzer_answer_deadline_at)).getTime()
+      if (!Number.isFinite(deadlineMs) || Date.now() < deadlineMs) {
+        return NextResponse.json({ error: 'Answer period has not expired yet' }, { status: 400 })
+      }
+
+      const { data: roundT } = await supabase
+        .from('quiz_rounds')
+        .select('round_type')
+        .eq('id', evTimeout.round_id)
+        .single()
+      if (roundT?.round_type !== 'buzzer') {
+        return NextResponse.json({ error: 'Only for buzzer rounds' }, { status: 400 })
+      }
+
+      const [{ data: buzzRowsT, error: buzzErrT }, { data: passRowsT, error: passErrT }] = await Promise.all([
+        supabase
+          .from('quiz_buzz_events')
+          .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_ms')
+          .eq('question_event_id', questionEventId)
+          .order('client_pressed_at_ms', { ascending: true })
+          .order('buzzed_at', { ascending: true })
+          .order('id', { ascending: true }),
+        supabase
+          .from('quiz_pass_log')
+          .select('team_label')
+          .eq('question_event_id', questionEventId)
+          .eq('passed_or_wrong', true),
+      ])
+      if (buzzErrT) return NextResponse.json({ error: buzzErrT.message }, { status: 500 })
+      if (passErrT) return NextResponse.json({ error: passErrT.message }, { status: 500 })
+
+      const excludedT = new Set((passRowsT || []).map((row: any) => String(row.team_label)))
+      const activeBuzzT = (buzzRowsT || []).find((row: any) => !excludedT.has(String(row.team_label)))
+      const activeTeamT = activeBuzzT?.team_label as TeamLabel | undefined
+      if (!activeTeamT || !TEAM_LABELS.includes(activeTeamT)) {
+        return NextResponse.json({ error: 'No active team is available to time out' }, { status: 400 })
+      }
+
+      const appliedT = await applyBuzzerWrongOutcome(supabase, {
+        sessionId,
+        questionEventId,
+        teamLabel: activeTeamT,
+        attemptNumber: Number(evTimeout.attempt_number || 1),
+        insertPassLog: false,
+        afterTimeout: true,
+      })
+      if (!appliedT.ok) {
+        return NextResponse.json({ error: appliedT.error }, { status: appliedT.status })
+      }
+      await broadcastDirectVerdictApplied(sessionId, supabase, {
+        questionEventId,
+        teamLabel: activeTeamT,
+        verdict: 'wrong',
+      })
+      const updatedScoresT = await getScoreMap(sessionId, supabase)
+      return NextResponse.json({
+        success: true,
+        state: 'dropped',
+        event: appliedT.updatedEvent,
+        updatedScores: updatedScoresT,
+        penalty: appliedT.penalty,
+        teamLabel: activeTeamT,
+      })
+    }
+
     if (action === 'mark_wrong_pass') {
       const questionEventId = body?.questionEventId as string | undefined
       const teamLabel = body?.teamLabel as TeamLabel | undefined
@@ -796,57 +899,30 @@ export async function PATCH(
         .single()
       if (roundMcq?.round_type === 'buzzer') {
         const attemptNumber = Number(event.attempt_number || 1)
-        await supabase.from('quiz_pass_log').insert({
-          question_event_id: questionEventId,
-          team_label: teamLabel,
-          attempt_number: attemptNumber,
-          passed_or_wrong: true,
+        const applied = await applyBuzzerWrongOutcome(supabase, {
+          sessionId,
+          questionEventId,
+          teamLabel,
+          attemptNumber,
+          insertPassLog: true,
+          afterTimeout: false,
         })
-
-        await supabase
-          .from('quiz_direct_attempts')
-          .update({ verdict: 'wrong', updated_at: new Date().toISOString() })
-          .eq('question_event_id', questionEventId)
-          .eq('team_label', teamLabel)
-          .eq('verdict', 'pending')
-
-        const [{ data: buzzRows }, { data: passRows }] = await Promise.all([
-          supabase
-            .from('quiz_buzz_events')
-            .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_ms')
-            .eq('question_event_id', questionEventId)
-            .order('client_pressed_at_ms', { ascending: true })
-            .order('buzzed_at', { ascending: true })
-            .order('id', { ascending: true }),
-          supabase
-            .from('quiz_pass_log')
-            .select('team_label')
-            .eq('question_event_id', questionEventId)
-            .eq('passed_or_wrong', true),
-        ])
-
-        const excluded = new Set((passRows || []).map((row: any) => String(row.team_label)))
-        const nextBuzz = (buzzRows || []).find((row: any) => !excluded.has(String(row.team_label)))
-        if (!nextBuzz?.team_label) {
-          const { data: updatedEvent } = await supabase
-            .from('quiz_question_events')
-            .update({ status: 'dropped' })
-            .eq('id', questionEventId)
-            .select('*')
-            .single()
-          return NextResponse.json({ success: true, state: 'dropped', event: updatedEvent })
+        if (!applied.ok) {
+          return NextResponse.json({ error: applied.error }, { status: applied.status })
         }
-
-        const { data: updatedEvent } = await supabase
-          .from('quiz_question_events')
-          .update({
-            status: 'buzzer_open',
-            directed_team: nextBuzz.team_label,
-          })
-          .eq('id', questionEventId)
-          .select('*')
-          .single()
-        return NextResponse.json({ success: true, state: 'pass_next_team', event: updatedEvent })
+        await broadcastDirectVerdictApplied(sessionId, supabase, {
+          questionEventId,
+          teamLabel,
+          verdict: 'wrong',
+        })
+        const updatedScores = await getScoreMap(sessionId, supabase)
+        return NextResponse.json({
+          success: true,
+          state: 'dropped',
+          event: applied.updatedEvent,
+          updatedScores,
+          penalty: applied.penalty,
+        })
       }
       if (roundMcq?.round_type === 'direct_question' && event.status === 'revealed') {
         return NextResponse.json(
@@ -1198,6 +1274,37 @@ export async function PATCH(
       const now = new Date().toISOString()
       if (verdict === 'wrong') {
         const isTrueOrFalseRound = roundC?.round_type === 'true_or_false'
+        const isBuzzerRound = roundC?.round_type === 'buzzer'
+
+        if (isBuzzerRound) {
+          const applied = await applyBuzzerWrongOutcome(supabase, {
+            sessionId,
+            questionEventId,
+            teamLabel,
+            attemptNumber: Number(event.attempt_number || 1),
+            insertPassLog: false,
+            afterTimeout: false,
+          })
+          if (!applied.ok) {
+            return NextResponse.json({ error: applied.error }, { status: applied.status })
+          }
+          await broadcastDirectVerdictApplied(sessionId, supabase, {
+            questionEventId,
+            teamLabel,
+            verdict: 'wrong',
+          })
+          const updatedScoresB = await getScoreMap(sessionId, supabase)
+          return NextResponse.json({
+            success: true,
+            verdict: 'wrong',
+            teamLabel,
+            correctAnswer,
+            correctAnswerOptionText,
+            updatedScores: updatedScoresB,
+            penalty: applied.penalty,
+          })
+        }
+
         await supabase
           .from('quiz_direct_attempts')
           .update({ verdict: 'wrong', updated_at: now })
@@ -1263,12 +1370,14 @@ export async function PATCH(
         .update({ verdict: 'correct', updated_at: now })
         .eq('id', attempt.id)
 
+      const buzzerCorrectExtras = roundC?.round_type === 'buzzer' ? { buzzer_answer_deadline_at: null as string | null } : {}
       await supabase
         .from('quiz_question_events')
         .update({
           status: 'answered',
           answered_by_team: teamLabel,
           points_awarded: pointsAwarded,
+          ...buzzerCorrectExtras,
         })
         .eq('id', questionEventId)
 
@@ -1835,7 +1944,7 @@ export async function PATCH(
       }
       const { data: event, error } = await supabase
         .from('quiz_question_events')
-        .update({ status: 'buzzer_open' })
+        .update({ status: 'buzzer_open', directed_team: null, buzzer_answer_deadline_at: null })
         .eq('id', questionEventId)
         .select('*')
         .single()

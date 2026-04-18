@@ -111,6 +111,22 @@ export async function POST(
     const myIndex = ordered.findIndex((row) => row.team_label === teamLabel)
     const buzzOrder = myIndex >= 0 ? myIndex + 1 : null
 
+    const { data: passRowsBuzz } = await supabase
+      .from('quiz_pass_log')
+      .select('team_label')
+      .eq('question_event_id', questionEventId)
+      .eq('passed_or_wrong', true)
+    const excludedBuzz = new Set((passRowsBuzz || []).map((row: { team_label: string }) => String(row.team_label)))
+    const firstActive = ordered.find((row) => !excludedBuzz.has(String(row.team_label)))
+    if (firstActive?.team_label === teamLabel) {
+      const deadlineIso = new Date(serverNowMs + 30_000).toISOString()
+      await supabase
+        .from('quiz_question_events')
+        .update({ directed_team: teamLabel, buzzer_answer_deadline_at: deadlineIso })
+        .eq('id', questionEventId)
+        .eq('status', 'buzzer_open')
+    }
+
     try {
       const now = new Date().toISOString()
       const channel = supabase.channel(`quiz:session:${sessionId}`, {
