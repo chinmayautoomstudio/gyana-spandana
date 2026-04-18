@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
 import { Button } from '@/components/ui/Button'
+import { buzzerWrongPenaltyPoints } from '@/lib/services/scoringService'
 import type { TeamLabel } from '@/lib/utils/teamColors'
 
 interface SessionState {
@@ -35,6 +36,7 @@ export default function ParticipantPlayPage() {
   const [rapidFireRemaining, setRapidFireRemaining] = useState<number | null>(null)
   const [buzzerPressedForEventId, setBuzzerPressedForEventId] = useState<string | null>(null)
   const buzzAttemptLockEventRef = useRef<string | null>(null)
+  const buzzerTimeoutSentForEventRef = useRef<string | null>(null)
   const [myBuzzOrder, setMyBuzzOrder] = useState<number | null>(null)
   const [questionLanguage, setQuestionLanguage] = useState<'en' | 'odia'>('en')
   const [buzzerClock, setBuzzerClock] = useState(() => Date.now())
@@ -142,6 +144,7 @@ export default function ParticipantPlayPage() {
   useEffect(() => {
     setBuzzerPressedForEventId(null)
     setMyBuzzOrder(null)
+    buzzerTimeoutSentForEventRef.current = null
     if (state?.activeRound?.round_type !== 'rapid_fire') {
       setRapidFireRemaining(null)
     }
@@ -254,6 +257,71 @@ export default function ParticipantPlayPage() {
       setAnswerBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (!sessionId || !state?.currentQuestionEvent?.id || !myTeamLabel) return
+    if (state.activeRound?.round_type !== 'buzzer') return
+    const ev = state.currentQuestionEvent
+    if (ev.status !== 'buzzer_open') return
+    const deadlineAt = ev.buzzer_answer_deadline_at as string | undefined
+    if (!deadlineAt) return
+    const deadlineMs = new Date(deadlineAt).getTime()
+    if (!Number.isFinite(deadlineMs) || buzzerClock < deadlineMs) return
+
+    const buzzerEventId = ev.id
+    const buzzerTimeExpiredLocal = buzzerClock >= deadlineMs
+    const canBuzzLocal =
+      state.activeRound?.round_type === 'buzzer' &&
+      ev.status === 'buzzer_open' &&
+      Boolean(myTeamLabel) &&
+      Boolean(buzzerEventId) &&
+      buzzerPressedForEventId !== buzzerEventId &&
+      !buzzerTimeExpiredLocal
+
+    const directed = (ev.directed_team || null) as TeamLabel | null
+    const isActiveBuzzerTeamLocal =
+      Boolean(myTeamLabel) && (directed ? directed === myTeamLabel : myBuzzOrder === 1)
+    const isBuzzerActiveResponderLocal =
+      state.activeRound?.round_type === 'buzzer' &&
+      ev.status === 'buzzer_open' &&
+      !canBuzzLocal &&
+      isActiveBuzzerTeamLocal &&
+      Boolean(deadlineAt)
+
+    if (!isBuzzerActiveResponderLocal) return
+
+    const eventId = ev.id
+    if (buzzerTimeoutSentForEventRef.current === eventId) return
+    buzzerTimeoutSentForEventRef.current = eventId
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/quiz/session/${sessionId}/buzzer-timeout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ questionEventId: eventId }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok && !data?.skipped) {
+          buzzerTimeoutSentForEventRef.current = null
+          setError(String(data?.error || 'Failed to apply buzzer timeout'))
+          return
+        }
+        await fetchState()
+      } catch (e: unknown) {
+        buzzerTimeoutSentForEventRef.current = null
+        setError(e instanceof Error ? e.message : 'Failed to apply buzzer timeout')
+      }
+    })()
+  }, [
+    sessionId,
+    state,
+    myTeamLabel,
+    myBuzzOrder,
+    buzzerPressedForEventId,
+    buzzerClock,
+    fetchState,
+  ])
 
   const submitBuzz = async (clientPressedAtMs: number) => {
     if (!sessionId || !state?.currentQuestionEvent?.id || !myTeamLabel) return
@@ -410,12 +478,14 @@ export default function ParticipantPlayPage() {
     (activeBuzzerTeam
       ? activeBuzzerTeam === myTeamLabel
       : myBuzzOrder === 1)
-  const canSubmitBuzzerAnswer =
+  const isBuzzerActiveResponder =
     isBuzzerRound &&
     state.currentQuestionEvent?.status === 'buzzer_open' &&
     !canBuzz &&
     isActiveBuzzerTeam &&
-    !buzzerTimeExpired
+    Boolean(buzzerDeadlineAt)
+  const canSubmitBuzzerAnswer = isBuzzerActiveResponder && !buzzerTimeExpired
+  const buzzerPenaltyPts = buzzerWrongPenaltyPoints(Number(state.session?.points_full ?? 10))
   const trueFalsePhaseOpen =
     isTrueFalseRound &&
     Boolean(state.currentQuestion) &&
@@ -825,6 +895,19 @@ export default function ParticipantPlayPage() {
               </button>
             ) : canSubmitBuzzerAnswer ? (
               <>
+                <div className="rounded-xl border-2 border-[#C0392B] bg-[#C0392B]/5 px-4 py-4 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#C0392B]">
+                    Time to submit your answer
+                  </p>
+                  <p className="mt-2 text-4xl font-bold tabular-nums text-[#C0392B]">
+                    {buzzerSecondsLeft ?? 0}
+                    <span className="text-xl font-semibold text-gray-800">s</span>
+                  </p>
+                  <p className="mt-2 text-xs text-gray-700">
+                    Wrong answer or timeout:{' '}
+                    <span className="font-semibold">{buzzerPenaltyPts}</span> pts (50% of full question value).
+                  </p>
+                </div>
                 <p className="text-sm font-medium text-gray-800">
                   You buzzed first. Select one option from the choices shown above:
                 </p>

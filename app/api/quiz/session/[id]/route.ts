@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePoints } from '@/lib/services/scoringService'
 import { applyBuzzerWrongOutcome } from '@/lib/services/buzzerRoundService'
+import { runBuzzerAnswerTimeout } from '@/lib/services/buzzerAnswerTimeout'
 import { getOccupiedLabels, nextOccupiedLabel } from '@/lib/quiz/teamSlots'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
@@ -866,80 +867,17 @@ export async function PATCH(
         return NextResponse.json({ error: 'questionEventId is required' }, { status: 400 })
       }
 
-      const { data: evTimeout } = await supabase
-        .from('quiz_question_events')
-        .select('*')
-        .eq('id', questionEventId)
-        .single()
-      if (!evTimeout) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
-      if (evTimeout.status !== 'buzzer_open') {
-        return NextResponse.json({ error: 'Buzzer is not open for this question' }, { status: 400 })
+      const result = await runBuzzerAnswerTimeout(supabase, sessionId, questionEventId)
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
       }
-      if (!evTimeout.buzzer_answer_deadline_at) {
-        return NextResponse.json({ error: 'No answer deadline is set for this question' }, { status: 400 })
-      }
-      const deadlineMs = new Date(String(evTimeout.buzzer_answer_deadline_at)).getTime()
-      if (!Number.isFinite(deadlineMs) || Date.now() < deadlineMs) {
-        return NextResponse.json({ error: 'Answer period has not expired yet' }, { status: 400 })
-      }
-
-      const { data: roundT } = await supabase
-        .from('quiz_rounds')
-        .select('round_type')
-        .eq('id', evTimeout.round_id)
-        .single()
-      if (roundT?.round_type !== 'buzzer') {
-        return NextResponse.json({ error: 'Only for buzzer rounds' }, { status: 400 })
-      }
-
-      const [{ data: buzzRowsT, error: buzzErrT }, { data: passRowsT, error: passErrT }] = await Promise.all([
-        supabase
-          .from('quiz_buzz_events')
-          .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_ms')
-          .eq('question_event_id', questionEventId)
-          .order('client_pressed_at_ms', { ascending: true })
-          .order('buzzed_at', { ascending: true })
-          .order('id', { ascending: true }),
-        supabase
-          .from('quiz_pass_log')
-          .select('team_label')
-          .eq('question_event_id', questionEventId)
-          .eq('passed_or_wrong', true),
-      ])
-      if (buzzErrT) return NextResponse.json({ error: buzzErrT.message }, { status: 500 })
-      if (passErrT) return NextResponse.json({ error: passErrT.message }, { status: 500 })
-
-      const excludedT = new Set((passRowsT || []).map((row: any) => String(row.team_label)))
-      const activeBuzzT = (buzzRowsT || []).find((row: any) => !excludedT.has(String(row.team_label)))
-      const activeTeamT = activeBuzzT?.team_label as TeamLabel | undefined
-      if (!activeTeamT || !TEAM_LABELS.includes(activeTeamT)) {
-        return NextResponse.json({ error: 'No active team is available to time out' }, { status: 400 })
-      }
-
-      const appliedT = await applyBuzzerWrongOutcome(supabase, {
-        sessionId,
-        questionEventId,
-        teamLabel: activeTeamT,
-        attemptNumber: Number(evTimeout.attempt_number || 1),
-        insertPassLog: false,
-        afterTimeout: true,
-      })
-      if (!appliedT.ok) {
-        return NextResponse.json({ error: appliedT.error }, { status: appliedT.status })
-      }
-      await broadcastDirectVerdictApplied(sessionId, supabase, {
-        questionEventId,
-        teamLabel: activeTeamT,
-        verdict: 'wrong',
-      })
-      const updatedScoresT = await getScoreMap(sessionId, supabase)
       return NextResponse.json({
         success: true,
         state: 'dropped',
-        event: appliedT.updatedEvent,
-        updatedScores: updatedScoresT,
-        penalty: appliedT.penalty,
-        teamLabel: activeTeamT,
+        event: result.event,
+        updatedScores: result.updatedScores,
+        penalty: result.penalty,
+        teamLabel: result.teamLabel,
       })
     }
 

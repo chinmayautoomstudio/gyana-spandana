@@ -10,14 +10,17 @@ function normalizeTeamLabel(value: unknown): TeamLabel | null {
   return null
 }
 
-/** Epoch ms from client at physical press; used to order buzzes before server arrival time. */
-function parseClientPressedAtMs(body: unknown, serverNowMs: number): number | null {
+/**
+ * Epoch ms from client at physical press; used to order buzzes before server arrival time.
+ * Falls back to serverNowMs when missing, invalid, or outside clock-skew bounds (bad client clocks).
+ */
+function parseClientPressedAtMs(body: unknown, serverNowMs: number): number {
   const raw = (body as { clientPressedAtMs?: unknown })?.clientPressedAtMs
-  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return serverNowMs
   const n = Math.trunc(raw)
-  if (!Number.isSafeInteger(n)) return null
-  if (n > serverNowMs + 120_000) return null
-  if (n < serverNowMs - 600_000) return null
+  if (!Number.isSafeInteger(n)) return serverNowMs
+  if (n > serverNowMs + 120_000) return serverNowMs
+  if (n < serverNowMs - 600_000) return serverNowMs
   return n
 }
 
@@ -38,12 +41,6 @@ export async function POST(
 
     if (!questionEventId || !teamLabel) {
       return NextResponse.json({ error: 'questionEventId and teamLabel are required' }, { status: 400 })
-    }
-    if (clientPressedAtMs === null) {
-      return NextResponse.json(
-        { error: 'clientPressedAtMs is required (epoch milliseconds at button press)' },
-        { status: 400 },
-      )
     }
 
     const { data: event } = await supabase
