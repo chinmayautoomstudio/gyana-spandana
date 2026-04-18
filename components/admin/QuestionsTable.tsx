@@ -119,13 +119,34 @@ export function QuestionsTable({
 
                     {/* Question */}
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="text-xs font-medium text-gray-900 leading-snug">
                           {index + 1}. {truncateText(pickText(question.question_text, question.question_text_odia))}
                         </span>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 shrink-0">
                           MCQ
                         </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        {(['A', 'B', 'C', 'D'] as const).map((opt) => {
+                          const key = `option_${opt.toLowerCase()}` as keyof Question
+                          const odiaKey = `option_${opt.toLowerCase()}_odia` as keyof Question
+                          const text = pickText(question[key] as string, question[odiaKey] as string)
+                          const isCorrect = question.correct_answer === opt
+                          return (
+                            <div
+                              key={opt}
+                              className={`flex items-start gap-1 text-xs px-1.5 py-0.5 rounded min-w-0 ${
+                                isCorrect
+                                  ? 'bg-green-50 text-green-800'
+                                  : 'text-gray-600'
+                              }`}
+                            >
+                              <span className="font-semibold shrink-0">{opt}.</span>
+                              <span className="truncate">{text}</span>
+                            </div>
+                          )
+                        })}
                       </div>
                     </td>
 
