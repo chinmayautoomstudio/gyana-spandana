@@ -53,7 +53,8 @@ export default function ParticipantPlayPage() {
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
-    const res = await fetch(`/api/quiz/session/${sessionId}`)
+    // Fix 7: lean participant endpoint — omits host-only queries (activeRoundQuestions etc.)
+    const res = await fetch(`/api/quiz/session/${sessionId}/participant`)
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data?.error || 'Failed to load session')
     setState(data)
@@ -115,7 +116,21 @@ export default function ParticipantPlayPage() {
         },
         onAnswerResult: () => void fetchState(),
         onParticipantAnswerSubmitted: () => void fetchState(),
-        onDirectVerdictApplied: () => void fetchState(),
+        onDirectVerdictApplied: (payload) => {
+          // Fix 1: optimistic update — instantly show verdict, then background-sync
+          setState((prev) => {
+            if (!prev?.participantDirectAttempt) return prev
+            if (prev.currentQuestionEvent?.id !== payload?.questionEventId) return prev
+            return {
+              ...prev,
+              participantDirectAttempt: {
+                ...prev.participantDirectAttempt,
+                verdict: payload.verdict,
+              },
+            }
+          })
+          void fetchState()
+        },
         onScoresUpdated: () => void fetchState(),
         onRoundEnded: () => void fetchState(),
         onSessionEnded: () => void fetchState(),
@@ -139,7 +154,7 @@ export default function ParticipantPlayPage() {
     if (!state?.session) return
     if (state.session.status === 'completed') return
 
-    const POLL_MS = 4000
+    const POLL_MS = 10_000 // Fix 6: was 4000; Realtime covers hot events, poll only recovers from disconnect
     const tick = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       void fetchState()
@@ -239,7 +254,16 @@ export default function ParticipantPlayPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || 'Failed to submit')
-      await fetchState()
+      // Fix 2: optimistic lock — confirm answer instantly, sync in background
+      setState((prev) =>
+        prev
+          ? {
+              ...prev,
+              participantDirectAttempt: { answer_text: selectedDirectOption!, verdict: 'pending' },
+            }
+          : prev,
+      )
+      void fetchState()
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -265,7 +289,16 @@ export default function ParticipantPlayPage() {
       if (trueFalseEventId) {
         setTrueFalseLockedEventId(trueFalseEventId)
       }
-      await fetchState()
+      // Fix 2: optimistic lock — confirm answer instantly, sync in background
+      setState((prev) =>
+        prev
+          ? {
+              ...prev,
+              participantDirectAttempt: { answer_text: selectedTrueFalse!, verdict: 'pending' },
+            }
+          : prev,
+      )
+      void fetchState()
     } catch (e: any) {
       setError(e.message)
     } finally {

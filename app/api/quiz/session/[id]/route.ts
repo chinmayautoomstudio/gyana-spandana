@@ -98,9 +98,11 @@ async function assertHostOrAdmin(sessionId: string, supabase: any) {
     return { ok: false, status: 401, message: 'Unauthorized' as const }
   }
 
+  // Fix 3: fetch full session row in one shot — later actions reuse auth.session
+  // instead of making a second quiz_live_sessions fetch for points_full/points_half/etc.
   const { data: session } = await supabase
     .from('quiz_live_sessions')
-    .select('id, assigned_host_id')
+    .select('*')
     .eq('id', sessionId)
     .single()
 
@@ -604,16 +606,19 @@ export async function PATCH(
       const roundId = body?.roundId as string | undefined
       if (!roundId) return NextResponse.json({ error: 'roundId is required' }, { status: 400 })
 
-      await supabase
-        .from('quiz_rounds')
-        .update({ status: 'active' })
-        .eq('id', roundId)
-        .eq('session_id', sessionId)
-
-      await supabase
-        .from('quiz_live_sessions')
-        .update({ status: 'active', current_round_id: roundId, updated_at: new Date().toISOString() })
-        .eq('id', sessionId)
+      // Fix 5: parallelise the two independent writes — saves ~100–200ms per round start
+      const now = new Date().toISOString()
+      await Promise.all([
+        supabase
+          .from('quiz_rounds')
+          .update({ status: 'active' })
+          .eq('id', roundId)
+          .eq('session_id', sessionId),
+        supabase
+          .from('quiz_live_sessions')
+          .update({ status: 'active', current_round_id: roundId, updated_at: now })
+          .eq('id', sessionId),
+      ])
 
       const { data: round } = await supabase.from('quiz_rounds').select('*').eq('id', roundId).single()
       return NextResponse.json({ success: true, round })
@@ -800,11 +805,8 @@ export async function PATCH(
           { status: 400 },
         )
       }
-      const { data: session } = await supabase
-        .from('quiz_live_sessions')
-        .select('points_full, points_half')
-        .eq('id', sessionId)
-        .single()
+      // Fix 3+4: reuse auth.session (full row from assertHostOrAdmin) instead of a second DB fetch
+      const sessionMC = auth.session
       const { data: question } = await supabase
         .from('quiz_questions')
         .select('correct_answer')
@@ -813,40 +815,26 @@ export async function PATCH(
 
       const pointsAwarded = resolvePoints(
         Number(event.attempt_number || 1),
-        Number(session?.points_full || 10),
-        Number(session?.points_half || 5),
+        Number(sessionMC?.points_full || 10),
+        Number(sessionMC?.points_half || 5),
         round?.round_type || 'direct_question',
       )
 
+      // Fix 4: parallelise event update and score increment in one shot
       const buzzerExtras = round?.round_type === 'buzzer' ? { buzzer_answer_deadline_at: null as string | null } : {}
-      await supabase
-        .from('quiz_question_events')
-        .update({
-          status: 'answered',
-          answered_by_team: teamLabel,
-          points_awarded: pointsAwarded,
-          ...buzzerExtras,
-        })
-        .eq('id', questionEventId)
-
-      const { data: scoreRow } = await supabase
-        .from('quiz_session_scores')
-        .select('id,total_score,questions_answered,questions_correct')
-        .eq('session_id', sessionId)
-        .eq('team_label', teamLabel)
-        .single()
-
-      if (!scoreRow) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
-
-      await supabase
-        .from('quiz_session_scores')
-        .update({
-          total_score: Number(scoreRow.total_score || 0) + pointsAwarded,
-          questions_answered: Number(scoreRow.questions_answered || 0) + 1,
-          questions_correct: Number(scoreRow.questions_correct || 0) + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', scoreRow.id)
+      await Promise.all([
+        supabase
+          .from('quiz_question_events')
+          .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded, ...buzzerExtras })
+          .eq('id', questionEventId),
+        supabase.rpc('increment_team_score', {
+          p_session_id: sessionId,
+          p_team_label: teamLabel,
+          p_score_delta: pointsAwarded,
+          p_answered_delta: 1,
+          p_correct_delta: 1,
+        }),
+      ])
 
       const updatedScores = await getScoreMap(sessionId, supabase)
       return NextResponse.json({
@@ -1067,11 +1055,8 @@ export async function PATCH(
         return NextResponse.json({ success: true, verdict: 'wrong', event })
       }
 
-      const { data: sessionJ } = await supabase
-        .from('quiz_live_sessions')
-        .select('points_full, points_half')
-        .eq('id', sessionId)
-        .single()
+      // Fix 3+4: reuse auth.session instead of fetching quiz_live_sessions again
+      const sessionJ = auth.session
       const pointsAwarded = resolvePoints(
         Number(event.attempt_number || 1),
         Number(sessionJ?.points_full || 10),
@@ -1079,50 +1064,38 @@ export async function PATCH(
         'direct_question',
       )
 
-      await supabase
-        .from('quiz_direct_attempts')
-        .update({ verdict: 'correct', updated_at: now })
-        .eq('id', attempt.id)
+      // Fix 4: parallelise the two independent writes
+      await Promise.all([
+        supabase
+          .from('quiz_direct_attempts')
+          .update({ verdict: 'correct', updated_at: now })
+          .eq('id', attempt.id),
+        supabase
+          .from('quiz_question_events')
+          .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded })
+          .eq('id', questionEventId),
+      ])
 
-      await supabase
-        .from('quiz_question_events')
-        .update({
-          status: 'answered',
-          answered_by_team: teamLabel,
-          points_awarded: pointsAwarded,
-        })
-        .eq('id', questionEventId)
-
-      const { data: scoreRowJ } = await supabase
-        .from('quiz_session_scores')
-        .select('id,total_score,questions_answered,questions_correct')
-        .eq('session_id', sessionId)
-        .eq('team_label', teamLabel)
-        .single()
-
-      if (!scoreRowJ) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
-
-      await supabase
-        .from('quiz_session_scores')
-        .update({
-          total_score: Number(scoreRowJ.total_score || 0) + pointsAwarded,
-          questions_answered: Number(scoreRowJ.questions_answered || 0) + 1,
-          questions_correct: Number(scoreRowJ.questions_correct || 0) + 1,
-          updated_at: now,
-        })
-        .eq('id', scoreRowJ.id)
+      // Fix 4: atomic increment instead of SELECT→UPDATE→SELECT, run in parallel with broadcast
+      const [updatedScores] = await Promise.all([
+        getScoreMap(sessionId, supabase).then(async (scores) => {
+          await supabase.rpc('increment_team_score', {
+            p_session_id: sessionId,
+            p_team_label: teamLabel,
+            p_score_delta: pointsAwarded,
+            p_answered_delta: 1,
+            p_correct_delta: 1,
+          })
+          return getScoreMap(sessionId, supabase)
+        }),
+        broadcastDirectVerdictApplied(sessionId, supabase, { questionEventId, teamLabel, verdict: 'correct' }),
+      ])
 
       const { data: qAns } = await supabase
         .from('quiz_questions')
         .select('correct_answer')
         .eq('id', event.question_id)
         .single()
-      const updatedScores = await getScoreMap(sessionId, supabase)
-      await broadcastDirectVerdictApplied(sessionId, supabase, {
-        questionEventId,
-        teamLabel,
-        verdict: 'correct',
-      })
       return NextResponse.json({
         success: true,
         verdict: 'correct',
@@ -1358,11 +1331,8 @@ export async function PATCH(
         })
       }
 
-      const { data: sessionC } = await supabase
-        .from('quiz_live_sessions')
-        .select('points_full, points_half')
-        .eq('id', sessionId)
-        .single()
+      // Fix 3+4: reuse auth.session instead of fetching quiz_live_sessions again
+      const sessionC = auth.session
       const pointsAwarded = resolvePoints(
         Number(event.attempt_number || 1),
         Number(sessionC?.points_full || 10),
@@ -1370,47 +1340,31 @@ export async function PATCH(
         roundC?.round_type === 'buzzer' ? 'buzzer' : 'direct_question',
       )
 
-      await supabase
-        .from('quiz_direct_attempts')
-        .update({ verdict: 'correct', updated_at: now })
-        .eq('id', attempt.id)
-
+      // Fix 4: parallelise the two independent writes
       const buzzerCorrectExtras = roundC?.round_type === 'buzzer' ? { buzzer_answer_deadline_at: null as string | null } : {}
-      await supabase
-        .from('quiz_question_events')
-        .update({
-          status: 'answered',
-          answered_by_team: teamLabel,
-          points_awarded: pointsAwarded,
-          ...buzzerCorrectExtras,
-        })
-        .eq('id', questionEventId)
+      await Promise.all([
+        supabase
+          .from('quiz_direct_attempts')
+          .update({ verdict: 'correct', updated_at: now })
+          .eq('id', attempt.id),
+        supabase
+          .from('quiz_question_events')
+          .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded, ...buzzerCorrectExtras })
+          .eq('id', questionEventId),
+      ])
 
-      const { data: scoreRowC } = await supabase
-        .from('quiz_session_scores')
-        .select('id,total_score,questions_answered,questions_correct')
-        .eq('session_id', sessionId)
-        .eq('team_label', teamLabel)
-        .single()
-
-      if (!scoreRowC) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
-
-      await supabase
-        .from('quiz_session_scores')
-        .update({
-          total_score: Number(scoreRowC.total_score || 0) + pointsAwarded,
-          questions_answered: Number(scoreRowC.questions_answered || 0) + 1,
-          questions_correct: Number(scoreRowC.questions_correct || 0) + 1,
-          updated_at: now,
-        })
-        .eq('id', scoreRowC.id)
-
+      // Fix 4: atomic increment + broadcast in parallel, then fetch final scores
+      await Promise.all([
+        supabase.rpc('increment_team_score', {
+          p_session_id: sessionId,
+          p_team_label: teamLabel,
+          p_score_delta: pointsAwarded,
+          p_answered_delta: 1,
+          p_correct_delta: 1,
+        }),
+        broadcastDirectVerdictApplied(sessionId, supabase, { questionEventId, teamLabel, verdict: 'correct' }),
+      ])
       const updatedScores = await getScoreMap(sessionId, supabase)
-      await broadcastDirectVerdictApplied(sessionId, supabase, {
-        questionEventId,
-        teamLabel,
-        verdict: 'correct',
-      })
       return NextResponse.json({
         success: true,
         verdict: 'correct',
@@ -1714,46 +1668,29 @@ export async function PATCH(
         return NextResponse.json({ error: 'Rapid fire team missing on question event' }, { status: 400 })
       }
 
-      const { data: session } = await supabase
-        .from('quiz_live_sessions')
-        .select('points_full, points_half')
-        .eq('id', sessionId)
-        .single()
-      const { data: round } = await supabase
-        .from('quiz_rounds')
-        .select('id,current_question_index')
-        .eq('id', event.round_id)
-        .single()
+      // Fix 3+4: reuse auth.session (has points_full/points_half) + fetch round in parallel
+      const [{ data: round }] = await Promise.all([
+        supabase.from('quiz_rounds').select('id,current_question_index').eq('id', event.round_id).single(),
+      ])
       if (!round) return NextResponse.json({ error: 'Round not found' }, { status: 404 })
 
-      const pointsAwarded = resolvePoints(1, Number(session?.points_full || 10), Number(session?.points_half || 5), 'rapid_fire')
+      const sessionRF = auth.session
+      const pointsAwarded = resolvePoints(1, Number(sessionRF?.points_full || 10), Number(sessionRF?.points_half || 5), 'rapid_fire')
 
-      await supabase
-        .from('quiz_question_events')
-        .update({
-          status: 'answered',
-          answered_by_team: teamLabel,
-          points_awarded: pointsAwarded,
-        })
-        .eq('id', questionEventId)
-
-      const { data: scoreRow } = await supabase
-        .from('quiz_session_scores')
-        .select('id,total_score,questions_answered,questions_correct')
-        .eq('session_id', sessionId)
-        .eq('team_label', teamLabel)
-        .single()
-      if (!scoreRow) return NextResponse.json({ error: 'Score row missing for team' }, { status: 500 })
-
-      await supabase
-        .from('quiz_session_scores')
-        .update({
-          total_score: Number(scoreRow.total_score || 0) + pointsAwarded,
-          questions_answered: Number(scoreRow.questions_answered || 0) + 1,
-          questions_correct: Number(scoreRow.questions_correct || 0) + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', scoreRow.id)
+      // Fix 4: parallelise event update + score rpc increment
+      await Promise.all([
+        supabase
+          .from('quiz_question_events')
+          .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded })
+          .eq('id', questionEventId),
+        supabase.rpc('increment_team_score', {
+          p_session_id: sessionId,
+          p_team_label: teamLabel,
+          p_score_delta: pointsAwarded,
+          p_answered_delta: 1,
+          p_correct_delta: 1,
+        }),
+      ])
 
       const { data: activeRapid } = await supabase
         .from('quiz_rapid_fire_sessions')
