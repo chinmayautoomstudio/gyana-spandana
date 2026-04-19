@@ -56,9 +56,6 @@ export async function POST(request: NextRequest) {
 
         const supabase = await createClient()
 
-        console.log('Attempting to insert contact inquiry...')
-        console.log('Data to insert:', { trimmedName, trimmedEmail, trimmedSubject, trimmedMessage })
-
         // Insert contact inquiry into database
         const { data, error } = await supabase
             .from('contact_inquiries')
@@ -75,19 +72,16 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (error) {
-            console.error('❌ Database error details:', {
+            // SECURITY (VULN-07, VULN-11): Log full details server-side only, never expose to client
+            console.error('[API /contact] DB insert error:', {
+                code: error.code,
                 message: error.message,
-                details: error.details,
-                hint: error.hint,
-                code: error.code
             })
             return NextResponse.json(
-                { error: `Failed to submit inquiry: ${error.message}` },
+                { error: 'Failed to submit your inquiry. Please try again.' },
                 { status: 500 }
             )
         }
-
-        console.log('✅ Successfully inserted inquiry:', data)
 
         // Notify admins about new contact inquiry (non-blocking)
         try {

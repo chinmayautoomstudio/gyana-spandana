@@ -1,6 +1,43 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+/**
+ * SECURITY (VULN-05): Detect actual MIME type from file content magic bytes.
+ * We do NOT trust file.type (client-controlled) or file extension.
+ * Magic byte signatures:
+ *   JPEG : FF D8 FF
+ *   PNG  : 89 50 4E 47 0D 0A 1A 0A
+ *   WebP : 52 49 46 46 ?? ?? ?? ?? 57 45 42 50
+ */
+type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp'
+
+function detectMimeFromBytes(bytes: Uint8Array): AllowedMime | null {
+  if (bytes.length < 12) return null
+
+  // JPEG: starts with FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+
+  // PNG: starts with 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+    bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a
+  ) return 'image/png'
+
+  // WebP: RIFF????WEBP
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) return 'image/webp'
+
+  return null
+}
+
+const MIME_TO_EXT: Record<AllowedMime, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
@@ -25,11 +62,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
+    // Convert File to buffer first so we can inspect magic bytes
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = new Uint8Array(arrayBuffer)
+
+    // SECURITY (VULN-05): Validate actual file content via magic bytes — NOT file.type (client-controlled)
+    const detectedMime = detectMimeFromBytes(buffer)
+    if (!detectedMime) {
       return NextResponse.json(
-        { success: false, error: 'Invalid file type. Only JPG, PNG, and WebP are allowed.' },
+        { success: false, error: 'Invalid file type. Only JPG, PNG, and WebP images are allowed.' },
         { status: 400 }
       )
     }
@@ -43,20 +84,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get file extension
-    const fileExt = file.name.split('.').pop()
+    // SECURITY (VULN-05): Derive extension from validated server-side MIME — NOT from client filename
+    const fileExt = MIME_TO_EXT[detectedMime]
     const fileName = `${user.id}-${Date.now()}.${fileExt}`
     const filePath = `profile-photos/${fileName}`
-
-    // Convert File to ArrayBuffer
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = new Uint8Array(arrayBuffer)
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from('profile-photos')
       .upload(filePath, buffer, {
-        contentType: file.type,
+        contentType: detectedMime,
         upsert: false,
       })
 
@@ -104,10 +141,10 @@ export async function POST(request: NextRequest) {
       success: true,
       url: urlData.publicUrl
     })
-  } catch (error: any) {
-    console.error('Profile photo upload error:', error)
+  } catch (error: unknown) {
+    console.error('[API /upload/profile-photo] Unexpected error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to upload profile photo' },
+      { success: false, error: 'Failed to upload profile photo. Please try again.' },
       { status: 500 }
     )
   }

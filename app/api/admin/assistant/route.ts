@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createRateLimiter, getCallerIp } from '@/lib/rate-limit'
 import {
   searchParticipants,
   getParticipantById,
@@ -15,6 +16,9 @@ import {
   getQuestionsByDifficulty,
   getQuestionsByExam,
 } from '@/lib/utils/assistant-queries'
+
+// SECURITY (VULN-03): 20 queries per admin per 5 minutes to cap OpenAI spend
+const rateLimiter = createRateLimiter({ limit: 20, windowMs: 5 * 60_000 })
 
 interface Message {
   role: 'system' | 'user' | 'assistant'
@@ -323,7 +327,9 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
       .single()
 
-    const role = profile?.role || user.user_metadata?.role || 'participant'
+    // SECURITY (VULN-04): Only trust the DB for role resolution.
+    // user_metadata.role is user-controlled and must never be used for authorization.
+    const role = profile?.role ?? 'participant'
     if (role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -334,6 +340,29 @@ export async function POST(request: Request) {
 
     if (!query || typeof query !== 'string') {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 })
+    }
+
+    // SECURITY (VULN-08): Enforce input limits to prevent excessive OpenAI token usage
+    if (query.length > 2000) {
+      return NextResponse.json(
+        { error: 'Query exceeds maximum length of 2000 characters.' },
+        { status: 400 }
+      )
+    }
+    if (conversationHistory.length > 50) {
+      return NextResponse.json(
+        { error: 'Conversation history exceeds maximum length of 50 messages.' },
+        { status: 400 }
+      )
+    }
+
+    // SECURITY (VULN-03): Rate limit OpenAI calls per IP
+    const ip = getCallerIp(request)
+    if (!rateLimiter.check(ip)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait before querying again.' },
+        { status: 429 }
+      )
     }
 
     // Query database based on user query
@@ -390,10 +419,10 @@ Answer the user's question based on the database context provided.`,
       response: aiResponse,
       context: JSON.parse(dbContext),
     })
-  } catch (error: any) {
-    console.error('Assistant API error:', error)
+  } catch (error: unknown) {
+    console.error('[API /admin/assistant] Unexpected error:', error)
     return NextResponse.json(
-      { error: error.message || 'An error occurred while processing your query' },
+      { error: 'An unexpected error occurred while processing your query.' },
       { status: 500 }
     )
   }

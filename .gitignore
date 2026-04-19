@@ -35,3 +35,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# security: ignore temporary scripts and backup files
+tmp_*
+*.old
+
+# security: ignore question bank data files (prevent accidental exposure of quiz content)
+*_questions.md
+*_questions.json

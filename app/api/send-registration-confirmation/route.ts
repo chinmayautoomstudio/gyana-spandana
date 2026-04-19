@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
 import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 import { buildRegistrationConfirmationEmail } from '@/lib/email/templates/registration-confirmation'
+import { createRateLimiter, getCallerIp } from '@/lib/rate-limit'
+
+// SECURITY (VULN-03): 10 confirmation emails per IP per 15 minutes
+const rateLimiter = createRateLimiter({ limit: 10, windowMs: 15 * 60_000 })
 
 interface RegistrationConfirmationPayload {
   participantEmail: string
@@ -18,6 +23,22 @@ interface RegistrationConfirmationPayload {
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY (VULN-01): Require an authenticated session before sending any email.
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // SECURITY (VULN-03): Rate limit to prevent email flooding
+    const ip = getCallerIp(request)
+    if (!rateLimiter.check(ip)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      )
+    }
+
     const body: RegistrationConfirmationPayload = await request.json()
     const {
       participantEmail,
@@ -91,9 +112,9 @@ export async function POST(request: NextRequest) {
     )
 
     if (!result.success) {
-      console.error('SendGrid error:', result.error)
+      console.error('[API /send-registration-confirmation] SendGrid error:', result.error)
       return NextResponse.json(
-        { error: 'Failed to send email', details: result.error },
+        { error: 'Failed to send confirmation email. Please try again.' },
         { status: 500 }
       )
     }
@@ -115,10 +136,10 @@ export async function POST(request: NextRequest) {
       { message: 'Email sent successfully' },
       { status: 200 }
     )
-  } catch (error: any) {
-    console.error('Error sending registration confirmation email:', error)
+  } catch (error: unknown) {
+    console.error('[API /send-registration-confirmation] Unexpected error:', error)
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { error: 'An unexpected error occurred.' },
       { status: 500 }
     )
   }

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
 import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
+import { createRateLimiter, getCallerIp } from '@/lib/rate-limit'
+
+// SECURITY (VULN-03): 10 notifications per IP per 15 minutes
+const rateLimiter = createRateLimiter({ limit: 10, windowMs: 15 * 60_000 })
 
 interface EmailNotificationPayload {
   authorityEmail: string
@@ -15,6 +20,22 @@ interface EmailNotificationPayload {
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY (VULN-01): Require an authenticated session before sending any email.
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // SECURITY (VULN-03): Rate limit to prevent email flooding
+    const ip = getCallerIp(request)
+    if (!rateLimiter.check(ip)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      )
+    }
+
     const body: EmailNotificationPayload = await request.json()
     const {
       authorityEmail,
@@ -169,9 +190,9 @@ GYANA SPARDHA Team
     )
 
     if (!result.success) {
-      console.error('SendGrid error:', result.error)
+      console.error('[API /send-authority-notification] SendGrid error:', result.error)
       return NextResponse.json(
-        { error: 'Failed to send email', details: result.error },
+        { error: 'Failed to send notification email. Please try again.' },
         { status: 500 }
       )
     }
@@ -180,10 +201,10 @@ GYANA SPARDHA Team
       { message: 'Email sent successfully' },
       { status: 200 }
     )
-  } catch (error: any) {
-    console.error('Error sending authority notification email:', error)
+  } catch (error: unknown) {
+    console.error('[API /send-authority-notification] Unexpected error:', error)
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { error: 'An unexpected error occurred.' },
       { status: 500 }
     )
   }
