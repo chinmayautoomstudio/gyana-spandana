@@ -39,11 +39,14 @@ export function QuestionFormModal({
 
   useEffect(() => {
     if (!open) return
-    setTab('manual')
-    setManualDirty(false)
-    setImportActive(false)
-    setImportFlowKey((k) => k + 1)
-    setManualFormKey((k) => k + 1)
+    const resetId = window.setTimeout(() => {
+      setTab('manual')
+      setManualDirty(false)
+      setImportActive(false)
+      setImportFlowKey((k) => k + 1)
+      setManualFormKey((k) => k + 1)
+    }, 0)
+    return () => window.clearTimeout(resetId)
   }, [open, question?.id])
 
   const trySetTab = useCallback(

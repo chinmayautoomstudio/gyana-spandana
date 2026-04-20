@@ -16,7 +16,7 @@ function CompetitionLeaderboardInner() {
   const supabase = useMemo(() => createClient(), [])
   const [exams, setExams] = useState<LeaderboardExamOption[]>([])
   const [examsLoading, setExamsLoading] = useState(true)
-  const [selectedExamId, setSelectedExamId] = useState<string | null>(null)
+  const [manualSelectedExamId, setManualSelectedExamId] = useState<string | null>(null)
 
   useEffect(() => {
     void (async () => {
@@ -33,24 +33,16 @@ function CompetitionLeaderboardInner() {
     })()
   }, [supabase])
 
-  useEffect(() => {
-    if (examsLoading) return
-    if (!exams.length) {
-      setSelectedExamId(null)
-      return
-    }
-    if (examFromQuery && exams.some((e) => e.id === examFromQuery)) {
-      setSelectedExamId(examFromQuery)
-      return
-    }
-    setSelectedExamId((prev) =>
-      prev && exams.some((e) => e.id === prev) ? prev : exams[0].id,
-    )
-  }, [exams, examsLoading, examFromQuery])
+  const selectedExamId = useMemo(() => {
+    if (examsLoading || !exams.length) return null
+    if (examFromQuery && exams.some((e) => e.id === examFromQuery)) return examFromQuery
+    if (manualSelectedExamId && exams.some((e) => e.id === manualSelectedExamId)) return manualSelectedExamId
+    return exams[0].id
+  }, [exams, examsLoading, examFromQuery, manualSelectedExamId])
 
   const onSelectExamId = useCallback(
     (id: string) => {
-      setSelectedExamId(id)
+      setManualSelectedExamId(id)
       router.replace(`/competition/leaderboard?exam=${encodeURIComponent(id)}`, {
         scroll: false,
       })

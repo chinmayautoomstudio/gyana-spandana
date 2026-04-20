@@ -313,7 +313,7 @@ export async function getTeamStats(teamId?: string): Promise<TeamStats[]> {
   const list = scores || []
   const teamIds = [...new Set(list.map((s: any) => s.team_id).filter(Boolean))]
 
-  let participantsByTeam = new Map<string, { name: string; is_participant1: boolean }[]>()
+  const participantsByTeam = new Map<string, { name: string; is_participant1: boolean }[]>()
   if (teamIds.length > 0) {
     const { data: allParticipants, error: pErr } = await supabase
       .from('participants')

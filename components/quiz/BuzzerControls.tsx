@@ -82,7 +82,7 @@ export function BuzzerControls({
   }
   const penaltyPreview = buzzerWrongPenaltyPoints(pointsFull)
   const deadlineIso = event?.buzzer_answer_deadline_at as string | undefined
-  const [tick, setTick] = useState(0)
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const timeoutFiredRef = useRef<string | null>(null)
 
   const isIdle = !event || event.status === 'answered' || event.status === 'dropped'
@@ -94,7 +94,7 @@ export function BuzzerControls({
 
   useEffect(() => {
     if (!isBuzzerOpen || !deadlineIso) return
-    const id = setInterval(() => setTick((n) => n + 1), 500)
+    const id = setInterval(() => setNowMs(Date.now()), 500)
     return () => clearInterval(id)
   }, [isBuzzerOpen, deadlineIso])
 
@@ -106,11 +106,11 @@ export function BuzzerControls({
     if (timeoutFiredRef.current === event.id) return
     timeoutFiredRef.current = event.id
     void onBuzzerTimeout()
-  }, [isBuzzerOpen, deadlineIso, event?.id, onBuzzerTimeout, tick])
+  }, [isBuzzerOpen, deadlineIso, event?.id, onBuzzerTimeout, nowMs])
 
   const secondsLeft =
     deadlineIso && Number.isFinite(new Date(deadlineIso).getTime())
-      ? Math.max(0, Math.ceil((new Date(deadlineIso).getTime() - Date.now()) / 1000))
+      ? Math.max(0, Math.ceil((new Date(deadlineIso).getTime() - nowMs) / 1000))
       : null
   const activeTeam = buzzEvents
     ?.slice()

@@ -70,19 +70,25 @@ export function RapidFireControls({
   const isRunning = phase === 'running' && isQuestionActive && remainingSeconds > 0
 
   useEffect(() => {
-    setDurationSeconds(Number(round?.rapid_fire_duration_seconds || 45))
-    setPhase('idle')
-    setPreviewQuestion(null)
-    setLocalFallbackSeconds(0)
-    timeoutHandledRef.current = false
-  }, [round?.id, round?.rapid_fire_duration_seconds])
-
-  useEffect(() => {
-    if (phase === 'running' && !isQuestionActive) {
+    const resetId = window.setTimeout(() => {
+      setDurationSeconds(Number(round?.rapid_fire_duration_seconds || 45))
       setPhase('idle')
       setPreviewQuestion(null)
       setLocalFallbackSeconds(0)
       timeoutHandledRef.current = false
+    }, 0)
+    return () => window.clearTimeout(resetId)
+  }, [round?.id, round?.rapid_fire_duration_seconds])
+
+  useEffect(() => {
+    if (phase === 'running' && !isQuestionActive) {
+      const resetId = window.setTimeout(() => {
+        setPhase('idle')
+        setPreviewQuestion(null)
+        setLocalFallbackSeconds(0)
+        timeoutHandledRef.current = false
+      }, 0)
+      return () => window.clearTimeout(resetId)
     }
   }, [phase, isQuestionActive])
 
@@ -112,8 +118,11 @@ export function RapidFireControls({
   useEffect(() => {
     if (phase !== 'running' || remainingSeconds > 0 || timeoutHandledRef.current) return
     timeoutHandledRef.current = true
-    setPhase('idle')
+    const resetId = window.setTimeout(() => {
+      setPhase('idle')
+    }, 0)
     void onEndTurn()
+    return () => window.clearTimeout(resetId)
   }, [phase, remainingSeconds, onEndTurn])
 
   const formattedTime = useMemo(() => {

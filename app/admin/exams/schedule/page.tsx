@@ -32,6 +32,14 @@ function SchedulePageContent() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  const openScheduleForExam = (exam: ScheduledExam, examId: string) => {
+    openedForExamIdRef.current = examId
+    setSelectedExam(exam)
+    setSelectedDate(exam.scheduled_start ? new Date(exam.scheduled_start) : new Date())
+    setShowExamSelector(false)
+    setShowScheduleModal(true)
+  }
+
   const fetchExams = async () => {
     setRefreshing(true)
     const supabase = createClient()
@@ -68,13 +76,10 @@ function SchedulePageContent() {
     if (openedForExamIdRef.current === id) return
     const found = allExams.find((e) => e.id === id)
     if (found) {
-      openedForExamIdRef.current = id
-      setSelectedExam(found)
-      setSelectedDate(
-        found.scheduled_start ? new Date(found.scheduled_start) : new Date()
-      )
-      setShowExamSelector(false)
-      setShowScheduleModal(true)
+      const openId = window.setTimeout(() => {
+        openScheduleForExam(found, id)
+      }, 0)
+      return () => window.clearTimeout(openId)
     }
   }, [loading, allExams, searchParams])
 

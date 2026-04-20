@@ -70,7 +70,9 @@ export function usePostgresLeaderboardRealtime({
   const [usePollFallback, setUsePollFallback] = useState(false)
 
   const onDataStaleRef = useRef(onDataStale)
-  onDataStaleRef.current = onDataStale
+  useEffect(() => {
+    onDataStaleRef.current = onDataStale
+  }, [onDataStale])
 
   // Pause/resume: hidden tabs should not hold Realtime slots or process events.
   useEffect(() => {
@@ -89,18 +91,24 @@ export function usePostgresLeaderboardRealtime({
 
   useEffect(() => {
     if (!enabled) {
-      setStatus('idle')
-      setUsePollFallback(false)
-      return
+      const idleId = window.setTimeout(() => {
+        setStatus('idle')
+        setUsePollFallback(false)
+      }, 0)
+      return () => window.clearTimeout(idleId)
     }
 
     if (!pageVisible) {
-      setStatus('paused')
-      return
+      const pausedId = window.setTimeout(() => {
+        setStatus('paused')
+      }, 0)
+      return () => window.clearTimeout(pausedId)
     }
 
-    setStatus('connecting')
-    setUsePollFallback(false)
+    const connectingId = window.setTimeout(() => {
+      setStatus('connecting')
+      setUsePollFallback(false)
+    }, 0)
 
     const onChange = () => {
       void runRefresh()
@@ -140,6 +148,7 @@ export function usePostgresLeaderboardRealtime({
       })
 
     return () => {
+      window.clearTimeout(connectingId)
       void supabase.removeChannel(channel)
     }
   }, [

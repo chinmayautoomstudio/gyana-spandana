@@ -125,7 +125,7 @@ export async function GET(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let participantAttemptPromise: any = Promise.resolve({ data: null })
-    let myLabelForAttempt: TeamLabel | null = myTeamLabel
+    const myLabelForAttempt: TeamLabel | null = myTeamLabel
 
     if (needParticipantAttempt && authUser) {
       if (myLabelForAttempt && ev?.id) {

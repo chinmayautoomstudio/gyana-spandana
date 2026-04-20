@@ -341,22 +341,34 @@ export function CompetitionLeaderboardPanel({
 
   useEffect(() => {
     if (!selectedExamId) return
-    void fetchExamLeaderboard()
+    const id = window.setTimeout(() => {
+      void fetchExamLeaderboard()
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [selectedExamId, fetchExamLeaderboard])
 
   useEffect(() => {
     if (!selectedLiveSessionId) return
-    void fetchLiveLeaderboard()
+    const id = window.setTimeout(() => {
+      void fetchLiveLeaderboard()
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [selectedLiveSessionId, fetchLiveLeaderboard])
 
   useEffect(() => {
     if (!selectedLiveSessionId) return
-    void fetchLiveTeamNames()
+    const id = window.setTimeout(() => {
+      void fetchLiveTeamNames()
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [selectedLiveSessionId, fetchLiveTeamNames])
 
   useEffect(() => {
     if (activeTab !== 'final') return
-    void fetchFinalLeaderboard()
+    const id = window.setTimeout(() => {
+      void fetchFinalLeaderboard()
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [activeTab, fetchFinalLeaderboard])
 
   const { status: examRealtimeStatus, usePollFallback: examPollFallback } =

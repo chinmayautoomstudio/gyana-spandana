@@ -225,17 +225,32 @@ export async function POST(
     }
 
     if (round.round_type === 'rapid_fire') {
-      const { data: activeRapidSession } = await supabase
+      const rapidSessionSelect = 'id,started_at,duration_seconds,questions_attempted,questions_correct,score_earned'
+      const { data: activeRapidSessionByEvent } = await supabase
         .from('quiz_rapid_fire_sessions')
-        .select('id,started_at,duration_seconds,questions_attempted,questions_correct,score_earned')
-        .eq('team_label', answeringTeam)
-        .is('ended_at', null)
-        .order('created_at', { ascending: false })
+        .select(rapidSessionSelect)
+        .eq('question_event_id', String(event.id))
         .limit(1)
-        .maybeSingle()
 
-      if (!activeRapidSession?.id || !activeRapidSession.started_at || !activeRapidSession.duration_seconds) {
+      let activeRapidSession = activeRapidSessionByEvent?.[0] ?? null
+
+      if (!activeRapidSession) {
+        const { data: activeRapidSessionsByTeam } = await supabase
+          .from('quiz_rapid_fire_sessions')
+          .select(rapidSessionSelect)
+          .eq('team_label', answeringTeam)
+          .is('ended_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+        activeRapidSession = activeRapidSessionsByTeam?.[0] ?? null
+      }
+
+      if (!activeRapidSession?.id) {
         return NextResponse.json({ error: 'Rapid Fire turn is not active' }, { status: 400 })
+      }
+
+      if (!activeRapidSession.started_at || !activeRapidSession.duration_seconds) {
+        return NextResponse.json({ error: 'Rapid Fire turn is misconfigured' }, { status: 400 })
       }
 
       const startedAtMs = new Date(String(activeRapidSession.started_at)).getTime()
@@ -339,6 +354,13 @@ export async function POST(
         if (createNextErr) return NextResponse.json({ error: createNextErr.message }, { status: 500 })
 
         nextEvent = createdNext || null
+        if (nextEvent?.id) {
+          const { error: syncRapidPointerErr } = await supabase
+            .from('quiz_rapid_fire_sessions')
+            .update({ question_event_id: nextEvent.id })
+            .eq('id', activeRapidSession.id)
+          if (syncRapidPointerErr) return NextResponse.json({ error: syncRapidPointerErr.message }, { status: 500 })
+        }
         await supabase
           .from('quiz_rounds')
           .update({ current_question_index: Number(nextQuestion.question_order || 0) })

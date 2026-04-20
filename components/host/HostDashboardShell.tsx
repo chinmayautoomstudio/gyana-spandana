@@ -86,6 +86,14 @@ export function HostDashboardShell({ children }: { children: ReactNode }) {
     endSessionRequestHandlerRef.current = handler
   }, [])
 
+  const setBlockingState = useCallback((value: boolean) => {
+    setIsBlocking(value)
+    if (!value) {
+      pendingActionRef.current = null
+      setShowLeaveSessionModal(false)
+    }
+  }, [])
+
   const handleContinueSession = useCallback(() => {
     closeLeaveSessionModal()
   }, [closeLeaveSessionModal])
@@ -106,19 +114,13 @@ export function HostDashboardShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', beforeUnload)
   }, [isBlocking])
 
-  useEffect(() => {
-    if (isBlocking) return
-    setShowLeaveSessionModal(false)
-    pendingActionRef.current = null
-  }, [isBlocking])
-
   const leaveGuardValue = useMemo<HostLeaveGuardContextValue>(
     () => ({
-      setIsBlocking,
+      setIsBlocking: setBlockingState,
       confirmOrRun,
       registerEndSessionRequestHandler,
     }),
-    [confirmOrRun, registerEndSessionRequestHandler],
+    [confirmOrRun, registerEndSessionRequestHandler, setBlockingState],
   )
 
   const handleNavClick = useCallback(
