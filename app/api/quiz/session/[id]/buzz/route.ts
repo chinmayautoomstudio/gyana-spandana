@@ -45,6 +45,18 @@ export async function POST(
       return NextResponse.json({ error: 'questionEventId and teamLabel are required' }, { status: 400 })
     }
 
+    const { data: session } = await supabase
+      .from('quiz_live_sessions')
+      .select('id,status')
+      .eq('id', sessionId)
+      .single()
+    if (!session) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+    }
+    if (String(session.status || '').toLowerCase() === 'completed') {
+      return NextResponse.json({ error: 'This session is completed and cannot be joined again' }, { status: 403 })
+    }
+
     const { data: event } = await supabase
       .from('quiz_question_events')
       .select('id,status,round_id')

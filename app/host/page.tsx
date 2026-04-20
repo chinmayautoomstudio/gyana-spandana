@@ -19,6 +19,23 @@ type HostViewer = {
   role: 'admin' | 'host'
 }
 
+function getSessionStatusBadge(status: string) {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'completed') {
+    return { label: 'Completed', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' }
+  }
+  if (normalized === 'active') {
+    return { label: 'Active', className: 'bg-blue-100 text-blue-900 border-blue-200' }
+  }
+  if (normalized === 'lobby' || normalized === 'setup') {
+    return { label: normalized === 'lobby' ? 'Lobby' : 'Setup', className: 'bg-amber-100 text-amber-900 border-amber-200' }
+  }
+  return {
+    label: status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown',
+    className: 'bg-gray-100 text-gray-800 border-gray-200',
+  }
+}
+
 async function fetchSessionsForViewer(
   client: ReturnType<typeof createClient>,
   viewer: HostViewer,
@@ -190,18 +207,41 @@ export default function HostDashboardPage() {
             </thead>
             <tbody>
               {sessions.map((session) => (
+                (() => {
+                  const isCompleted = String(session.status || '').toLowerCase() === 'completed'
+                  return (
                 <tr key={session.id} className="border-t border-gray-100">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{session.title}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700 capitalize">{session.status}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    {(() => {
+                      const badge = getSessionStatusBadge(session.status)
+                      return (
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      )
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {new Date(session.created_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <Link href={`/host/session/${session.id}`}>
-                      <Button size="sm">Open session</Button>
-                    </Link>
+                    {isCompleted ? (
+                      <>
+                        <Button size="sm" disabled aria-disabled="true">
+                          Open session
+                        </Button>
+                        <p className="mt-1 text-xs text-gray-500">Session completed - rejoin disabled.</p>
+                      </>
+                    ) : (
+                      <Link href={`/host/session/${session.id}`}>
+                        <Button size="sm">Open session</Button>
+                      </Link>
+                    )}
                   </td>
                 </tr>
+                  )
+                })()
               ))}
             </tbody>
           </table>

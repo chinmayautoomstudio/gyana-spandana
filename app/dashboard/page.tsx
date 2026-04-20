@@ -101,6 +101,23 @@ type DashboardParticipantRow = {
   } | null
 }
 
+function getSessionStatusBadge(status: string) {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'completed') {
+    return { label: 'Completed', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' }
+  }
+  if (normalized === 'active') {
+    return { label: 'Active', className: 'bg-blue-100 text-blue-900 border-blue-200' }
+  }
+  if (normalized === 'lobby' || normalized === 'setup') {
+    return { label: normalized === 'lobby' ? 'Lobby' : 'Setup', className: 'bg-amber-100 text-amber-900 border-amber-200' }
+  }
+  return {
+    label: status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown',
+    className: 'bg-gray-100 text-gray-800 border-gray-200',
+  }
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -963,30 +980,63 @@ export default function DashboardPage() {
                 </p>
                 <ul className="space-y-6">
                   {quizOverview.map((s) => (
+                    (() => {
+                      const isCompleted = String(s.status || '').toLowerCase() === 'completed'
+                      return (
                     <li key={s.id} className="rounded-xl border border-gray-200/80 bg-white/40 p-4">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-semibold text-gray-900">{s.title}</p>
-                          <p className="text-xs text-gray-500">
-                            Status: {s.status}
+                          <p className="text-xs text-gray-500 flex items-center gap-2">
+                            <span>Status:</span>
+                            {(() => {
+                              const badge = getSessionStatusBadge(s.status)
+                              return (
+                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}>
+                                  {badge.label}
+                                </span>
+                              )
+                            })()}
                             {s.is_test_session ? ' · Test session' : ''}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/quiz/${s.id}/play`}
-                            className="inline-flex items-center rounded-lg bg-[#C0392B] px-3 py-2 text-sm font-medium text-white hover:bg-[#A93226]"
-                          >
-                            Open play
-                          </Link>
-                          <Link
-                            href={`/quiz/${s.id}/display`}
-                            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                          >
-                            Display board
-                          </Link>
+                          {isCompleted ? (
+                            <>
+                              <span
+                                aria-disabled="true"
+                                className="inline-flex cursor-not-allowed items-center rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-500"
+                              >
+                                Open play
+                              </span>
+                              <span
+                                aria-disabled="true"
+                                className="inline-flex cursor-not-allowed items-center rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-500"
+                              >
+                                Display board
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Link
+                                href={`/quiz/${s.id}/play`}
+                                className="inline-flex items-center rounded-lg bg-[#C0392B] px-3 py-2 text-sm font-medium text-white hover:bg-[#A93226]"
+                              >
+                                Open play
+                              </Link>
+                              <Link
+                                href={`/quiz/${s.id}/display`}
+                                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                              >
+                                Display board
+                              </Link>
+                            </>
+                          )}
                         </div>
                       </div>
+                      {isCompleted ? (
+                        <p className="mt-2 text-xs font-medium text-gray-500">Session completed - rejoin disabled.</p>
+                      ) : null}
                       <ul className="mt-4 space-y-2 border-t border-gray-200/60 pt-3">
                         {(Array.isArray(s.rounds) ? s.rounds : []).map((r) => (
                           <li key={r.id} className="text-sm">
@@ -1001,6 +1051,8 @@ export default function DashboardPage() {
                         ) : null}
                       </ul>
                     </li>
+                      )
+                    })()
                   ))}
                 </ul>
               </div>

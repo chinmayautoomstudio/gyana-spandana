@@ -50,9 +50,12 @@ export async function POST(
 
     const { data: session } = await supabase
       .from('quiz_live_sessions')
-      .select('team_slots')
+      .select('team_slots,status')
       .eq('id', sessionId)
       .single()
+    if (String(session?.status || '').toLowerCase() === 'completed') {
+      return NextResponse.json({ error: 'This session is completed and cannot be joined again' }, { status: 403 })
+    }
 
     const slots = (session?.team_slots || {}) as Record<string, string>
     const participantLabel =

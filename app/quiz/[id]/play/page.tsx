@@ -466,7 +466,7 @@ export default function ParticipantPlayPage() {
             <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">Session Complete</p>
             <h1 className="mt-2 text-2xl font-bold text-emerald-950">{state.session.title}</h1>
             <p className="mt-4 text-base text-emerald-900">Thank you for participating in Gyana Spardha.</p>
-            <p className="mt-2 text-sm text-emerald-800">We appreciate your time and enthusiasm.</p>
+            <p className="mt-2 text-sm text-emerald-800">This session is now closed. Rejoin is disabled for participants.</p>
           </div>
         </div>
       </div>

@@ -17,6 +17,23 @@ interface QuizSessionRow {
 
 type SessionFilter = 'all' | 'live' | 'test'
 
+function getSessionStatusBadge(status: string) {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'completed') {
+    return { label: 'Completed', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' }
+  }
+  if (normalized === 'active') {
+    return { label: 'Active', className: 'bg-blue-100 text-blue-900 border-blue-200' }
+  }
+  if (normalized === 'lobby' || normalized === 'setup') {
+    return { label: normalized === 'lobby' ? 'Lobby' : 'Setup', className: 'bg-amber-100 text-amber-900 border-amber-200' }
+  }
+  return {
+    label: status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown',
+    className: 'bg-gray-100 text-gray-800 border-gray-200',
+  }
+}
+
 export default function AdminQuizSessionsPage() {
   const [sessions, setSessions] = useState<QuizSessionRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,6 +126,9 @@ export default function AdminQuizSessionsPage() {
             </thead>
             <tbody>
               {filteredSessions.map((session) => (
+                (() => {
+                  const isCompleted = String(session.status || '').toLowerCase() === 'completed'
+                  return (
                 <tr key={session.id} className="border-t border-gray-100">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
                     <span className="inline-flex flex-wrap items-center gap-2">
@@ -120,7 +140,16 @@ export default function AdminQuizSessionsPage() {
                       ) : null}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{session.status}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    {(() => {
+                      const badge = getSessionStatusBadge(session.status)
+                      return (
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      )
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-700">{session.assigned_host_id?.slice(0, 8) || '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {Object.values(session.team_slots || {}).filter(Boolean).length}/4
@@ -128,20 +157,35 @@ export default function AdminQuizSessionsPage() {
                   <td className="px-4 py-3 text-sm text-gray-700">{session.rounds?.length || 0}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/host/session/${session.id}`}>
-                        <Button size="sm">Host</Button>
-                      </Link>
-                      <Link href={`/leaderboard/${session.id}`}>
-                        <Button size="sm" variant="outline">
+                      {isCompleted ? (
+                        <Button size="sm" disabled aria-disabled="true">
+                          Host
+                        </Button>
+                      ) : (
+                        <Link href={`/host/session/${session.id}`}>
+                          <Button size="sm">Host</Button>
+                        </Link>
+                      )}
+                      {isCompleted ? (
+                        <Button size="sm" variant="outline" disabled aria-disabled="true">
                           Leaderboard
                         </Button>
-                      </Link>
+                      ) : (
+                        <Link href={`/leaderboard/${session.id}`}>
+                          <Button size="sm" variant="outline">
+                            Leaderboard
+                          </Button>
+                        </Link>
+                      )}
                       <Button size="sm" variant="ghost" onClick={() => handleDelete(session.id)}>
                         Delete
                       </Button>
                     </div>
+                    {isCompleted ? <p className="mt-1 text-xs text-gray-500">Session completed - rejoin disabled.</p> : null}
                   </td>
                 </tr>
+                  )
+                })()
               ))}
             </tbody>
           </table>
