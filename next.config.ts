@@ -18,7 +18,28 @@ function supabaseStorageRemotePattern():
   }
 }
 
+/** Origins for CSP connect-src so browser Supabase client can reach custom or local URLs. */
+function supabaseConnectSrcEntries(): string[] {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return [];
+  try {
+    const u = new URL(url);
+    if (!u.hostname) return [];
+    const hostPart = u.port ? `${u.hostname}:${u.port}` : u.hostname;
+    if (u.protocol === "https:") {
+      return [`https://${hostPart}`, `wss://${hostPart}`];
+    }
+    if (u.protocol === "http:") {
+      return [`http://${hostPart}`, `ws://${hostPart}`];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 const supabasePattern = supabaseStorageRemotePattern();
+const supabaseConnectSrc = supabaseConnectSrcEntries();
 
 const nextConfig: NextConfig = {
   compress: true,
@@ -95,7 +116,10 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.openai.com",
+              [
+                "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.openai.com",
+                ...supabaseConnectSrc,
+              ].join(" "),
               "frame-ancestors 'none'",
             ].join("; "),
           },
