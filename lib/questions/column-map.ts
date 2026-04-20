@@ -47,6 +47,12 @@ const HEADER_ALIASES: Record<string, AllImportField> = {
   difficulty_level: 'difficulty_level',
   level: 'difficulty_level',
 
+  type: 'question_type',
+  'question type': 'question_type',
+  question_type: 'question_type',
+  qtype: 'question_type',
+  'q type': 'question_type',
+
   explanation: 'explanation',
   explain: 'explanation',
   rationale: 'explanation',
@@ -124,6 +130,7 @@ export function rowObjectToImportPartial(obj: Partial<Record<AllImportField, str
     difficulty_level,
     explanation,
     tags,
+    question_type,
     question_text_odia,
     option_a_odia,
     option_b_odia,
@@ -144,6 +151,7 @@ export function rowObjectToImportPartial(obj: Partial<Record<AllImportField, str
     difficulty_level: difficulty_level,
     explanation: explanation || null,
     tags: tags,
+    question_type: question_type,
     question_text_odia: question_text_odia,
     option_a_odia: option_a_odia,
     option_b_odia: option_b_odia,

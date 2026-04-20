@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/Button'
 import {
   QUESTION_IMPORT_FIELDS,
   ODIA_IMPORT_FIELDS,
+  QUESTION_TYPE_VALUES,
   type AllImportField,
   type ImportRow,
   normalizeAnswer,
   normalizeDifficulty,
+  normalizeQuestionType,
   parseTags,
   validateImportRow,
   normalizeQuestionTextForDedupe,
@@ -59,18 +61,24 @@ function draftToImportPartial(d: Record<string, string>): Record<string, unknown
   const tagsStr = d.tags ?? ''
   const emptyToUndef = (s: string | undefined) =>
     s === undefined || String(s).trim() === '' ? undefined : String(s).trim()
+  const qt = normalizeQuestionType(d.question_type)
+  const correctForSchema =
+    qt === 'true_false'
+      ? String(d.correct_answer ?? '')
+      : String(normalizeAnswer(d.correct_answer) ?? '')
   return {
     question_text: d.question_text ?? '',
     option_a: d.option_a ?? '',
     option_b: d.option_b ?? '',
     option_c: d.option_c ?? '',
     option_d: d.option_d ?? '',
-    correct_answer: normalizeAnswer(d.correct_answer) ?? undefined,
+    correct_answer: correctForSchema,
     points: d.points === '' || d.points === undefined ? 1 : Number(d.points),
     category: d.category || null,
     difficulty_level: normalizeDifficulty(d.difficulty_level),
     explanation: d.explanation || null,
     tags: typeof tagsStr === 'string' ? parseTags(tagsStr) : null,
+    question_type: qt,
     question_text_odia: emptyToUndef(d.question_text_odia),
     option_a_odia: emptyToUndef(d.option_a_odia),
     option_b_odia: emptyToUndef(d.option_b_odia),
@@ -92,12 +100,18 @@ function buildPreviewRows(
       option_b: p.option_b ?? '',
       option_c: p.option_c ?? '',
       option_d: p.option_d ?? '',
-      correct_answer: p.correct_answer ?? '',
+      correct_answer:
+        typeof p.correct_answer === 'string'
+          ? p.correct_answer
+          : p.correct_answer != null
+            ? String(p.correct_answer)
+            : '',
       points: String(p.points ?? 1),
       category: p.category ?? '',
       difficulty_level: p.difficulty_level ?? 'medium',
       explanation: p.explanation ?? '',
       tags: Array.isArray(p.tags) ? p.tags.join(', ') : '',
+      question_type: normalizeQuestionType(p.question_type),
       question_text_odia: p.question_text_odia ?? '',
       option_a_odia: p.option_a_odia ?? '',
       option_b_odia: p.option_b_odia ?? '',
@@ -258,7 +272,11 @@ export function QuestionImportFlow({
     for (const row of rawRows) {
       const obj = applyColumnMapping(row, columnMapping)
       const flat = rowObjectToImportPartial(obj) as Record<string, unknown>
-      const ans = normalizeAnswer(flat.correct_answer as string | null)
+      const qt = normalizeQuestionType(flat.question_type as string | undefined)
+      const ans =
+        qt === 'true_false'
+          ? String(flat.correct_answer ?? '').trim() || undefined
+          : normalizeAnswer(flat.correct_answer as string | null) || undefined
       const odEmpty = (k: string) => {
         const v = flat[k]
         if (v === undefined || v === null) return undefined
@@ -271,19 +289,20 @@ export function QuestionImportFlow({
         option_b: String(flat.option_b || ''),
         option_c: String(flat.option_c || ''),
         option_d: String(flat.option_d || ''),
-        correct_answer: ans || undefined,
+        correct_answer: ans,
         points: flat.points !== undefined && flat.points !== '' ? Number(flat.points) : 1,
         category: (flat.category as string) || null,
         difficulty_level: normalizeDifficulty(flat.difficulty_level as string),
         explanation: (flat.explanation as string) || null,
         tags: parseTags(flat.tags as string),
+        question_type: qt,
         question_text_odia: odEmpty('question_text_odia'),
         option_a_odia: odEmpty('option_a_odia'),
         option_b_odia: odEmpty('option_b_odia'),
         option_c_odia: odEmpty('option_c_odia'),
         option_d_odia: odEmpty('option_d_odia'),
         explanation_odia: odEmpty('explanation_odia'),
-      })
+      } as unknown as Partial<ImportRow>)
     }
     setPreviewRows(buildPreviewRows(partials, bankTextToId))
     setStep('preview')
@@ -294,7 +313,19 @@ export function QuestionImportFlow({
     setPreviewRows((prev) =>
       prev.map((r) => {
         if (r.key !== key) return r
-        const draft = { ...r.draft, [field]: value }
+        let draft = { ...r.draft, [field]: value }
+        if (field === 'question_type') {
+          const prevT = normalizeQuestionType(r.draft.question_type)
+          const nextT = normalizeQuestionType(value)
+          if (nextT === 'true_false' && /^[ABCD]$/i.test(draft.correct_answer?.trim() ?? '')) {
+            draft = { ...draft, correct_answer: 'TRUE' }
+          } else if (prevT === 'true_false' && nextT !== 'true_false') {
+            const ca = (draft.correct_answer ?? '').trim().toUpperCase()
+            if (ca === 'TRUE' || ca === 'FALSE') {
+              draft = { ...draft, correct_answer: 'A' }
+            }
+          }
+        }
         const partial = draftToImportPartial(draft)
         const v = validateImportRow(partial as Partial<ImportRow>)
         const norm = normalizeQuestionTextForDedupe(draft.question_text)
@@ -430,14 +461,18 @@ export function QuestionImportFlow({
         }
 
         const tagsArray = v.data.tags
+        const isTf = v.data.question_type === 'true_false'
         const payload: Record<string, unknown> = {
           exam_id: null,
           question_text: v.data.question_text,
-          option_a: v.data.option_a,
-          option_b: v.data.option_b,
-          option_c: v.data.option_c,
-          option_d: v.data.option_d,
+          question_type: v.data.question_type,
+          media_url: null,
+          option_a: isTf ? null : v.data.option_a,
+          option_b: isTf ? null : v.data.option_b,
+          option_c: isTf ? null : v.data.option_c,
+          option_d: isTf ? null : v.data.option_d,
           correct_answer: v.data.correct_answer,
+          correct_answer_tf: v.data.correct_answer_tf,
           points: v.data.points,
           explanation: v.data.explanation,
           category: v.data.category,
@@ -445,10 +480,10 @@ export function QuestionImportFlow({
           tags: tagsArray,
           import_batch_id: batchId,
           question_text_odia: v.data.question_text_odia ?? null,
-          option_a_odia: v.data.option_a_odia ?? null,
-          option_b_odia: v.data.option_b_odia ?? null,
-          option_c_odia: v.data.option_c_odia ?? null,
-          option_d_odia: v.data.option_d_odia ?? null,
+          option_a_odia: isTf ? null : (v.data.option_a_odia ?? null),
+          option_b_odia: isTf ? null : (v.data.option_b_odia ?? null),
+          option_c_odia: isTf ? null : (v.data.option_c_odia ?? null),
+          option_d_odia: isTf ? null : (v.data.option_d_odia ?? null),
           explanation_odia: v.data.explanation_odia ?? null,
         }
 
@@ -657,13 +692,14 @@ export function QuestionImportFlow({
               Invalid rows are unchecked by default—fix fields to enable selection, or leave unchecked to skip.
             </p>
             <div className="overflow-x-auto border rounded-lg max-h-[55vh] overflow-y-auto">
-              <table className="w-full text-xs min-w-[1800px]">
+              <table className="w-full text-xs min-w-[1920px]">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="text-left text-gray-700 font-semibold p-2 w-10">
                       <span className="sr-only">Include</span>
                     </th>
                     <th className="text-left text-gray-700 font-semibold p-2 sticky left-0 bg-gray-50 z-20">#</th>
+                    <th className="text-left text-gray-700 font-semibold p-2 min-w-[120px]">Type</th>
                     <th className="text-left text-gray-700 font-semibold p-2 min-w-[180px]">Question</th>
                     <th className="text-left text-gray-700 font-semibold p-2 min-w-[160px]">Question (Odia)</th>
                     <th className="text-left text-gray-700 font-semibold p-2 min-w-[180px]">Options A–D</th>
@@ -702,6 +738,20 @@ export function QuestionImportFlow({
                         />
                       </td>
                       <td className="p-1 sticky left-0 bg-white">{i + 1}</td>
+                      <td className="p-1 align-top">
+                        <select
+                          value={normalizeQuestionType(r.draft.question_type)}
+                          onChange={(e) => updateDraft(r.key, 'question_type', e.target.value)}
+                          className="w-full min-w-[108px] border rounded text-gray-900 bg-white text-[10px]"
+                          aria-label="Question type"
+                        >
+                          {QUESTION_TYPE_VALUES.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="p-1">
                         <textarea
                           value={r.draft.question_text}
@@ -728,7 +778,8 @@ export function QuestionImportFlow({
                             key={f}
                             value={r.draft[f]}
                             onChange={(e) => updateDraft(r.key, f, e.target.value)}
-                            className="w-full border rounded px-1 text-gray-900"
+                            disabled={normalizeQuestionType(r.draft.question_type) === 'true_false'}
+                            className="w-full border rounded px-1 text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
                             placeholder={f}
                           />
                         ))}
@@ -741,24 +792,43 @@ export function QuestionImportFlow({
                             key={f}
                             value={r.draft[f]}
                             onChange={(e) => updateDraft(r.key, f, e.target.value)}
-                            className="w-full border rounded px-1 text-gray-900"
+                            disabled={normalizeQuestionType(r.draft.question_type) === 'true_false'}
+                            className="w-full border rounded px-1 text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
                             placeholder={f}
                           />
                         ))}
                       </td>
                       <td className="p-1">
-                        <select
-                          value={r.draft.correct_answer}
-                          onChange={(e) => updateDraft(r.key, 'correct_answer', e.target.value)}
-                          className="w-14 border rounded text-gray-900 bg-white"
-                        >
-                          <option value="">—</option>
-                          {['A', 'B', 'C', 'D'].map((x) => (
-                            <option key={x} value={x}>
-                              {x}
-                            </option>
-                          ))}
-                        </select>
+                        {normalizeQuestionType(r.draft.question_type) === 'true_false' ? (
+                          <select
+                            value={
+                              ['TRUE', 'FALSE'].includes((r.draft.correct_answer || '').toUpperCase())
+                                ? (r.draft.correct_answer || '').toUpperCase()
+                                : ''
+                            }
+                            onChange={(e) => updateDraft(r.key, 'correct_answer', e.target.value)}
+                            className="w-full min-w-[4.5rem] border rounded text-gray-900 bg-white"
+                            aria-label="True or false answer"
+                          >
+                            <option value="">—</option>
+                            <option value="TRUE">TRUE</option>
+                            <option value="FALSE">FALSE</option>
+                          </select>
+                        ) : (
+                          <select
+                            value={r.draft.correct_answer}
+                            onChange={(e) => updateDraft(r.key, 'correct_answer', e.target.value)}
+                            className="w-14 border rounded text-gray-900 bg-white"
+                            aria-label="Correct option"
+                          >
+                            <option value="">—</option>
+                            {['A', 'B', 'C', 'D'].map((x) => (
+                              <option key={x} value={x}>
+                                {x}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td className="p-1">
                         <input
