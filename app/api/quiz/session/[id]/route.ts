@@ -327,6 +327,7 @@ export async function GET(
     let pendingDirectAnswer: {
       team_label: string
       answer_text: string
+      verdict?: string | null
       answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
       answer_option_text: string | null
     } | null = null
