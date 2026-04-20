@@ -15,9 +15,15 @@ interface RapidFireControlsProps {
   onSelectTeam: (label: TeamLabel) => void
   onPrepareRapidFire: (teamLabel: TeamLabel) => Promise<{ question: any } | null>
   onStartRapidFire: (teamLabel: TeamLabel, durationSeconds: number) => Promise<any>
-  onCorrect: () => void
-  onWrong: () => void
   onEndTurn: () => void
+  participantResponse?: {
+    team_label: string
+    answer_text: string
+    verdict?: string | null
+    answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
+    answer_option_text: string | null
+  } | null
+  turnSummary?: { correct: number; incorrect: number } | null
   teamDisplayNames?: Record<TeamLabel, string>
   questionLanguage?: 'en' | 'odia'
   rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
@@ -32,9 +38,9 @@ export function RapidFireControls({
   onSelectTeam,
   onPrepareRapidFire,
   onStartRapidFire,
-  onCorrect,
-  onWrong,
   onEndTurn,
+  participantResponse = null,
+  turnSummary = null,
   teamDisplayNames,
   questionLanguage = 'en',
   rapidFireTimer = null,
@@ -43,7 +49,6 @@ export function RapidFireControls({
   const [phase, setPhase] = useState<'idle' | 'preview' | 'running'>('idle')
   const [previewQuestion, setPreviewQuestion] = useState<any | null>(null)
   const [localFallbackSeconds, setLocalFallbackSeconds] = useState<number>(0)
-  const [correctCount, setCorrectCount] = useState(0)
   const [clock, setClock] = useState(() => Date.now())
   const timeoutHandledRef = useRef(false)
 
@@ -69,7 +74,6 @@ export function RapidFireControls({
     setPhase('idle')
     setPreviewQuestion(null)
     setLocalFallbackSeconds(0)
-    setCorrectCount(0)
     timeoutHandledRef.current = false
   }, [round?.id, round?.rapid_fire_duration_seconds])
 
@@ -131,18 +135,8 @@ export function RapidFireControls({
     if (!started) return
     setPhase('running')
     setClock(Date.now())
-    setCorrectCount(0)
     setLocalFallbackSeconds(durationSeconds)
     timeoutHandledRef.current = false
-  }
-
-  const handleCorrect = () => {
-    setCorrectCount((prev) => prev + 1)
-    onCorrect()
-  }
-
-  const handleWrong = () => {
-    onWrong()
   }
 
   const teamLabelText = teamDisplayNames?.[activeTeam] && teamDisplayNames[activeTeam] !== 'Unassigned'
@@ -232,18 +226,29 @@ export function RapidFireControls({
             </div>
           ) : (
             <>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+                {participantResponse?.answer_option_label ? (
+                  <>
+                    <p>
+                      Participant response: <span className="font-semibold">{participantResponse.answer_option_label}</span>
+                      {participantResponse.answer_option_text ? ` — ${participantResponse.answer_option_text}` : ''}
+                    </p>
+                    <p className="mt-1">
+                      Auto-grade:{' '}
+                      <span className="font-semibold">
+                        {participantResponse.verdict === 'correct'
+                          ? 'Correct'
+                          : participantResponse.verdict === 'wrong'
+                            ? 'Wrong'
+                            : 'Awaiting submission'}
+                      </span>
+                    </p>
+                  </>
+                ) : (
+                  <p>Waiting for participant answer submission...</p>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={handleCorrect} isLoading={busy} disabled={!isQuestionActive || remainingSeconds <= 0}>
-                  Correct
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={handleWrong}
-                  isLoading={busy}
-                  disabled={!isQuestionActive || remainingSeconds <= 0}
-                >
-                  Wrong
-                </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -258,7 +263,11 @@ export function RapidFireControls({
                   End Turn Early
                 </Button>
               </div>
-              <p className="text-sm text-gray-600">Correct answers this turn: {correctCount}</p>
+              {turnSummary ? (
+                <p className="text-sm text-gray-600">
+                  Turn summary - Correct: {turnSummary.correct}, Incorrect: {turnSummary.incorrect}
+                </p>
+              ) : null}
             </>
           )}
         </>

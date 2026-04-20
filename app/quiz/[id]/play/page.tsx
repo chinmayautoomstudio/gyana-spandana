@@ -18,6 +18,7 @@ interface SessionState {
   participantDirectAttempt?: { answer_text: string; verdict: string } | null
   /** From GET: server-backed Rapid Fire turn countdown (started_at + duration_seconds). */
   rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
+  rapidFireTurnSummary?: { correct: number; incorrect: number } | null
   /** From GET: server epoch ms at response time — used to correct buzzer deadline vs client clock skew. */
   serverTimestampMs?: number
 }
@@ -264,6 +265,47 @@ export default function ParticipantPlayPage() {
           : prev,
       )
       void fetchState()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setAnswerBusy(false)
+    }
+  }
+
+  const submitRapidFireAnswer = async () => {
+    if (!sessionId || !state?.currentQuestionEvent?.id || !selectedDirectOption) return
+    setAnswerBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/quiz/session/${sessionId}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionEventId: state.currentQuestionEvent.id,
+          answerText: selectedDirectOption,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Failed to submit')
+
+      if (data?.nextEvent && data?.nextQuestion) {
+        setState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentQuestionEvent: data.nextEvent,
+                currentQuestion: data.nextQuestion,
+                participantDirectAttempt: null,
+                rapidFireTurnSummary: data.turnSummary ?? prev.rapidFireTurnSummary ?? null,
+              }
+            : prev,
+        )
+        setSelectedDirectOption(null)
+      } else {
+        // Turn ended or no further question available; refresh authoritative state.
+        setRapidFireRemaining(0)
+        await fetchState()
+      }
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -567,6 +609,7 @@ export default function ParticipantPlayPage() {
     isMyTurn &&
     (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0)
   const questionReadOnly = isTrueFalseRound ? !canChooseTrueFalse : !rapidFirePhaseOpen
+  const rapidFireTurnSummary = isRapidFireRound ? state.rapidFireTurnSummary ?? null : null
 
   const onTrueFalseSelect = (value: 'TRUE' | 'FALSE') => {
     setSelectedTrueFalse(value)
@@ -717,6 +760,36 @@ export default function ParticipantPlayPage() {
               if (rapidFirePhaseOpen) setSelectedDirectOption(value)
             }}
           />
+        )}
+
+        {isRapidFireRound && rapidFireTurnSummary ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+            <p className="text-sm font-semibold">Rapid Fire turn summary</p>
+            <p className="mt-1 text-sm">
+              Correct: {rapidFireTurnSummary.correct} | Incorrect: {rapidFireTurnSummary.incorrect}
+            </p>
+          </div>
+        ) : null}
+
+        {isRapidFireRound && state.currentQuestion && (
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            {!rapidFirePhaseOpen ? (
+              <p className="text-sm text-gray-600">
+                {isMyTurn ? 'Waiting for the next Rapid Fire question...' : 'Waiting for your turn...'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">Select one option, then submit to auto-advance.</p>
+                <Button
+                  onClick={() => void submitRapidFireAnswer()}
+                  isLoading={answerBusy}
+                  disabled={!selectedDirectOption}
+                >
+                  Submit Rapid Fire answer
+                </Button>
+              </div>
+            )}
+          </div>
         )}
 
         {showDirectPostRevealSummary ? (

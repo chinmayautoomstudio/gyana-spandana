@@ -86,6 +86,8 @@ export interface ParticipantAnswerSubmittedPayload {
   teamLabel: string
   /** Present when emitted from the answer API; omit for legacy broadcasts. */
   answerText?: string
+  /** Present for auto-graded rounds like Rapid Fire. */
+  verdict?: 'pending' | 'correct' | 'wrong'
   submittedAt: string
 }
 

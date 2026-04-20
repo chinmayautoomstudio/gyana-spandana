@@ -37,9 +37,11 @@ interface SessionState {
   pendingDirectAnswer?: {
     team_label: string
     answer_text: string
+    verdict?: string | null
     answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     answer_option_text: string | null
   } | null
+  rapidFireTurnSummary?: { correct: number; incorrect: number } | null
   pendingBuzzerAnswer?: {
     team_label: string
     answer_text: string
@@ -116,7 +118,8 @@ export default function HostSessionPage() {
         if (
           !prev?.currentQuestionEvent ||
           (prev.activeRound?.round_type !== 'direct_question' &&
-            prev.activeRound?.round_type !== 'true_or_false')
+            prev.activeRound?.round_type !== 'true_or_false' &&
+            prev.activeRound?.round_type !== 'rapid_fire')
         ) {
           return prev
         }
@@ -132,6 +135,7 @@ export default function HostSessionPage() {
           : tfLabel
             ? tfLabel
             : null
+        const payloadVerdict = (payload as { verdict?: 'pending' | 'correct' | 'wrong' }).verdict
         return {
           ...prev,
           ...(prev.activeRound?.round_type === 'buzzer'
@@ -147,6 +151,7 @@ export default function HostSessionPage() {
                 pendingDirectAnswer: {
                   team_label: payload.teamLabel,
                   answer_text: raw,
+                  verdict: payloadVerdict || 'pending',
                   answer_option_label: optionLabel || tfLabel,
                   answer_option_text: optionText,
                 },
@@ -625,24 +630,14 @@ export default function HostSessionPage() {
                       durationSeconds,
                     })
                   }
-                  onCorrect={() =>
-                    state.currentQuestionEvent &&
-                    runAction('rapid_fire_correct', {
-                      questionEventId: state.currentQuestionEvent.id,
-                    })
-                  }
-                  onWrong={() =>
-                    state.currentQuestionEvent &&
-                    runAction('rapid_fire_wrong', {
-                      questionEventId: state.currentQuestionEvent.id,
-                    })
-                  }
                   onEndTurn={() =>
                     runAction('end_rapid_fire', {
                       roundId: activeRound.id,
                       teamLabel: (state.currentQuestionEvent?.rapid_fire_team || selectedTeam) as TeamLabel,
                     })
                   }
+                  participantResponse={state.pendingDirectAnswer ?? null}
+                  turnSummary={state.rapidFireTurnSummary ?? null}
                   teamDisplayNames={teamNames}
                   questionLanguage={questionLanguage}
                   rapidFireTimer={state.rapidFireTimer ?? null}

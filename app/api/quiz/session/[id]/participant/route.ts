@@ -102,6 +102,17 @@ export async function GET(
       ? supabase.from('quiz_questions').select('*').eq('id', questionId).single()
       : Promise.resolve({ data: null })
 
+    let myTeamLabel: TeamLabel | null = null
+    if (authUser) {
+      const slotsPart = (session.team_slots || {}) as Record<string, string>
+      const { data: participantRow } = await supabase
+        .from('participants')
+        .select('team_id')
+        .eq('user_id', authUser.id)
+        .maybeSingle()
+      myTeamLabel = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id) || null
+    }
+
     const needParticipantAttempt =
       latestEvent &&
       authUser &&
@@ -114,18 +125,9 @@ export async function GET(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let participantAttemptPromise: any = Promise.resolve({ data: null })
-    let myLabelForAttempt: TeamLabel | null = null
+    let myLabelForAttempt: TeamLabel | null = myTeamLabel
 
     if (needParticipantAttempt && authUser) {
-      // Resolve team label then fetch attempt
-      const slotsPart = (session.team_slots || {}) as Record<string, string>
-      const { data: participantRow } = await supabase
-        .from('participants')
-        .select('team_id')
-        .eq('user_id', authUser.id)
-        .maybeSingle()
-      myLabelForAttempt = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id) || null
-
       if (myLabelForAttempt && ev?.id) {
         participantAttemptPromise = supabase
           .from('quiz_direct_attempts')
@@ -143,7 +145,7 @@ export async function GET(
 
     const revealCorrect = Boolean(ev?.correct_answer_revealed_at)
     // Participants never get the correct answer unless it has been revealed
-    const currentQuestion = stripCorrectAnswer(questionRow || null, revealCorrect)
+    let currentQuestion = stripCorrectAnswer(questionRow || null, revealCorrect)
 
     const participantDirectAttempt = pAtt
       ? {
@@ -154,6 +156,7 @@ export async function GET(
 
     // Rapid Fire timer (same logic as full endpoint)
     let rapidFireTimer: { startedAt: string; durationSeconds: number } | null = null
+    let rapidFireTurnSummary: { correct: number; incorrect: number } | null = null
     if (
       activeRound?.round_type === 'rapid_fire' &&
       latestEvent &&
@@ -163,18 +166,37 @@ export async function GET(
       if (TEAM_LABELS.includes(rfTeam as TeamLabel)) {
         const { data: rfSess } = await supabase
           .from('quiz_rapid_fire_sessions')
-          .select('started_at, duration_seconds')
+          .select('started_at, duration_seconds,questions_attempted,questions_correct,ended_at')
           .eq('team_label', rfTeam)
-          .is('ended_at', null)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
-        if (rfSess?.started_at != null && rfSess.duration_seconds != null) {
+        if (rfSess?.started_at != null && rfSess.duration_seconds != null && rfSess.ended_at == null) {
           rapidFireTimer = {
             startedAt: String(rfSess.started_at),
             durationSeconds: Number(rfSess.duration_seconds),
           }
         }
+        if (rfSess) {
+          const attempted = Number(rfSess.questions_attempted || 0)
+          const correct = Number(rfSess.questions_correct || 0)
+          rapidFireTurnSummary = { correct, incorrect: Math.max(0, attempted - correct) }
+        }
+      }
+    }
+
+    if (activeRound?.round_type === 'rapid_fire' && latestEvent) {
+      const rapidTeam = String((ev?.rapid_fire_team || ev?.directed_team || '')).trim().toUpperCase() as TeamLabel | ''
+      const isRapidTeam = Boolean(myTeamLabel && rapidTeam && myTeamLabel === rapidTeam)
+      let timerActive = Boolean(rapidFireTimer)
+      if (rapidFireTimer?.startedAt && rapidFireTimer.durationSeconds != null) {
+        const startedMs = new Date(rapidFireTimer.startedAt).getTime()
+        if (Number.isFinite(startedMs)) {
+          timerActive = Date.now() < startedMs + Number(rapidFireTimer.durationSeconds) * 1000
+        }
+      }
+      if (!isRapidTeam || !timerActive) {
+        currentQuestion = null
       }
     }
 
@@ -187,6 +209,7 @@ export async function GET(
       scores,
       participantDirectAttempt,
       rapidFireTimer,
+      rapidFireTurnSummary,
       serverTimestampMs: Date.now(),
     })
   } catch (error: any) {

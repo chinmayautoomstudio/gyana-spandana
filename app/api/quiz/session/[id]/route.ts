@@ -395,34 +395,43 @@ export async function GET(
 
     const ev = latestEvent as any
     const questionId = ev?.question_id as string | undefined
+    const isRapidFireHostAttempt =
+      activeRound?.round_type === 'rapid_fire' &&
+      ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status))
     const needPendingDirectAttempt =
       latestEvent &&
       isHostOrAdmin &&
-      (activeRound?.round_type === 'direct_question' || activeRound?.round_type === 'true_or_false') &&
-      ['revealed', 'options_revealed'].includes(String(ev?.status))
+      ((activeRound?.round_type === 'direct_question' || activeRound?.round_type === 'true_or_false') &&
+        ['revealed', 'options_revealed'].includes(String(ev?.status)) ||
+        isRapidFireHostAttempt)
 
-    const dirForAttempt = needPendingDirectAttempt ? (ev.directed_team as TeamLabel) : null
-    const directAttemptPromise =
-      needPendingDirectAttempt && dirForAttempt && TEAM_LABELS.includes(dirForAttempt)
-        ? supabase
-            .from('quiz_direct_attempts')
-            .select('team_label, answer_text, verdict')
-            .eq('question_event_id', ev.id)
-            .eq('team_label', dirForAttempt)
-            .eq('verdict', 'pending')
-            .maybeSingle()
-        : Promise.resolve({ data: null })
-    const fallbackDirectAttemptPromise =
-      needPendingDirectAttempt && ev?.id
-        ? supabase
-            .from('quiz_direct_attempts')
-            .select('team_label, answer_text, verdict')
-            .eq('question_event_id', ev.id)
-            .eq('verdict', 'pending')
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-        : Promise.resolve({ data: null })
+    const dirForAttempt = needPendingDirectAttempt
+      ? ((isRapidFireHostAttempt ? (ev.rapid_fire_team || ev.directed_team) : ev.directed_team) as TeamLabel)
+      : null
+    let directAttemptPromise: PromiseLike<{ data: any }> = Promise.resolve({ data: null })
+    if (needPendingDirectAttempt && dirForAttempt && TEAM_LABELS.includes(dirForAttempt)) {
+      let query = supabase
+        .from('quiz_direct_attempts')
+        .select('team_label, answer_text, verdict')
+        .eq('question_event_id', ev.id)
+        .eq('team_label', dirForAttempt)
+      if (!isRapidFireHostAttempt) {
+        query = query.eq('verdict', 'pending')
+      }
+      directAttemptPromise = query.maybeSingle()
+    }
+
+    let fallbackDirectAttemptPromise: PromiseLike<{ data: any }> = Promise.resolve({ data: null })
+    if (needPendingDirectAttempt && ev?.id) {
+      let query = supabase
+        .from('quiz_direct_attempts')
+        .select('team_label, answer_text, verdict')
+        .eq('question_event_id', ev.id)
+      if (!isRapidFireHostAttempt) {
+        query = query.eq('verdict', 'pending')
+      }
+      fallbackDirectAttemptPromise = query.order('updated_at', { ascending: false }).limit(1).maybeSingle()
+    }
 
     const currentQuestionPromise = questionId
       ? supabase.from('quiz_questions').select('*').eq('id', questionId).single()
@@ -464,6 +473,7 @@ export async function GET(
       pendingDirectAnswer = {
         team_label: chosenAttempt.team_label,
         answer_text: String(chosenAttempt.answer_text ?? ''),
+        verdict: String(chosenAttempt.verdict ?? 'pending'),
         answer_option_label: optionLabel,
         answer_option_text: optionText,
       }
@@ -526,28 +536,33 @@ export async function GET(
       }
     }
 
-    if (
-      latestEvent &&
-      !isHostOrAdmin &&
-      (activeRound?.round_type === 'direct_question' ||
-        activeRound?.round_type === 'buzzer' ||
-        activeRound?.round_type === 'true_or_false') &&
-      ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status)) &&
-      authUser
-    ) {
+    let participantLabel: TeamLabel | null = null
+    if (!isHostOrAdmin && authUser) {
       const { data: participantRow } = await supabase
         .from('participants')
         .select('team_id')
         .eq('user_id', authUser.id)
         .maybeSingle()
       const slotsPart = (session.team_slots || {}) as Record<string, string>
-      const myLabel = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id)
-      if (myLabel) {
+      participantLabel = TEAM_LABELS.find((l) => slotsPart[l] === participantRow?.team_id) || null
+    }
+
+    if (
+      latestEvent &&
+      !isHostOrAdmin &&
+      (activeRound?.round_type === 'direct_question' ||
+        activeRound?.round_type === 'buzzer' ||
+        activeRound?.round_type === 'true_or_false' ||
+        activeRound?.round_type === 'rapid_fire') &&
+      ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status)) &&
+      authUser
+    ) {
+      if (participantLabel) {
         const { data: pAtt } = await supabase
           .from('quiz_direct_attempts')
           .select('answer_text, verdict')
           .eq('question_event_id', ev.id)
-          .eq('team_label', myLabel)
+          .eq('team_label', participantLabel)
           .maybeSingle()
         if (pAtt) {
           participantDirectAttempt = {
@@ -559,6 +574,7 @@ export async function GET(
     }
 
     let rapidFireTimer: { startedAt: string; durationSeconds: number } | null = null
+    let rapidFireTurnSummary: { correct: number; incorrect: number } | null = null
     if (
       activeRound?.round_type === 'rapid_fire' &&
       latestEvent &&
@@ -569,18 +585,37 @@ export async function GET(
       if (TEAM_LABELS.includes(rfTeam as TeamLabel)) {
         const { data: rfSess } = await supabase
           .from('quiz_rapid_fire_sessions')
-          .select('started_at, duration_seconds')
+          .select('started_at, duration_seconds,questions_attempted,questions_correct,ended_at')
           .eq('team_label', rfTeam)
-          .is('ended_at', null)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
-        if (rfSess?.started_at != null && rfSess.duration_seconds != null) {
+        if (rfSess?.started_at != null && rfSess.duration_seconds != null && rfSess.ended_at == null) {
           rapidFireTimer = {
             startedAt: String(rfSess.started_at),
             durationSeconds: Number(rfSess.duration_seconds),
           }
         }
+        if (rfSess) {
+          const attempted = Number(rfSess.questions_attempted || 0)
+          const correct = Number(rfSess.questions_correct || 0)
+          rapidFireTurnSummary = { correct, incorrect: Math.max(0, attempted - correct) }
+        }
+      }
+    }
+
+    if (!isHostOrAdmin && activeRound?.round_type === 'rapid_fire' && latestEvent) {
+      const rapidTeam = String((ev?.rapid_fire_team || ev?.directed_team || '')).trim().toUpperCase() as TeamLabel | ''
+      const isRapidTeam = Boolean(participantLabel && rapidTeam && participantLabel === rapidTeam)
+      let timerActive = Boolean(rapidFireTimer)
+      if (rapidFireTimer?.startedAt && rapidFireTimer.durationSeconds != null) {
+        const startedMs = new Date(rapidFireTimer.startedAt).getTime()
+        if (Number.isFinite(startedMs)) {
+          timerActive = Date.now() < startedMs + Number(rapidFireTimer.durationSeconds) * 1000
+        }
+      }
+      if (!isRapidTeam || !timerActive) {
+        currentQuestion = null
       }
     }
 
@@ -597,6 +632,7 @@ export async function GET(
       pendingBuzzerAnswer,
       participantDirectAttempt,
       rapidFireTimer,
+      rapidFireTurnSummary,
       serverTimestampMs: Date.now(),
     })
   } catch (error: any) {

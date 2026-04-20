@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { resolvePoints } from '@/lib/services/scoringService'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
+
+async function pickNextRapidFireQuestion(roundId: string, supabase: any) {
+  const [{ data: allQuestions }, { data: usedEvents }] = await Promise.all([
+    supabase.from('quiz_questions').select('*').eq('round_id', roundId).order('question_order', { ascending: true }),
+    supabase.from('quiz_question_events').select('question_id').eq('round_id', roundId),
+  ])
+
+  if (!allQuestions?.length) return null
+  const usedQuestionIds = new Set((usedEvents ?? []).map((event: any) => String(event.question_id || '')))
+  const remaining = allQuestions.filter((question: any) => !usedQuestionIds.has(String(question.id || '')))
+  if (!remaining.length) return null
+  const randomIndex = Math.floor(Math.random() * remaining.length)
+  return remaining[randomIndex]
+}
 
 export async function POST(
   request: NextRequest,
@@ -60,10 +75,11 @@ export async function POST(
     if (
       round.round_type !== 'direct_question' &&
       round.round_type !== 'buzzer' &&
-      round.round_type !== 'true_or_false'
+      round.round_type !== 'true_or_false' &&
+      round.round_type !== 'rapid_fire'
     ) {
       return NextResponse.json(
-        { error: 'Answer submission is only allowed in direct question, true/false, or buzzer rounds' },
+        { error: 'Answer submission is only allowed in direct question, true/false, buzzer, or rapid fire rounds' },
         { status: 400 },
       )
     }
@@ -79,7 +95,7 @@ export async function POST(
 
     const { data: session } = await supabase
       .from('quiz_live_sessions')
-      .select('team_slots')
+      .select('team_slots,points_full,points_half')
       .eq('id', sessionId)
       .single()
 
@@ -115,7 +131,7 @@ export async function POST(
         return NextResponse.json({ error: 'It is not your team turn to answer' }, { status: 403 })
       }
       answeringTeam = directed
-    } else {
+    } else if (round.round_type === 'buzzer') {
       if (event.status !== 'buzzer_open') {
         return NextResponse.json({ error: 'Buzzer is not open for answers' }, { status: 400 })
       }
@@ -157,6 +173,18 @@ export async function POST(
         return NextResponse.json({ error: 'It is not your team turn to answer' }, { status: 403 })
       }
       answeringTeam = activeTeam
+    } else {
+      if (!['revealed', 'options_revealed', 'buzzer_open'].includes(String(event.status || ''))) {
+        return NextResponse.json({ error: 'Rapid Fire question is not open for answers' }, { status: 400 })
+      }
+      const rapidFireTeam = (event.rapid_fire_team || event.directed_team) as TeamLabel | null
+      if (!rapidFireTeam || !TEAM_LABELS.includes(rapidFireTeam)) {
+        return NextResponse.json({ error: 'Rapid Fire turn is not assigned to a valid team' }, { status: 400 })
+      }
+      if (participantLabel !== rapidFireTeam) {
+        return NextResponse.json({ error: 'It is not your team turn to answer' }, { status: 403 })
+      }
+      answeringTeam = rapidFireTeam
     }
 
     if (!answeringTeam) {
@@ -175,6 +203,7 @@ export async function POST(
     }
 
     const now = new Date().toISOString()
+    let rapidFirePayload: any = null
     if (existing) {
       const { error: upErr } = await supabase
         .from('quiz_direct_attempts')
@@ -192,6 +221,140 @@ export async function POST(
       if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
     }
 
+    if (round.round_type === 'rapid_fire') {
+      const { data: activeRapidSession } = await supabase
+        .from('quiz_rapid_fire_sessions')
+        .select('id,started_at,duration_seconds,questions_attempted,questions_correct,score_earned')
+        .eq('team_label', answeringTeam)
+        .is('ended_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!activeRapidSession?.id || !activeRapidSession.started_at || !activeRapidSession.duration_seconds) {
+        return NextResponse.json({ error: 'Rapid Fire turn is not active' }, { status: 400 })
+      }
+
+      const startedAtMs = new Date(String(activeRapidSession.started_at)).getTime()
+      const durationMs = Number(activeRapidSession.duration_seconds) * 1000
+      const hasTimerExpired = Number.isFinite(startedAtMs) && Number.isFinite(durationMs) && Date.now() >= startedAtMs + durationMs
+      if (hasTimerExpired) {
+        await supabase
+          .from('quiz_rapid_fire_sessions')
+          .update({ ended_at: now })
+          .eq('id', activeRapidSession.id)
+        return NextResponse.json({ error: 'Rapid Fire turn has ended' }, { status: 400 })
+      }
+
+      const { data: question } = await supabase
+        .from('quiz_questions')
+        .select('id,correct_answer,question_order')
+        .eq('id', event.question_id)
+        .single()
+
+      if (!question) {
+        return NextResponse.json({ error: 'Question not found for this event' }, { status: 404 })
+      }
+
+      const officialAnswer = String(question.correct_answer || '').trim().toUpperCase()
+      const submittedAnswer = String(answerText || '').trim().toUpperCase()
+      const isCorrect = submittedAnswer !== '' && submittedAnswer === officialAnswer
+      const verdict = isCorrect ? 'correct' : 'wrong'
+      const pointsAwarded = isCorrect
+        ? resolvePoints(
+            1,
+            Number(session?.points_full ?? 10),
+            Number(session?.points_half ?? 5),
+            'rapid_fire',
+          )
+        : 0
+
+      const { error: verdictErr } = await supabase
+        .from('quiz_direct_attempts')
+        .update({ answer_text: submittedAnswer, verdict, updated_at: now })
+        .eq('question_event_id', questionEventId)
+        .eq('team_label', answeringTeam)
+      if (verdictErr) return NextResponse.json({ error: verdictErr.message }, { status: 500 })
+
+      const { error: markEventErr } = await supabase
+        .from('quiz_question_events')
+        .update({
+          status: isCorrect ? 'answered' : 'dropped',
+          answered_by_team: answeringTeam,
+          points_awarded: pointsAwarded,
+        })
+        .eq('id', questionEventId)
+      if (markEventErr) return NextResponse.json({ error: markEventErr.message }, { status: 500 })
+
+      if (isCorrect && pointsAwarded > 0) {
+        const { error: scoreErr } = await supabase.rpc('increment_team_score', {
+          p_session_id: sessionId,
+          p_team_label: answeringTeam,
+          p_score_delta: pointsAwarded,
+          p_answered_delta: 1,
+          p_correct_delta: 1,
+        })
+        if (scoreErr) return NextResponse.json({ error: scoreErr.message }, { status: 500 })
+      }
+
+      const nextAttempted = Number(activeRapidSession.questions_attempted || 0) + 1
+      const nextCorrect = Number(activeRapidSession.questions_correct || 0) + (isCorrect ? 1 : 0)
+      const nextScore = Number(activeRapidSession.score_earned || 0) + pointsAwarded
+      const { error: updateRapidErr } = await supabase
+        .from('quiz_rapid_fire_sessions')
+        .update({
+          questions_attempted: nextAttempted,
+          questions_correct: nextCorrect,
+          score_earned: nextScore,
+        })
+        .eq('id', activeRapidSession.id)
+      if (updateRapidErr) return NextResponse.json({ error: updateRapidErr.message }, { status: 500 })
+
+      const nextQuestion = await pickNextRapidFireQuestion(event.round_id, supabase)
+      const timeNowMs = Date.now()
+      const expiredAfterAnswer =
+        Number.isFinite(startedAtMs) && Number.isFinite(durationMs) && timeNowMs >= startedAtMs + durationMs
+
+      let nextEvent: any = null
+      let rapidFireCompleted = false
+      if (!nextQuestion || expiredAfterAnswer) {
+        rapidFireCompleted = true
+        await supabase.from('quiz_rapid_fire_sessions').update({ ended_at: new Date(timeNowMs).toISOString() }).eq('id', activeRapidSession.id)
+      } else {
+        const { data: createdNext, error: createNextErr } = await supabase
+          .from('quiz_question_events')
+          .insert({
+            round_id: event.round_id,
+            question_id: nextQuestion.id,
+            status: 'revealed',
+            attempt_number: 1,
+            rapid_fire_team: answeringTeam,
+            directed_team: answeringTeam,
+          })
+          .select('*')
+          .single()
+        if (createNextErr) return NextResponse.json({ error: createNextErr.message }, { status: 500 })
+
+        nextEvent = createdNext || null
+        await supabase
+          .from('quiz_rounds')
+          .update({ current_question_index: Number(nextQuestion.question_order || 0) })
+          .eq('id', event.round_id)
+      }
+
+      rapidFirePayload = {
+        verdict,
+        pointsAwarded,
+        nextEvent,
+        nextQuestion: nextQuestion && !rapidFireCompleted ? nextQuestion : null,
+        rapidFireCompleted,
+        turnSummary: {
+          correct: nextCorrect,
+          incorrect: Math.max(0, nextAttempted - nextCorrect),
+        },
+      }
+    }
+
     // Best-effort realtime ping so host UI refreshes immediately when a participant submits.
     try {
       const channel = supabase.channel(`quiz:session:${sessionId}`, {
@@ -207,6 +370,7 @@ export async function POST(
               questionEventId,
               teamLabel: answeringTeam,
               answerText,
+              verdict: rapidFirePayload?.verdict ?? 'pending',
               submittedAt: now,
             },
             timestamp: now,
@@ -217,7 +381,10 @@ export async function POST(
       // Ignore realtime send failures; DB write already succeeded and fallback refresh listeners still apply.
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      ...(rapidFirePayload || {}),
+    })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
