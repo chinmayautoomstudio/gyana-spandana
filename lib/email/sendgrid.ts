@@ -54,6 +54,9 @@ export async function sendEmail(
         enable: false,
         enableText: false,
       },
+      openTracking: {
+        enable: false,
+      },
     },
   }
 
