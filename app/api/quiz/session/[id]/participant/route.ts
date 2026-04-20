@@ -162,7 +162,7 @@ export async function GET(
     if (
       activeRound?.round_type === 'rapid_fire' &&
       latestEvent &&
-      ['revealed', 'options_revealed', 'buzzer_open'].includes(String(ev?.status || ''))
+      ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status || ''))
     ) {
       const rfTeam = String((ev as any)?.rapid_fire_team || '').trim().toUpperCase()
       if (TEAM_LABELS.includes(rfTeam as TeamLabel)) {

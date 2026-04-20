@@ -272,15 +272,15 @@ export function RapidFireControls({
                   End Turn Early
                 </Button>
               </div>
-              {turnSummary ? (
-                <p className="text-sm text-gray-600">
-                  Turn summary - Correct: {turnSummary.correct}, Incorrect: {turnSummary.incorrect}
-                </p>
-              ) : null}
             </>
           )}
         </>
       )}
+      {turnSummary ? (
+        <p className="text-sm text-gray-600">
+          Turn summary - Correct: {turnSummary.correct}, Incorrect: {turnSummary.incorrect}
+        </p>
+      ) : null}
     </section>
   )
 }

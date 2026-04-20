@@ -581,7 +581,9 @@ export async function GET(
     if (
       activeRound?.round_type === 'rapid_fire' &&
       latestEvent &&
-      ['revealed', 'options_revealed', 'buzzer_open'].includes(String((latestEvent as any)?.status || ''))
+      ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(
+        String((latestEvent as any)?.status || ''),
+      )
     ) {
       const evRf = latestEvent as { rapid_fire_team?: string }
       const rfTeam = String(evRf?.rapid_fire_team || '').trim().toUpperCase()
