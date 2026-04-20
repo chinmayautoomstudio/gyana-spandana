@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 type TeamLabel = 'A' | 'B' | 'C' | 'D'
 
@@ -131,7 +132,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: slotError }, { status: 400 })
     }
 
-    const { data: hostProfile, error: hostProfileError } = await supabase
+    let adminDb
+    try {
+      adminDb = createAdminClient()
+    } catch (e: any) {
+      return NextResponse.json(
+        {
+          error:
+            e?.message ||
+            'Server is not configured for admin session creation (missing SUPABASE_SERVICE_ROLE_KEY). See ENV_SETUP.md.',
+        },
+        { status: 500 },
+      )
+    }
+
+    const { data: hostProfile, error: hostProfileError } = await adminDb
       .from('user_profiles')
       .select('user_id')
       .eq('user_id', assigned_host_id)
@@ -148,7 +163,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data: session, error: sessionError } = await supabase
+    const { data: session, error: sessionError } = await adminDb
       .from('quiz_live_sessions')
       .insert({
         title,
@@ -169,7 +184,7 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < rounds.length; i++) {
       const round = rounds[i]
-      const { data: createdRound, error: roundError } = await supabase
+      const { data: createdRound, error: roundError } = await adminDb
         .from('quiz_rounds')
         .insert({
           session_id: session.id,
@@ -189,7 +204,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (round.question_set_id) {
-        const { data: setQuestions, error: setQuestionsError } = await supabase
+        const { data: setQuestions, error: setQuestionsError } = await adminDb
           .from('question_set_questions')
           .select('order_index,question_id')
           .eq('question_set_id', round.question_set_id)
@@ -213,7 +228,7 @@ export async function POST(request: NextRequest) {
               : setQuestions.slice(0, Math.min(cap, setQuestions.length))
 
           const questionIds = limited.map((q) => q.question_id)
-          const { data: sourceQuestions, error: sourceError } = await supabase
+          const { data: sourceQuestions, error: sourceError } = await adminDb
             .from('questions')
             .select('*')
             .in('id', questionIds)
@@ -251,7 +266,7 @@ export async function POST(request: NextRequest) {
             .filter(Boolean)
 
           if (snapshotRows.length > 0) {
-            const { error: insertQuestionsError } = await supabase
+            const { error: insertQuestionsError } = await adminDb
               .from('quiz_questions')
               .insert(snapshotRows as any[])
             if (insertQuestionsError) {
@@ -270,7 +285,10 @@ export async function POST(request: NextRequest) {
       questions_answered: 0,
       questions_correct: 0,
     }))
-    await supabase.from('quiz_session_scores').insert(scoreRows)
+    const { error: scoresError } = await adminDb.from('quiz_session_scores').insert(scoreRows)
+    if (scoresError) {
+      return NextResponse.json({ error: scoresError.message }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true, sessionId: session.id })
   } catch (error: any) {
