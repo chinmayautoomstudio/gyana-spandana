@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { QuestionSearch } from '@/components/admin/QuestionSearch'
 import { type Question } from '@/components/admin/QuestionCard'
-import { QuestionCard } from '@/components/admin/QuestionCard'
 
 interface QuestionSelectionModalProps {
   isOpen: boolean
@@ -145,19 +145,21 @@ export function QuestionSelectionModal({
 
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex h-dvh min-h-0 w-full flex-col items-center justify-center overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:p-6">
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex h-dvh min-h-0 w-full flex-col items-center justify-center overflow-y-auto overscroll-contain p-2 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:p-3">
       {/* Background overlay */}
       <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
-      {/* Explicit max-height so list flex-1 is bounded (max-h-% alone can fail inside flex) */}
+      {/* Grid: main row minmax(0,1fr) gives a definite height so the list can scroll (nested flex-1 alone was ~content height) */}
       <div
-        className="relative z-50 flex min-h-0 w-full max-w-6xl max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-lg bg-white text-left shadow-xl sm:max-h-[calc(100dvh-3rem)]"
+        className="relative z-50 grid h-[calc(100dvh-1rem)] min-h-0 w-full max-w-screen-2xl max-h-[calc(100dvh-1rem)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-lg bg-white text-left shadow-xl sm:h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-1.5rem)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="question-selection-modal-title"
       >
-        <div className="flex min-h-0 max-h-full flex-1 flex-col px-4 pt-5 sm:px-6">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 pt-5 sm:px-6">
             {/* Header */}
             <div className="mb-4 flex shrink-0 items-center justify-between">
               <div>
@@ -252,8 +254,8 @@ export function QuestionSelectionModal({
               </div>
             </div>
 
-            {/* Questions list: bounded flex child — min-h-0 + flex-1 required for overflow-y */}
-            <div className="min-h-0 flex-1 basis-0 overflow-y-auto overflow-x-hidden rounded-lg border border-gray-200">
+            {/* Scroll region: h-0 + flex-1 + min-h-0 gives a bounded height so the list scrolls inside the modal */}
+            <div className="h-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain overflow-x-hidden rounded-lg border border-gray-200 [scrollbar-gutter:stable]">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[#C0392B]"></div>
@@ -324,7 +326,8 @@ export function QuestionSelectionModal({
             </Button>
           </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
