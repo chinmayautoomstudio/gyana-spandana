@@ -1017,7 +1017,6 @@ export async function updateP2InvitedEmail(newEmail: string): Promise<UpdateP2Em
       console.error('Send invitation after P2 email update failed', result.error)
     }
   })
-    })
 
   return { success: true }
 }
