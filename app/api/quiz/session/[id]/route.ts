@@ -1513,7 +1513,6 @@ export async function PATCH(
         .from('quiz_pass_log')
         .select('team_label')
         .eq('question_event_id', questionEventId)
-        .eq('attempt_number', 2)
 
       const tried = new Set((passRowsP || []).map((p: any) => p.team_label))
       if (tried.size >= passThreshold) {
@@ -1529,6 +1528,13 @@ export async function PATCH(
       const nextP =
         orderP.find((l) => !tried.has(l)) ||
         (useTestRotation ? nextOccupiedLabel(teamLabel, occupiedP) : nextTeam(teamLabel))
+      if (tried.has(nextP)) {
+        return NextResponse.json({
+          success: true,
+          state: 'awaiting_reveal_or_skip',
+          event,
+        })
+      }
       const { data: updatedEventP, error: uErr2 } = await supabase
         .from('quiz_question_events')
         .update({ directed_team: nextP, status: 'revealed' })
@@ -1585,9 +1591,21 @@ export async function PATCH(
         .eq('id', sessionId)
         .single()
       const occupiedR = getOccupiedLabels((sessionR?.team_slots || {}) as Record<string, string>)
-      const labels = occupiedR.length > 0 ? occupiedR : [...TEAM_LABELS]
+      // Reveal eligibility must be based on teams actually mapped in this session.
+      // Safety fallback keeps behavior sane only when mapping is absent.
+      const requiredLabelsForReveal: TeamLabel[] =
+        occupiedR.length > 0 ? [...new Set(occupiedR)] : [...TEAM_LABELS]
+      const revealDebugPayload =
+        process.env.NODE_ENV !== 'production'
+          ? {
+              revealDebug: {
+                requiredLabelsForReveal,
+                occupiedLabels: occupiedR,
+              },
+            }
+          : {}
 
-      for (const L of labels) {
+      for (const L of requiredLabelsForReveal) {
         const { data: wr } = await supabase
           .from('quiz_direct_attempts')
           .select('id')
@@ -1597,7 +1615,10 @@ export async function PATCH(
           .maybeSingle()
         if (!wr) {
           return NextResponse.json(
-            { error: `Each team must be marked wrong before revealing the answer (missing: Team ${L})` },
+            {
+              error: `Each team must be marked wrong before revealing the answer (missing: Team ${L})`,
+              ...revealDebugPayload,
+            },
             { status: 400 },
           )
         }
@@ -1614,7 +1635,7 @@ export async function PATCH(
         .select('*')
         .single()
       if (revErr) return NextResponse.json({ error: revErr.message }, { status: 500 })
-      return NextResponse.json({ success: true, event: updatedEv })
+      return NextResponse.json({ success: true, event: updatedEv, ...revealDebugPayload })
     }
 
     if (action === 'prepare_rapid_fire') {
