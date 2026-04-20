@@ -47,6 +47,14 @@ export async function sendEmail(
     subject: options.subject,
     html: options.html,
     text: options.text,
+    // Disable click tracking so users receive direct links.
+    // This avoids SSL/certificate issues on misconfigured branded tracking domains.
+    trackingSettings: {
+      clickTracking: {
+        enable: false,
+        enableText: false,
+      },
+    },
   }
 
   try {
