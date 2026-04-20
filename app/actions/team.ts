@@ -13,6 +13,7 @@ import { notifyAllAdmins } from '@/app/actions/notification'
 import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
 import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 import { buildTeamNameChangedP2Email } from '@/lib/email/templates/team-name-changed-p2'
+import { buildRegistrationConfirmationEmail } from '@/lib/email/templates/registration-confirmation'
 
 const INVITATION_EXPIRY_DAYS = 7
 
@@ -37,6 +38,84 @@ function getSiteUrl(): string {
     process.env.NEXT_PUBLIC_SITE_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
   )
+}
+
+async function sendRegistrationConfirmationEmailDirect(
+  admin: ReturnType<typeof createAdminClient>,
+  payload: {
+    participantEmail: string
+    participantName: string
+    participantSchool: string
+    teammateName: string
+    teammateSchool: string
+    teamName: string
+    teamCode: string
+    registrationDate: string
+    participantId?: string
+  },
+  siteUrl: string
+): Promise<void> {
+  try {
+    if (!isSendGridConfigured()) {
+      console.warn('Registration email skipped (SendGrid not configured) for', payload.participantEmail)
+      return
+    }
+
+    const registrationDateFormatted = new Date(payload.registrationDate).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+    const { subject, html, text } = buildRegistrationConfirmationEmail({
+      participantName: payload.participantName,
+      participantEmail: payload.participantEmail,
+      participantSchool: payload.participantSchool || '',
+      teammateName: payload.teammateName,
+      teammateSchool: payload.teammateSchool || '',
+      teamName: payload.teamName,
+      teamCode: payload.teamCode,
+      registrationDateFormatted,
+      loginUrl: `${siteUrl}/login`,
+    })
+
+    const result = await sendEmail(
+      {
+        to: payload.participantEmail,
+        subject,
+        html,
+        text,
+      },
+      {
+        emailType: SENT_EMAIL_TYPES.REGISTRATION_CONFIRMATION,
+        metadata: {
+          participant_id: payload.participantId ?? null,
+          team_name: payload.teamName,
+          team_code: payload.teamCode,
+        },
+      }
+    )
+
+    if (!result.success) {
+      console.error('Registration email failed for', payload.participantEmail, result.error)
+      return
+    }
+
+    if (payload.participantId) {
+      const { error: updateError } = await admin
+        .from('participants')
+        .update({ registration_email_sent_at: new Date().toISOString() })
+        .eq('id', payload.participantId)
+
+      if (updateError) {
+        console.error('Failed to update registration_email_sent_at for participant', payload.participantId, updateError)
+      }
+    }
+  } catch (err) {
+    console.error('Failed to send participant confirmation email:', err)
+  }
 }
 
 export type CreateTeamResult = { success: true } | { success: false; error: string }
@@ -514,30 +593,11 @@ export async function completeP2Registration(
 
   const siteUrl = getSiteUrl()
   const registrationDate = new Date().toISOString()
-  const apiUrl = `${siteUrl}/api/send-registration-confirmation`
   const teamCode = teamRow?.team_code ?? ''
   const teamName = teamRow?.team_name ?? ''
 
-  const sendConfirmation = (payload: {
-    participantEmail: string
-    participantName: string
-    participantSchool: string
-    teammateName: string
-    teammateSchool: string
-    teamName: string
-    teamCode: string
-    registrationDate: string
-    participantId?: string
-  }) => {
-    void fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch((err) => { console.error('Registration confirmation email failed', err) })
-  }
-
   // Fire-and-forget: do not block on confirmation emails or admin notifications
-  sendConfirmation({
+  void sendRegistrationConfirmationEmailDirect(admin, {
     participantEmail: emailLower,
     participantName: data.name,
     participantSchool: schoolName,
@@ -547,9 +607,9 @@ export async function completeP2Registration(
     teamCode,
     registrationDate,
     participantId: p2Participant?.id,
-  })
+  }, siteUrl)
   if (p1Email) {
-    sendConfirmation({
+    void sendRegistrationConfirmationEmailDirect(admin, {
       participantEmail: p1Email,
       participantName: p1Name,
       participantSchool: schoolName,
@@ -559,7 +619,7 @@ export async function completeP2Registration(
       teamCode,
       registrationDate,
       participantId: p1Row?.id,
-    })
+    }, siteUrl)
   }
 
   notifyAllAdmins(
@@ -684,28 +744,10 @@ export async function completeP2RegistrationWithGoogle(
 
   const siteUrl = getSiteUrl()
   const registrationDate = new Date().toISOString()
-  const apiUrl = `${siteUrl}/api/send-registration-confirmation`
   const teamCode = teamRow?.team_code ?? ''
   const teamName = teamRow?.team_name ?? ''
 
-  const sendConfirmation = (payload: {
-    participantEmail: string
-    participantName: string
-    participantSchool: string
-    teammateName: string
-    teammateSchool: string
-    teamName: string
-    teamCode: string
-    registrationDate: string
-    participantId?: string
-  }) => {
-    void fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch((err) => { console.error('Registration confirmation email failed', err) })
-  }
-  sendConfirmation({
+  void sendRegistrationConfirmationEmailDirect(admin, {
     participantEmail: userEmail,
     participantName: data.name,
     participantSchool: schoolName,
@@ -715,9 +757,9 @@ export async function completeP2RegistrationWithGoogle(
     teamCode,
     registrationDate,
     participantId: p2Participant?.id,
-  })
+  }, siteUrl)
   if (p1Email) {
-    sendConfirmation({
+    void sendRegistrationConfirmationEmailDirect(admin, {
       participantEmail: p1Email,
       participantName: p1Name,
       participantSchool: schoolName,
@@ -727,7 +769,7 @@ export async function completeP2RegistrationWithGoogle(
       teamCode,
       registrationDate,
       participantId: p1Participant?.id,
-    })
+    }, siteUrl)
   }
   notifyAllAdmins(
     'New Team Registered',
