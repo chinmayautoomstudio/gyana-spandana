@@ -136,6 +136,22 @@ async function getScoreMap(sessionId: string, supabase: any) {
   }, {} as Record<TeamLabel, number>)
 }
 
+async function pickNextRapidFireQuestion(roundId: string, supabase: any) {
+  const [{ data: allQuestions }, { data: usedEvents }] = await Promise.all([
+    supabase.from('quiz_questions').select('*').eq('round_id', roundId).order('question_order', { ascending: true }),
+    supabase.from('quiz_question_events').select('question_id').eq('round_id', roundId),
+  ])
+
+  if (!allQuestions?.length) return null
+
+  const usedQuestionIds = new Set((usedEvents ?? []).map((event: any) => String(event.question_id || '')))
+  const remaining = allQuestions.filter((question: any) => !usedQuestionIds.has(String(question.id || '')))
+  if (!remaining.length) return null
+
+  const randomIndex = Math.floor(Math.random() * remaining.length)
+  return remaining[randomIndex]
+}
+
 async function getTeamDisplayNames(session: { team_slots?: Record<string, string> | null }, supabase: any) {
   const slots = (session?.team_slots || {}) as Record<string, string>
   const ids = [...new Set(TEAM_LABELS.map((l) => slots[l]).filter(Boolean))]
@@ -1601,6 +1617,37 @@ export async function PATCH(
       return NextResponse.json({ success: true, event: updatedEv })
     }
 
+    if (action === 'prepare_rapid_fire') {
+      const roundId = body?.roundId as string | undefined
+      const teamLabel = body?.teamLabel as TeamLabel | undefined
+      if (!roundId || !teamLabel) {
+        return NextResponse.json({ error: 'roundId and teamLabel are required' }, { status: 400 })
+      }
+      if (!TEAM_LABELS.includes(teamLabel)) {
+        return NextResponse.json({ error: 'teamLabel must be A/B/C/D' }, { status: 400 })
+      }
+
+      const { data: round } = await supabase
+        .from('quiz_rounds')
+        .select('id,round_type,current_question_index,rapid_fire_duration_seconds')
+        .eq('id', roundId)
+        .eq('session_id', sessionId)
+        .single()
+      if (!round) return NextResponse.json({ error: 'Round not found' }, { status: 404 })
+      if (round.round_type !== 'rapid_fire') {
+        return NextResponse.json({ error: 'Round is not rapid fire' }, { status: 400 })
+      }
+
+      const question = await pickNextRapidFireQuestion(roundId, supabase)
+      if (!question) return NextResponse.json({ error: 'No more questions in this round' }, { status: 400 })
+
+      return NextResponse.json({
+        success: true,
+        question,
+        teamLabel,
+      })
+    }
+
     if (action === 'start_rapid_fire') {
       const roundId = body?.roundId as string | undefined
       const teamLabel = body?.teamLabel as TeamLabel | undefined
@@ -1623,12 +1670,7 @@ export async function PATCH(
       }
 
       const durationSeconds = Number(body?.durationSeconds || round.rapid_fire_duration_seconds || 45)
-      const { data: question } = await supabase
-        .from('quiz_questions')
-        .select('*')
-        .eq('round_id', roundId)
-        .eq('question_order', Number(round.current_question_index || 0) + 1)
-        .maybeSingle()
+      const question = await pickNextRapidFireQuestion(roundId, supabase)
       if (!question) return NextResponse.json({ error: 'No more questions in this round' }, { status: 400 })
 
       const { data: event, error: eventErr } = await supabase
@@ -1740,12 +1782,7 @@ export async function PATCH(
           .eq('id', activeRapid.id)
       }
 
-      const { data: nextQuestion } = await supabase
-        .from('quiz_questions')
-        .select('*')
-        .eq('round_id', round.id)
-        .eq('question_order', Number(round.current_question_index || 0) + 1)
-        .maybeSingle()
+      const nextQuestion = await pickNextRapidFireQuestion(round.id, supabase)
 
       let nextEvent: any = null
       if (nextQuestion) {
@@ -1823,12 +1860,7 @@ export async function PATCH(
           .eq('id', activeRapid.id)
       }
 
-      const { data: nextQuestion } = await supabase
-        .from('quiz_questions')
-        .select('*')
-        .eq('round_id', round.id)
-        .eq('question_order', Number(round.current_question_index || 0) + 1)
-        .maybeSingle()
+      const nextQuestion = await pickNextRapidFireQuestion(round.id, supabase)
 
       let nextEvent: any = null
       if (nextQuestion) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { TeamBadge } from '@/components/quiz/TeamBadge'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
@@ -13,12 +13,14 @@ interface RapidFireControlsProps {
   busy?: boolean
   selectedTeam: TeamLabel
   onSelectTeam: (label: TeamLabel) => void
-  onStartRapidFire: (teamLabel: TeamLabel, durationSeconds: number) => void
+  onPrepareRapidFire: (teamLabel: TeamLabel) => Promise<{ question: any } | null>
+  onStartRapidFire: (teamLabel: TeamLabel, durationSeconds: number) => Promise<any>
   onCorrect: () => void
   onWrong: () => void
   onEndTurn: () => void
   teamDisplayNames?: Record<TeamLabel, string>
   questionLanguage?: 'en' | 'odia'
+  rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
 }
 
 export function RapidFireControls({
@@ -28,52 +30,87 @@ export function RapidFireControls({
   busy = false,
   selectedTeam,
   onSelectTeam,
+  onPrepareRapidFire,
   onStartRapidFire,
   onCorrect,
   onWrong,
   onEndTurn,
   teamDisplayNames,
   questionLanguage = 'en',
+  rapidFireTimer = null,
 }: RapidFireControlsProps) {
   const [durationSeconds, setDurationSeconds] = useState<number>(Number(round?.rapid_fire_duration_seconds || 45))
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(0)
-  const [hasStarted, setHasStarted] = useState(false)
+  const [phase, setPhase] = useState<'idle' | 'preview' | 'running'>('idle')
+  const [previewQuestion, setPreviewQuestion] = useState<any | null>(null)
+  const [localFallbackSeconds, setLocalFallbackSeconds] = useState<number>(0)
   const [correctCount, setCorrectCount] = useState(0)
+  const [clock, setClock] = useState(() => Date.now())
+  const timeoutHandledRef = useRef(false)
 
   const activeTeam = (event?.rapid_fire_team || selectedTeam) as TeamLabel
   const isQuestionActive = Boolean(event && ['revealed', 'options_revealed', 'buzzer_open'].includes(event.status))
-  const isRunning = hasStarted && isQuestionActive && remainingSeconds > 0
+  const hasServerTimer = Boolean(rapidFireTimer?.startedAt && rapidFireTimer?.durationSeconds != null)
+
+  const remainingSeconds = useMemo(() => {
+    if (hasServerTimer && rapidFireTimer) {
+      const startedAtMs = new Date(rapidFireTimer.startedAt).getTime()
+      if (Number.isFinite(startedAtMs)) {
+        const elapsed = Math.floor((clock - startedAtMs) / 1000)
+        return Math.max(0, Number(rapidFireTimer.durationSeconds) - elapsed)
+      }
+    }
+    return Math.max(0, localFallbackSeconds)
+  }, [clock, hasServerTimer, localFallbackSeconds, rapidFireTimer])
+
+  const isRunning = phase === 'running' && isQuestionActive && remainingSeconds > 0
 
   useEffect(() => {
     setDurationSeconds(Number(round?.rapid_fire_duration_seconds || 45))
+    setPhase('idle')
+    setPreviewQuestion(null)
+    setLocalFallbackSeconds(0)
+    setCorrectCount(0)
+    timeoutHandledRef.current = false
   }, [round?.id, round?.rapid_fire_duration_seconds])
 
   useEffect(() => {
-    if (hasStarted && !isQuestionActive) {
-      setHasStarted(false)
-      setRemainingSeconds(0)
+    if (phase === 'running' && !isQuestionActive) {
+      setPhase('idle')
+      setPreviewQuestion(null)
+      setLocalFallbackSeconds(0)
+      timeoutHandledRef.current = false
     }
-  }, [hasStarted, isQuestionActive])
+  }, [phase, isQuestionActive])
 
   useEffect(() => {
     if (!isRunning) return
-    let endTriggered = false
+    const tick = setInterval(() => setClock(Date.now()), 1000)
+    return () => clearInterval(tick)
+  }, [isRunning])
+
+  useEffect(() => {
+    if (phase !== 'running' || hasServerTimer) return
     const timer = setInterval(() => {
-      setRemainingSeconds((prev) => {
+      setLocalFallbackSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(timer)
-          if (!endTriggered) {
-            endTriggered = true
-            setHasStarted(false)
-            void onEndTurn()
-          }
+          timeoutHandledRef.current = true
+          setPhase('idle')
+          void onEndTurn()
           return 0
         }
         return prev - 1
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [isRunning, onEndTurn])
+  }, [phase, hasServerTimer, onEndTurn])
+
+  useEffect(() => {
+    if (phase !== 'running' || remainingSeconds > 0 || timeoutHandledRef.current) return
+    timeoutHandledRef.current = true
+    setPhase('idle')
+    void onEndTurn()
+  }, [phase, remainingSeconds, onEndTurn])
 
   const formattedTime = useMemo(() => {
     const mins = Math.floor(remainingSeconds / 60)
@@ -81,11 +118,22 @@ export function RapidFireControls({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }, [remainingSeconds])
 
-  const handleStart = () => {
-    setHasStarted(true)
-    setRemainingSeconds(durationSeconds)
+  const handleLoadQuestion = async () => {
+    const result = await onPrepareRapidFire(selectedTeam)
+    const preparedQuestion = result?.question ?? null
+    if (!preparedQuestion) return
+    setPreviewQuestion(preparedQuestion)
+    setPhase('preview')
+  }
+
+  const handleStart = async () => {
+    const started = await onStartRapidFire(selectedTeam, durationSeconds)
+    if (!started) return
+    setPhase('running')
+    setClock(Date.now())
     setCorrectCount(0)
-    onStartRapidFire(selectedTeam, durationSeconds)
+    setLocalFallbackSeconds(durationSeconds)
+    timeoutHandledRef.current = false
   }
 
   const handleCorrect = () => {
@@ -100,6 +148,7 @@ export function RapidFireControls({
   const teamLabelText = teamDisplayNames?.[activeTeam] && teamDisplayNames[activeTeam] !== 'Unassigned'
     ? `${teamDisplayNames[activeTeam]} (${activeTeam})`
     : `Team ${activeTeam}`
+  const displayQuestion = phase === 'preview' ? previewQuestion : question || previewQuestion
 
   return (
     <section className="space-y-4">
@@ -111,7 +160,7 @@ export function RapidFireControls({
         </div>
       </div>
 
-      {!hasStarted ? (
+      {phase === 'idle' ? (
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
           <p className="text-sm font-medium text-gray-700">Choose team for this rapid fire turn</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -146,47 +195,72 @@ export function RapidFireControls({
               className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#C0392B] focus:outline-none focus:ring-2 focus:ring-[#C0392B]/30 disabled:bg-gray-100 disabled:text-gray-500"
             />
           </div>
-          <Button onClick={handleStart} isLoading={busy}>
-            Start Rapid Fire
+          <Button onClick={handleLoadQuestion} isLoading={busy}>
+            Load Question
           </Button>
         </div>
       ) : (
         <>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="mb-2 text-sm text-gray-600">{teamLabelText} is answering</p>
+            <p className="mb-2 text-sm text-gray-600">
+              {phase === 'preview' ? `${teamLabelText} question preview` : `${teamLabelText} is answering`}
+            </p>
             <QuestionDisplay
-              question={question}
+              question={displayQuestion}
               showOptions
               readOnly
               revealCorrectAnswer
               language={questionLanguage}
             />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleCorrect} isLoading={busy} disabled={!isQuestionActive || remainingSeconds <= 0}>
-              Correct
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleWrong}
-              isLoading={busy}
-              disabled={!isQuestionActive || remainingSeconds <= 0}
-            >
-              Wrong
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setHasStarted(false)
-                setRemainingSeconds(0)
-                onEndTurn()
-              }}
-              isLoading={busy}
-            >
-              End Turn Early
-            </Button>
-          </div>
-          <p className="text-sm text-gray-600">Correct answers this turn: {correctCount}</p>
+          {phase === 'preview' ? (
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleStart} isLoading={busy}>
+                Start Rapid Fire
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPhase('idle')
+                  setPreviewQuestion(null)
+                  timeoutHandledRef.current = false
+                }}
+                isLoading={busy}
+              >
+                Back
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleCorrect} isLoading={busy} disabled={!isQuestionActive || remainingSeconds <= 0}>
+                  Correct
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleWrong}
+                  isLoading={busy}
+                  disabled={!isQuestionActive || remainingSeconds <= 0}
+                >
+                  Wrong
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setPhase('idle')
+                    setPreviewQuestion(null)
+                    setLocalFallbackSeconds(0)
+                    timeoutHandledRef.current = false
+                    onEndTurn()
+                  }}
+                  isLoading={busy}
+                >
+                  End Turn Early
+                </Button>
+              </div>
+              <p className="text-sm text-gray-600">Correct answers this turn: {correctCount}</p>
+            </>
+          )}
         </>
       )}
     </section>

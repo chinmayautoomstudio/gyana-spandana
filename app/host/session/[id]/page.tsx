@@ -25,6 +25,7 @@ interface SessionState {
   activeRound: any | null
   currentQuestionEvent: any | null
   currentQuestion: any | null
+  rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
   scores: Record<TeamLabel, number>
   team_display_names?: Record<TeamLabel, string>
   activeRoundQuestions?: Array<{
@@ -611,6 +612,12 @@ export default function HostSessionPage() {
                   busy={busy}
                   selectedTeam={selectedTeam}
                   onSelectTeam={setSelectedTeam}
+                  onPrepareRapidFire={(teamLabel) =>
+                    runAction('prepare_rapid_fire', {
+                      roundId: activeRound.id,
+                      teamLabel,
+                    })
+                  }
                   onStartRapidFire={(teamLabel, durationSeconds) =>
                     runAction('start_rapid_fire', {
                       roundId: activeRound.id,
@@ -638,6 +645,7 @@ export default function HostSessionPage() {
                   }
                   teamDisplayNames={teamNames}
                   questionLanguage={questionLanguage}
+                  rapidFireTimer={state.rapidFireTimer ?? null}
                 />
               ) : activeRound.round_type === 'buzzer' ? (
                 <BuzzerControls
