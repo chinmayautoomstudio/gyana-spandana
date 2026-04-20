@@ -72,7 +72,7 @@ export async function completeProfile(
       .from('participants')
       .select('id, user_id')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (fetchError) {
       console.error('Error fetching participant:', fetchError)
@@ -199,7 +199,7 @@ export async function updateProfile(
       .from('participants')
       .select('id, user_id')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !existingParticipant) {
       console.error('Error fetching participant:', fetchError)
@@ -299,10 +299,10 @@ export async function checkProfileCompletion(): Promise<{ completed: boolean; er
       .from('participants')
       .select('profile_completed')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
-    if (participantError) {
-      return { completed: false, error: participantError.message }
+    if (participantError || !participant) {
+      return { completed: false, error: participantError?.message || 'Participant record not found' }
     }
 
     return { completed: participant?.profile_completed || false }

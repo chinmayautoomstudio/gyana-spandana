@@ -1228,14 +1228,21 @@ export async function PATCH(
         if (first === 'A' || first === 'B' || first === 'C' || first === 'D') return first
         return normalized
       }
+      const normalizeTrueFalseValue = (input: string | null | undefined): 'TRUE' | 'FALSE' | null => {
+        const normalized = String(input || '').trim().toUpperCase()
+        if (!normalized) return null
+        if (normalized === 'TRUE' || normalized === 'T' || normalized === '1' || normalized === 'A') return 'TRUE'
+        if (normalized === 'FALSE' || normalized === 'F' || normalized === '0' || normalized === 'B') return 'FALSE'
+        return null
+      }
 
       const submittedRaw = String(attempt.answer_text || '').trim().toUpperCase()
       const isTrueFalseQuestion =
         String(qAns?.question_type || '').toLowerCase() === 'true_false' ||
         roundC?.round_type === 'true_or_false'
-      const submitted = isTrueFalseQuestion ? submittedRaw : normalizeOptionValue(submittedRaw)
+      const submitted = isTrueFalseQuestion ? normalizeTrueFalseValue(submittedRaw) : normalizeOptionValue(submittedRaw)
       const correctAnswer = String(qAns?.correct_answer || '').trim().toUpperCase()
-      const normalizedCorrect = isTrueFalseQuestion ? correctAnswer : normalizeOptionValue(correctAnswer)
+      const normalizedCorrect = isTrueFalseQuestion ? normalizeTrueFalseValue(correctAnswer) : normalizeOptionValue(correctAnswer)
       const verdict: 'correct' | 'wrong' =
         submitted && normalizedCorrect && submitted === normalizedCorrect ? 'correct' : 'wrong'
 

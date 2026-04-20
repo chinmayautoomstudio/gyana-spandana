@@ -276,7 +276,7 @@ export default function DashboardPage() {
       .from('participants')
       .select(PARTICIPANT_WITH_TEAM_SELECT)
       .eq('user_id', uid)
-      .single()
+      .maybeSingle()
 
     if (participant) {
       setParticipantData(participant)

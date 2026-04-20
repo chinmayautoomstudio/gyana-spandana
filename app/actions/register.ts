@@ -3,6 +3,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { TEAM_NAME_MAX_LENGTH, TeamRegistrationFormData } from '@/lib/validations'
 import { notifyAllAdmins } from '@/app/actions/notification'
+import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
+import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
+import { buildRegistrationConfirmationEmail } from '@/lib/email/templates/registration-confirmation'
 
 /** Team code: GS- + first 8 chars of UUID (e.g. GS-A7F2K9M4). Same format as team.ts. */
 function generateShortTeamCode(): string {
@@ -162,24 +165,67 @@ export async function registerTeam(
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ||
             (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
         const registrationDate = new Date().toISOString()
-        const apiUrl = `${siteUrl}/api/send-registration-confirmation`
 
         const sendOne = async (
             payload: { participantEmail: string; participantName: string; participantSchool: string; teammateName: string; teammateSchool: string; teamName: string; teamCode: string; registrationDate: string; participantId?: string }
         ) => {
             try {
-                const res = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                })
-                const body = await res.json().catch(() => ({}))
-                if (!res.ok) {
-                    console.error('Registration email failed for', payload.participantEmail, res.status, body)
+                if (!isSendGridConfigured()) {
+                    console.warn('Registration email skipped (SendGrid not configured) for', payload.participantEmail)
                     return
                 }
-                if (body.skipped) {
-                    console.warn('Registration email skipped (SendGrid not configured) for', payload.participantEmail)
+
+                const registrationDateFormatted = new Date(payload.registrationDate).toLocaleDateString('en-IN', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                })
+
+                const { subject, html, text } = buildRegistrationConfirmationEmail({
+                    participantName: payload.participantName,
+                    participantEmail: payload.participantEmail,
+                    participantSchool: payload.participantSchool || '',
+                    teammateName: payload.teammateName,
+                    teammateSchool: payload.teammateSchool || '',
+                    teamName: payload.teamName,
+                    teamCode: payload.teamCode,
+                    registrationDateFormatted,
+                    loginUrl: `${siteUrl}/login`,
+                })
+
+                const result = await sendEmail(
+                    {
+                        to: payload.participantEmail,
+                        subject,
+                        html,
+                        text,
+                    },
+                    {
+                        emailType: SENT_EMAIL_TYPES.REGISTRATION_CONFIRMATION,
+                        metadata: {
+                            participant_id: payload.participantId ?? null,
+                            team_name: payload.teamName,
+                            team_code: payload.teamCode,
+                        },
+                    }
+                )
+
+                if (!result.success) {
+                    console.error('Registration email failed for', payload.participantEmail, result.error)
+                    return
+                }
+
+                if (payload.participantId) {
+                    const { error: updateError } = await supabase
+                        .from('participants')
+                        .update({ registration_email_sent_at: new Date().toISOString() })
+                        .eq('id', payload.participantId)
+
+                    if (updateError) {
+                        console.error('Failed to update registration_email_sent_at for participant', payload.participantId, updateError)
+                    }
                 }
             } catch (err) {
                 console.error('Failed to send participant confirmation email:', err)
