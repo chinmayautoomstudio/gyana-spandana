@@ -420,6 +420,13 @@ export async function GET(
     ])
 
     let currentQuestion: any = questionRow || null
+    if (currentQuestion && activeRound?.round_type === 'true_or_false') {
+      // Force true/false rendering for this round even if source question metadata was inconsistent.
+      currentQuestion = {
+        ...currentQuestion,
+        question_type: 'true_false',
+      }
+    }
     const revealCorrect = Boolean(ev?.correct_answer_revealed_at)
     const showCorrectInPayload = revealCorrect || isHostOrAdmin
     currentQuestion = stripCorrectAnswer(currentQuestion, showCorrectInPayload)
@@ -822,19 +829,21 @@ export async function PATCH(
 
       // Fix 4: parallelise event update and score increment in one shot
       const buzzerExtras = round?.round_type === 'buzzer' ? { buzzer_answer_deadline_at: null as string | null } : {}
-      await Promise.all([
-        supabase
-          .from('quiz_question_events')
-          .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded, ...buzzerExtras })
-          .eq('id', questionEventId),
-        supabase.rpc('increment_team_score', {
-          p_session_id: sessionId,
-          p_team_label: teamLabel,
-          p_score_delta: pointsAwarded,
-          p_answered_delta: 1,
-          p_correct_delta: 1,
-        }),
-      ])
+      const { error: scoreErr } = await supabase.rpc('increment_team_score', {
+        p_session_id: sessionId,
+        p_team_label: teamLabel,
+        p_score_delta: pointsAwarded,
+        p_answered_delta: 1,
+        p_correct_delta: 1,
+      })
+      if (scoreErr) {
+        return NextResponse.json({ error: scoreErr.message }, { status: 500 })
+      }
+      const { error: markErr } = await supabase
+        .from('quiz_question_events')
+        .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded, ...buzzerExtras })
+        .eq('id', questionEventId)
+      if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
 
       const updatedScores = await getScoreMap(sessionId, supabase)
       return NextResponse.json({
@@ -1076,18 +1085,18 @@ export async function PATCH(
           .eq('id', questionEventId),
       ])
 
-      // Fix 4: atomic increment instead of SELECT→UPDATE→SELECT, run in parallel with broadcast
+      const { error: scoreErr } = await supabase.rpc('increment_team_score', {
+        p_session_id: sessionId,
+        p_team_label: teamLabel,
+        p_score_delta: pointsAwarded,
+        p_answered_delta: 1,
+        p_correct_delta: 1,
+      })
+      if (scoreErr) {
+        return NextResponse.json({ error: scoreErr.message }, { status: 500 })
+      }
       const [updatedScores] = await Promise.all([
-        getScoreMap(sessionId, supabase).then(async (scores) => {
-          await supabase.rpc('increment_team_score', {
-            p_session_id: sessionId,
-            p_team_label: teamLabel,
-            p_score_delta: pointsAwarded,
-            p_answered_delta: 1,
-            p_correct_delta: 1,
-          })
-          return getScoreMap(sessionId, supabase)
-        }),
+        getScoreMap(sessionId, supabase),
         broadcastDirectVerdictApplied(sessionId, supabase, { questionEventId, teamLabel, verdict: 'correct' }),
       ])
 
@@ -1221,7 +1230,9 @@ export async function PATCH(
       }
 
       const submittedRaw = String(attempt.answer_text || '').trim().toUpperCase()
-      const isTrueFalseQuestion = String(qAns?.question_type || '').toLowerCase() === 'true_false'
+      const isTrueFalseQuestion =
+        String(qAns?.question_type || '').toLowerCase() === 'true_false' ||
+        roundC?.round_type === 'true_or_false'
       const submitted = isTrueFalseQuestion ? submittedRaw : normalizeOptionValue(submittedRaw)
       const correctAnswer = String(qAns?.correct_answer || '').trim().toUpperCase()
       const normalizedCorrect = isTrueFalseQuestion ? correctAnswer : normalizeOptionValue(correctAnswer)
@@ -1337,7 +1348,11 @@ export async function PATCH(
         Number(event.attempt_number || 1),
         Number(sessionC?.points_full || 10),
         Number(sessionC?.points_half || 5),
-        roundC?.round_type === 'buzzer' ? 'buzzer' : 'direct_question',
+        roundC?.round_type === 'buzzer'
+          ? 'buzzer'
+          : roundC?.round_type === 'true_or_false'
+            ? 'true_or_false'
+            : 'direct_question',
       )
 
       // Fix 4: parallelise the two independent writes
@@ -1354,16 +1369,21 @@ export async function PATCH(
       ])
 
       // Fix 4: atomic increment + broadcast in parallel, then fetch final scores
-      await Promise.all([
-        supabase.rpc('increment_team_score', {
-          p_session_id: sessionId,
-          p_team_label: teamLabel,
-          p_score_delta: pointsAwarded,
-          p_answered_delta: 1,
-          p_correct_delta: 1,
-        }),
-        broadcastDirectVerdictApplied(sessionId, supabase, { questionEventId, teamLabel, verdict: 'correct' }),
-      ])
+      const { error: scoreErr } = await supabase.rpc('increment_team_score', {
+        p_session_id: sessionId,
+        p_team_label: teamLabel,
+        p_score_delta: pointsAwarded,
+        p_answered_delta: 1,
+        p_correct_delta: 1,
+      })
+      if (scoreErr) {
+        return NextResponse.json({ error: scoreErr.message }, { status: 500 })
+      }
+      await broadcastDirectVerdictApplied(sessionId, supabase, {
+        questionEventId,
+        teamLabel,
+        verdict: 'correct',
+      })
       const updatedScores = await getScoreMap(sessionId, supabase)
       return NextResponse.json({
         success: true,
@@ -1678,19 +1698,21 @@ export async function PATCH(
       const pointsAwarded = resolvePoints(1, Number(sessionRF?.points_full || 10), Number(sessionRF?.points_half || 5), 'rapid_fire')
 
       // Fix 4: parallelise event update + score rpc increment
-      await Promise.all([
-        supabase
-          .from('quiz_question_events')
-          .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded })
-          .eq('id', questionEventId),
-        supabase.rpc('increment_team_score', {
-          p_session_id: sessionId,
-          p_team_label: teamLabel,
-          p_score_delta: pointsAwarded,
-          p_answered_delta: 1,
-          p_correct_delta: 1,
-        }),
-      ])
+      const { error: scoreErr } = await supabase.rpc('increment_team_score', {
+        p_session_id: sessionId,
+        p_team_label: teamLabel,
+        p_score_delta: pointsAwarded,
+        p_answered_delta: 1,
+        p_correct_delta: 1,
+      })
+      if (scoreErr) {
+        return NextResponse.json({ error: scoreErr.message }, { status: 500 })
+      }
+      const { error: markErr } = await supabase
+        .from('quiz_question_events')
+        .update({ status: 'answered', answered_by_team: teamLabel, points_awarded: pointsAwarded })
+        .eq('id', questionEventId)
+      if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
 
       const { data: activeRapid } = await supabase
         .from('quiz_rapid_fire_sessions')

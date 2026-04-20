@@ -247,7 +247,10 @@ export async function POST(request: NextRequest) {
                 source_question_id: src.id,
                 question_text: src.question_text,
                 question_text_odia: src.question_text_odia,
-                question_type: src.question_type || 'mcq',
+                question_type:
+                  round.round_type === 'true_or_false'
+                    ? 'true_false'
+                    : src.question_type || 'mcq',
                 option_a: src.option_a,
                 option_b: src.option_b,
                 option_c: src.option_c,
@@ -288,6 +291,16 @@ export async function POST(request: NextRequest) {
     const { error: scoresError } = await adminDb.from('quiz_session_scores').insert(scoreRows)
     if (scoresError) {
       return NextResponse.json({ error: scoresError.message }, { status: 500 })
+    }
+    const { count: scoreCount, error: scoreCountError } = await adminDb
+      .from('quiz_session_scores')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', session.id)
+    if (scoreCountError) {
+      return NextResponse.json({ error: scoreCountError.message }, { status: 500 })
+    }
+    if ((scoreCount || 0) < 4) {
+      return NextResponse.json({ error: 'Failed to initialize score rows for all teams' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, sessionId: session.id })
