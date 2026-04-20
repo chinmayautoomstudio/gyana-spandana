@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { resolvePoints } from '@/lib/services/scoringService'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
@@ -225,6 +226,7 @@ export async function POST(
     }
 
     if (round.round_type === 'rapid_fire') {
+      const supabaseAdmin = createAdminClient()
       const rapidSessionSelect = 'id,started_at,duration_seconds,questions_attempted,questions_correct,score_earned'
       const { data: activeRapidSessionByEvent } = await supabase
         .from('quiz_rapid_fire_sessions')
@@ -257,7 +259,7 @@ export async function POST(
       const durationMs = Number(activeRapidSession.duration_seconds) * 1000
       const hasTimerExpired = Number.isFinite(startedAtMs) && Number.isFinite(durationMs) && Date.now() >= startedAtMs + durationMs
       if (hasTimerExpired) {
-        await supabase
+        await supabaseAdmin
           .from('quiz_rapid_fire_sessions')
           .update({ ended_at: now })
           .eq('id', activeRapidSession.id)
@@ -287,14 +289,14 @@ export async function POST(
           )
         : 0
 
-      const { error: verdictErr } = await supabase
+      const { error: verdictErr } = await supabaseAdmin
         .from('quiz_direct_attempts')
         .update({ answer_text: submittedAnswer, verdict, updated_at: now })
         .eq('question_event_id', questionEventId)
         .eq('team_label', answeringTeam)
       if (verdictErr) return NextResponse.json({ error: verdictErr.message }, { status: 500 })
 
-      const { error: markEventErr } = await supabase
+      const { error: markEventErr } = await supabaseAdmin
         .from('quiz_question_events')
         .update({
           status: isCorrect ? 'answered' : 'dropped',
@@ -305,7 +307,7 @@ export async function POST(
       if (markEventErr) return NextResponse.json({ error: markEventErr.message }, { status: 500 })
 
       if (isCorrect && pointsAwarded > 0) {
-        const { error: scoreErr } = await supabase.rpc('increment_team_score', {
+        const { error: scoreErr } = await supabaseAdmin.rpc('increment_team_score', {
           p_session_id: sessionId,
           p_team_label: answeringTeam,
           p_score_delta: pointsAwarded,
@@ -318,7 +320,7 @@ export async function POST(
       const nextAttempted = Number(activeRapidSession.questions_attempted || 0) + 1
       const nextCorrect = Number(activeRapidSession.questions_correct || 0) + (isCorrect ? 1 : 0)
       const nextScore = Number(activeRapidSession.score_earned || 0) + pointsAwarded
-      const { error: updateRapidErr } = await supabase
+      const { error: updateRapidErr } = await supabaseAdmin
         .from('quiz_rapid_fire_sessions')
         .update({
           questions_attempted: nextAttempted,
@@ -337,9 +339,12 @@ export async function POST(
       let rapidFireCompleted = false
       if (!nextQuestion || expiredAfterAnswer) {
         rapidFireCompleted = true
-        await supabase.from('quiz_rapid_fire_sessions').update({ ended_at: new Date(timeNowMs).toISOString() }).eq('id', activeRapidSession.id)
+        await supabaseAdmin
+          .from('quiz_rapid_fire_sessions')
+          .update({ ended_at: new Date(timeNowMs).toISOString() })
+          .eq('id', activeRapidSession.id)
       } else {
-        const { data: createdNext, error: createNextErr } = await supabase
+        const { data: createdNext, error: createNextErr } = await supabaseAdmin
           .from('quiz_question_events')
           .insert({
             round_id: event.round_id,
@@ -355,13 +360,13 @@ export async function POST(
 
         nextEvent = createdNext || null
         if (nextEvent?.id) {
-          const { error: syncRapidPointerErr } = await supabase
+          const { error: syncRapidPointerErr } = await supabaseAdmin
             .from('quiz_rapid_fire_sessions')
             .update({ question_event_id: nextEvent.id })
             .eq('id', activeRapidSession.id)
           if (syncRapidPointerErr) return NextResponse.json({ error: syncRapidPointerErr.message }, { status: 500 })
         }
-        await supabase
+        await supabaseAdmin
           .from('quiz_rounds')
           .update({ current_question_index: Number(nextQuestion.question_order || 0) })
           .eq('id', event.round_id)
