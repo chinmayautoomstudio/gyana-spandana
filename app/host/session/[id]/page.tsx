@@ -322,7 +322,7 @@ export default function HostSessionPage() {
   }, [isSessionCompleted, setIsBlocking, state?.session?.id])
 
   useEffect(() => {
-    registerEndSessionRequestHandler(() => () => setShowEndSessionConfirm(true))
+    registerEndSessionRequestHandler(() => setShowEndSessionConfirm(true))
     return () => registerEndSessionRequestHandler(null)
   }, [registerEndSessionRequestHandler])
 
