@@ -157,6 +157,8 @@ export async function GET(
     // Rapid Fire timer (same logic as full endpoint)
     let rapidFireTimer: { startedAt: string; durationSeconds: number } | null = null
     let rapidFireTurnSummary: { correct: number; incorrect: number } | null = null
+    let rapidFireSessionMeta: { started_at: string | null; duration_seconds: number | null; ended_at: string | null } | null =
+      null
     if (
       activeRound?.round_type === 'rapid_fire' &&
       latestEvent &&
@@ -164,13 +166,25 @@ export async function GET(
     ) {
       const rfTeam = String((ev as any)?.rapid_fire_team || '').trim().toUpperCase()
       if (TEAM_LABELS.includes(rfTeam as TeamLabel)) {
-        const { data: rfSess } = await supabase
+        const { data: rfByEvent } = await supabase
           .from('quiz_rapid_fire_sessions')
           .select('started_at, duration_seconds,questions_attempted,questions_correct,ended_at')
-          .eq('team_label', rfTeam)
+          .eq('question_event_id', String(ev?.id || ''))
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
+        const { data: rfByTeam } = rfByEvent
+          ? ({ data: null } as { data: any })
+          : await supabase
+              .from('quiz_rapid_fire_sessions')
+              .select('started_at, duration_seconds,questions_attempted,questions_correct,ended_at')
+              .eq('team_label', rfTeam)
+              .is('ended_at', null)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+        const rfSess = rfByEvent || rfByTeam
+        rapidFireSessionMeta = rfSess
         if (rfSess?.started_at != null && rfSess.duration_seconds != null && rfSess.ended_at == null) {
           rapidFireTimer = {
             startedAt: String(rfSess.started_at),
@@ -188,7 +202,10 @@ export async function GET(
     if (activeRound?.round_type === 'rapid_fire' && latestEvent) {
       const rapidTeam = String((ev?.rapid_fire_team || ev?.directed_team || '')).trim().toUpperCase() as TeamLabel | ''
       const isRapidTeam = Boolean(myTeamLabel && rapidTeam && myTeamLabel === rapidTeam)
-      let timerActive = Boolean(rapidFireTimer)
+      let timerActive = true
+      if (rapidFireSessionMeta?.ended_at) {
+        timerActive = false
+      }
       if (rapidFireTimer?.startedAt && rapidFireTimer.durationSeconds != null) {
         const startedMs = new Date(rapidFireTimer.startedAt).getTime()
         if (Number.isFinite(startedMs)) {

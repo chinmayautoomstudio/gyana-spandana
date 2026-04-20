@@ -498,10 +498,12 @@ export default function ParticipantPlayPage() {
     (isRapidFireRound &&
       ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || ''))) ||
     (isBuzzerRound && ['revealed', 'buzzer_open', 'options_revealed'].includes(String(state.currentQuestionEvent?.status || '')))
+  const rapidFireEventActive =
+    isRapidFireRound && ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || ''))
   const rapidFireQuestionVisible =
     isRapidFireRound &&
     Boolean(state.currentQuestion) &&
-    ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || '')) &&
+    rapidFireEventActive &&
     (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0)
 
   const attempt = state.participantDirectAttempt
@@ -744,7 +746,17 @@ export default function ParticipantPlayPage() {
 
         {!state.currentQuestion || (isRapidFireRound && !rapidFireQuestionVisible) ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-600">
-            {isRapidFireRound ? 'Rapid Fire turn ended. Waiting for host...' : 'Questions will be assigned soon.'}
+            {isRapidFireRound
+              ? !rapidFireEventActive
+                ? 'Rapid Fire turn ended. Waiting for host...'
+                : !isMyTurn
+                  ? 'Waiting for your turn in Rapid Fire...'
+                  : rapidFireSecondsDisplay == null
+                    ? 'Timer syncing...'
+                    : rapidFireSecondsDisplay <= 0
+                      ? 'Rapid Fire turn ended. Waiting for host...'
+                      : 'Loading your Rapid Fire question...'
+              : 'Questions will be assigned soon.'}
           </div>
         ) : (
           <QuestionDisplay
