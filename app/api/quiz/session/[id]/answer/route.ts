@@ -5,6 +5,7 @@ import { resolvePoints } from '@/lib/services/scoringService'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
+const RAPID_FIRE_SUBMIT_GRACE_MS = 2_000
 
 async function pickNextRapidFireQuestion(roundId: string, supabase: any) {
   const [{ data: allQuestions }, { data: usedEvents }] = await Promise.all([
@@ -257,8 +258,12 @@ export async function POST(
 
       const startedAtMs = new Date(String(activeRapidSession.started_at)).getTime()
       const durationMs = Number(activeRapidSession.duration_seconds) * 1000
-      const hasTimerExpired = Number.isFinite(startedAtMs) && Number.isFinite(durationMs) && Date.now() >= startedAtMs + durationMs
-      if (hasTimerExpired) {
+      const deadlineMs = startedAtMs + durationMs
+      const hasSubmitWindowExpired =
+        Number.isFinite(startedAtMs) &&
+        Number.isFinite(durationMs) &&
+        Date.now() >= deadlineMs + RAPID_FIRE_SUBMIT_GRACE_MS
+      if (hasSubmitWindowExpired) {
         await supabaseAdmin
           .from('quiz_rapid_fire_sessions')
           .update({ ended_at: now })
@@ -333,7 +338,7 @@ export async function POST(
       const nextQuestion = await pickNextRapidFireQuestion(event.round_id, supabase)
       const timeNowMs = Date.now()
       const expiredAfterAnswer =
-        Number.isFinite(startedAtMs) && Number.isFinite(durationMs) && timeNowMs >= startedAtMs + durationMs
+        Number.isFinite(startedAtMs) && Number.isFinite(durationMs) && timeNowMs >= deadlineMs
 
       let nextEvent: any = null
       let rapidFireCompleted = false

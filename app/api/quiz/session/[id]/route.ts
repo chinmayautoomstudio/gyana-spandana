@@ -352,14 +352,17 @@ export async function GET(
           .maybeSingle()
       : Promise.resolve({ data: null })
 
-    const qsPromise = roundId
+    const shouldComputeActiveRoundQuestions =
+      Boolean(roundId) && String(activeRound?.round_type || '') !== 'rapid_fire'
+
+    const qsPromise = shouldComputeActiveRoundQuestions
       ? supabase
           .from('quiz_questions')
           .select('id, question_order, question_type, question_text')
           .eq('round_id', roundId)
           .order('question_order', { ascending: true })
       : Promise.resolve({ data: null })
-    const completedEventsPromise = roundId
+    const completedEventsPromise = shouldComputeActiveRoundQuestions
       ? supabase
           .from('quiz_question_events')
           .select('question_id')
@@ -383,7 +386,7 @@ export async function GET(
         .map((row: any) => String(row?.question_id || '').trim())
         .filter((id: string) => id.length > 0),
     )
-    activeRoundQuestions = roundId
+    activeRoundQuestions = shouldComputeActiveRoundQuestions
       ? (qs || [])
           .filter((q: any) => !completedQuestionIds.has(String(q?.id || '')))
           .map((q: any) => ({

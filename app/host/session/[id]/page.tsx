@@ -103,13 +103,32 @@ export default function HostSessionPage() {
   const [showFinalScoreboard, setShowFinalScoreboard] = useState(false)
   const [finalScoreboard, setFinalScoreboard] = useState<FinalScoreboardPayload | null>(null)
   const lastQuestionEventIdRef = useRef<string | null>(null)
+  const fetchInFlightRef = useRef<Promise<void> | null>(null)
+  const fetchQueuedRef = useRef(false)
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
-    const res = await fetch(`/api/quiz/session/${sessionId}`)
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data?.error || 'Failed to load session')
-    setState(data)
+    if (fetchInFlightRef.current) {
+      fetchQueuedRef.current = true
+      await fetchInFlightRef.current
+      return
+    }
+
+    const runFetchLoop = async () => {
+      do {
+        fetchQueuedRef.current = false
+        const res = await fetch(`/api/quiz/session/${sessionId}`)
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data?.error || 'Failed to load session')
+        setState(data)
+      } while (fetchQueuedRef.current)
+    }
+
+    const inFlight = runFetchLoop().finally(() => {
+      fetchInFlightRef.current = null
+    })
+    fetchInFlightRef.current = inFlight
+    await inFlight
   }, [sessionId])
 
   const applyParticipantAnswerOptimistic = useCallback(

@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button'
 import { buzzerWrongPenaltyPoints } from '@/lib/services/scoringService'
 import type { TeamLabel } from '@/lib/utils/teamColors'
 
+const RAPID_FIRE_SUBMIT_GRACE_SECONDS = 2
+
 interface SessionState {
   session: any
   rounds: any[]
@@ -492,6 +494,14 @@ export default function ParticipantPlayPage() {
   }
   const rapidFireSecondsDisplay =
     rapidFireSecondsFromServer !== null ? rapidFireSecondsFromServer : rapidFireRemaining
+  const rapidFireGraceActive = (() => {
+    if (!isRapidFireRound || rt?.startedAt == null || rt.durationSeconds == null) return false
+    const startedMs = new Date(rt.startedAt).getTime()
+    if (!Number.isFinite(startedMs)) return false
+    const deadlineMs = startedMs + Number(rt.durationSeconds) * 1000
+    const graceDeadlineMs = deadlineMs + RAPID_FIRE_SUBMIT_GRACE_SECONDS * 1000
+    return rapidFireClock >= deadlineMs && rapidFireClock < graceDeadlineMs
+  })()
 
   const showOptions =
     (isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed') ||
@@ -504,7 +514,7 @@ export default function ParticipantPlayPage() {
     isRapidFireRound &&
     Boolean(state.currentQuestion) &&
     rapidFireEventActive &&
-    (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0)
+    (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0 || rapidFireGraceActive)
 
   const attempt = state.participantDirectAttempt
   const evStatus = String(state.currentQuestionEvent?.status || '')
@@ -609,7 +619,7 @@ export default function ParticipantPlayPage() {
     ['revealed', 'options_revealed', 'buzzer_open'].includes(evStatus) &&
     !revealCorrect &&
     isMyTurn &&
-    (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0)
+    (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0 || rapidFireGraceActive)
   const questionReadOnly = isTrueFalseRound ? !canChooseTrueFalse : !rapidFirePhaseOpen
   const rapidFireTurnSummary = isRapidFireRound ? state.rapidFireTurnSummary ?? null : null
 
@@ -730,7 +740,7 @@ export default function ParticipantPlayPage() {
         {isRapidFireRound &&
         ['revealed', 'options_revealed', 'buzzer_open'].includes(evStatus) &&
         Boolean(state.currentQuestion) &&
-        (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0) ? (
+        (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0 || rapidFireGraceActive) ? (
           <div className="rounded-2xl border-2 border-orange-400 bg-orange-50/90 px-4 py-5 text-center shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-orange-900">Rapid Fire</p>
             {rapidFireSecondsDisplay != null && rapidFireSecondsDisplay > 0 ? (
@@ -738,6 +748,14 @@ export default function ParticipantPlayPage() {
                 {rapidFireSecondsDisplay}
                 <span className="ml-1 text-2xl font-semibold text-orange-900">s</span>
               </p>
+            ) : rapidFireGraceActive ? (
+              <>
+                <p className="mt-2 text-5xl font-bold tabular-nums tracking-tight text-orange-950">
+                  0
+                  <span className="ml-1 text-2xl font-semibold text-orange-900">s</span>
+                </p>
+                <p className="mt-1 text-xs text-orange-900">Grace window: finalizing in-flight submissions…</p>
+              </>
             ) : (
               <p className="mt-3 text-sm text-orange-900">Syncing timer…</p>
             )}
@@ -753,6 +771,8 @@ export default function ParticipantPlayPage() {
                   ? 'Waiting for your turn in Rapid Fire...'
                   : rapidFireSecondsDisplay == null
                     ? 'Timer syncing...'
+                    : rapidFireGraceActive
+                      ? 'Grace window active. Submit now if your answer is ready...'
                     : rapidFireSecondsDisplay <= 0
                       ? 'Rapid Fire turn ended. Waiting for host...'
                       : 'Loading your Rapid Fire question...'
@@ -791,7 +811,11 @@ export default function ParticipantPlayPage() {
               </p>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-gray-700">Select one option, then submit to auto-advance.</p>
+                <p className="text-sm text-gray-700">
+                  {rapidFireGraceActive
+                    ? 'Grace window active (2s): submit now to count this response.'
+                    : 'Select one option, then submit to auto-advance.'}
+                </p>
                 <Button
                   onClick={() => void submitRapidFireAnswer()}
                   isLoading={answerBusy}
