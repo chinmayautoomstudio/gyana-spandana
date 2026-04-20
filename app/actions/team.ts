@@ -14,6 +14,7 @@ import { isSendGridConfigured, sendEmail } from '@/lib/email/sendgrid'
 import { SENT_EMAIL_TYPES } from '@/lib/email/email-types'
 import { buildTeamNameChangedP2Email } from '@/lib/email/templates/team-name-changed-p2'
 import { buildRegistrationConfirmationEmail } from '@/lib/email/templates/registration-confirmation'
+import { buildTeamInvitationEmail } from '@/lib/email/templates/team-invitation'
 
 const INVITATION_EXPIRY_DAYS = 7
 
@@ -116,6 +117,37 @@ async function sendRegistrationConfirmationEmailDirect(
   } catch (err) {
     console.error('Failed to send participant confirmation email:', err)
   }
+}
+
+async function sendTeamInvitationEmailDirect(payload: {
+  p2Email: string
+  p1Name: string
+  teamName: string
+  schoolName: string
+  invitationLink: string
+  expiresAt: string
+}): Promise<{ success: true } | { success: false; error: string }> {
+  if (!isSendGridConfigured()) {
+    console.warn('Team invitation email skipped (SendGrid not configured) for', payload.p2Email)
+    return { success: true }
+  }
+
+  const { subject, html, text } = buildTeamInvitationEmail({
+    p2Email: payload.p2Email,
+    p1Name: payload.p1Name,
+    teamName: payload.teamName,
+    schoolName: payload.schoolName || '',
+    invitationLink: payload.invitationLink,
+    expiresAt: payload.expiresAt,
+  })
+
+  return sendEmail(
+    { to: payload.p2Email, subject, html, text },
+    {
+      emailType: SENT_EMAIL_TYPES.TEAM_INVITATION,
+      metadata: { team_name: payload.teamName, p2_email: payload.p2Email },
+    }
+  )
 }
 
 export type CreateTeamResult = { success: true } | { success: false; error: string }
@@ -437,24 +469,17 @@ export async function createTeamAndInviteP2(data: TeamCreationFormData): Promise
   })
 
   // Fire-and-forget: do not block response on email or admin notifications
-  void fetch(`${getSiteUrl()}/api/send-team-invitation`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      p2Email: data.p2Email.trim(),
-      p1Name: data.p1Name,
-      teamName: teamNameTrimmed,
-      schoolName: data.schoolName,
-      invitationLink,
-      expiresAt: expiresAtFormatted,
-    }),
-  }).then(async (res) => {
-    const body = await res.json().catch(() => ({}))
-    if (!res.ok && !(body as { skipped?: boolean }).skipped) {
-      console.error('Send invitation failed', res.status, body)
+  void sendTeamInvitationEmailDirect({
+    p2Email: data.p2Email.trim(),
+    p1Name: data.p1Name,
+    teamName: teamNameTrimmed,
+    schoolName: data.schoolName,
+    invitationLink,
+    expiresAt: expiresAtFormatted,
+  }).then((result) => {
+    if (!result.success) {
+      console.error('Send invitation failed', result.error)
     }
-  }).catch((e) => {
-    console.error('Send invitation error', e)
   })
 
   notifyAllAdmins(
@@ -870,27 +895,16 @@ export async function resendInvitation(teamId: string): Promise<ResendInvitation
     day: 'numeric',
   })
 
-  try {
-    const res = await fetch(`${getSiteUrl()}/api/send-team-invitation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        p2Email: team.p2_invited_email,
-        p1Name: p1.name ?? 'Your teammate',
-        teamName: team.team_name,
-        schoolName: p1.school_name ?? '',
-        invitationLink,
-        expiresAt: expiresAtFormatted,
-      }),
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      if (!(body as { skipped?: boolean }).skipped) {
-        return { success: false, error: 'Failed to send invitation email.' }
-      }
-    }
-  } catch (e) {
-    console.error('Resend invitation error', e)
+  const emailResult = await sendTeamInvitationEmailDirect({
+    p2Email: team.p2_invited_email,
+    p1Name: p1.name ?? 'Your teammate',
+    teamName: team.team_name,
+    schoolName: p1.school_name ?? '',
+    invitationLink,
+    expiresAt: expiresAtFormatted,
+  })
+  if (!emailResult.success) {
+    console.error('Resend invitation error', emailResult.error)
     return { success: false, error: 'Failed to send invitation email.' }
   }
 
@@ -991,26 +1005,18 @@ export async function updateP2InvitedEmail(newEmail: string): Promise<UpdateP2Em
     day: 'numeric',
   })
 
-  void fetch(`${getSiteUrl()}/api/send-team-invitation`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      p2Email: trimmed,
-      p1Name: p1?.name ?? 'Your teammate',
-      teamName: team.team_name,
-      schoolName: p1?.school_name ?? '',
-      invitationLink,
-      expiresAt: expiresAtFormatted,
-    }),
+  void sendTeamInvitationEmailDirect({
+    p2Email: trimmed,
+    p1Name: p1?.name ?? 'Your teammate',
+    teamName: team.team_name,
+    schoolName: p1?.school_name ?? '',
+    invitationLink,
+    expiresAt: expiresAtFormatted,
+  }).then((result) => {
+    if (!result.success) {
+      console.error('Send invitation after P2 email update failed', result.error)
+    }
   })
-    .then(async (res) => {
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok && !(body as { skipped?: boolean }).skipped) {
-        console.error('Send invitation after P2 email update failed', res.status, body)
-      }
-    })
-    .catch((e) => {
-      console.error('Send invitation after P2 email update error', e)
     })
 
   return { success: true }
@@ -1127,26 +1133,17 @@ export async function renameTeamNameOnce(newTeamName: string): Promise<RenameTea
       day: 'numeric',
     })
 
-    void fetch(`${getSiteUrl()}/api/send-team-invitation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        p2Email: p2Addr,
-        p1Name: p1Row?.name ?? 'Your teammate',
-        teamName: newNameTrimmed,
-        schoolName: p1Row?.school_name ?? '',
-        invitationLink,
-        expiresAt: expiresAtFormatted,
-      }),
-    })
-      .then(async (res) => {
-        const body = await res.json().catch(() => ({}))
-        if (!res.ok && !(body as { skipped?: boolean }).skipped) {
-          console.error('Send invitation after team rename failed', res.status, body)
-        }
-      })
-      .catch((e) => {
-        console.error('Send invitation after team rename error', e)
+    void sendTeamInvitationEmailDirect({
+      p2Email: p2Addr,
+      p1Name: p1Row?.name ?? 'Your teammate',
+      teamName: newNameTrimmed,
+      schoolName: p1Row?.school_name ?? '',
+      invitationLink,
+      expiresAt: expiresAtFormatted,
+    }).then((result) => {
+      if (!result.success) {
+        console.error('Send invitation after team rename failed', result.error)
+      }
       })
   } else if (team.status === 'complete') {
     const { data: p2Row } = await admin
