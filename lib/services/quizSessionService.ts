@@ -56,6 +56,8 @@ export interface TimerStartedPayload {
   questionEventId: string
   durationSeconds: number
   team?: string
+  /** Rapid Fire: server turn start time (ISO) for client countdown alignment. */
+  startedAt?: string
 }
 
 export interface BuzzerOpenPayload {

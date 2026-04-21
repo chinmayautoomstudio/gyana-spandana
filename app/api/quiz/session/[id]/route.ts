@@ -57,7 +57,7 @@ async function broadcastDirectVerdictApplied(
 async function broadcastTimerStarted(
   sessionId: string,
   supabase: any,
-  args: { questionEventId: string; durationSeconds: number; team: string },
+  args: { questionEventId: string; durationSeconds: number; team: string; startedAt: string },
 ) {
   const now = new Date().toISOString()
   try {
@@ -82,6 +82,7 @@ async function broadcastTimerStarted(
           questionEventId: args.questionEventId,
           durationSeconds: args.durationSeconds,
           team: args.team,
+          startedAt: args.startedAt,
         },
         timestamp: now,
       },
@@ -1789,6 +1790,7 @@ export async function PATCH(
         questionEventId: event.id,
         durationSeconds,
         team: teamLabel,
+        startedAt: String(rapidFireSession?.started_at || new Date().toISOString()),
       })
 
       return NextResponse.json({

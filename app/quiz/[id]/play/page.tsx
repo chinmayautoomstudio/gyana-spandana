@@ -105,6 +105,17 @@ export default function ParticipantPlayPage() {
         onTimerStarted: (payload) => {
           const seconds = Number(payload?.durationSeconds || 0)
           setRapidFireRemaining(Number.isFinite(seconds) && seconds > 0 ? seconds : null)
+          const startedAt = typeof payload?.startedAt === 'string' ? payload.startedAt : ''
+          if (startedAt && Number.isFinite(seconds) && seconds > 0) {
+            setState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    rapidFireTimer: { startedAt, durationSeconds: seconds },
+                  }
+                : prev,
+            )
+          }
           void fetchState()
         },
         onBuzzerOpen: (_payload) => {
@@ -798,7 +809,12 @@ export default function ParticipantPlayPage() {
           />
         )}
 
-        {isRapidFireRound && rapidFireTurnSummary && state.rapidFireTurnComplete ? (
+        {isRapidFireRound &&
+        rapidFireTurnSummary &&
+        (state.rapidFireTurnComplete ||
+          (rapidFireSecondsFromServer !== null &&
+            rapidFireSecondsFromServer <= 0 &&
+            !rapidFireGraceActive)) ? (
           <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 px-4 py-5 text-center shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-900">Rapid Fire — turn complete</p>
             <p className="mt-2 text-lg font-semibold text-emerald-950">
@@ -806,7 +822,14 @@ export default function ParticipantPlayPage() {
               <span className="tabular-nums">{rapidFireTurnSummary.incorrect}</span>
             </p>
           </div>
-        ) : isRapidFireRound && rapidFireTurnSummary && !state.rapidFireTurnComplete ? (
+        ) : isRapidFireRound &&
+          rapidFireTurnSummary &&
+          !state.rapidFireTurnComplete &&
+          !(
+            rapidFireSecondsFromServer !== null &&
+            rapidFireSecondsFromServer <= 0 &&
+            !rapidFireGraceActive
+          ) ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
             <p className="text-sm font-semibold">Rapid Fire live tally</p>
             <p className="mt-1 text-sm">

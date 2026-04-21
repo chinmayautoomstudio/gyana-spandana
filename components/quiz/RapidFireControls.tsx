@@ -113,6 +113,7 @@ export function RapidFireControls({
   }, [clock, hasServerTimer, localFallbackSeconds, rapidFireTimer, serverTimestampMs])
 
   const isRunning = phase === 'running' && isQuestionActive && remainingSeconds > 0
+  const tickClockActive = phase === 'running' && isQuestionActive
 
   useEffect(() => {
     const resetId = window.setTimeout(() => {
@@ -138,10 +139,10 @@ export function RapidFireControls({
   }, [phase, isQuestionActive])
 
   useEffect(() => {
-    if (!isRunning) return
+    if (!tickClockActive) return
     const tick = setInterval(() => setClock(Date.now()), 1000)
     return () => clearInterval(tick)
-  }, [isRunning])
+  }, [tickClockActive])
 
   useEffect(() => {
     if (phase !== 'running' || hasServerTimer) return
@@ -203,8 +204,7 @@ export function RapidFireControls({
     phase === 'preview' ? (previewQuestion?.id as string | undefined) : (event?.question_id as string | undefined)
 
   const showProminentTurnSummary =
-    turnSummary != null &&
-    (rapidFireTurnComplete || (phase !== 'idle' && remainingSeconds <= 0))
+    turnSummary != null && (rapidFireTurnComplete || remainingSeconds <= 0)
 
   return (
     <section className="space-y-4">

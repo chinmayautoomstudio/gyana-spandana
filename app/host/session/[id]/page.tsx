@@ -368,6 +368,31 @@ export default function HostSessionPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `Failed to ${action}`)
+      if (action === 'start_rapid_fire' && data?.rapidFireSession) {
+        const rs = data.rapidFireSession as { started_at?: string; duration_seconds?: number }
+        const durFromPayload = Number(payload.durationSeconds ?? 0)
+        if (rs.started_at) {
+          const dur =
+            Number.isFinite(Number(rs.duration_seconds)) && Number(rs.duration_seconds) > 0
+              ? Number(rs.duration_seconds)
+              : Number.isFinite(durFromPayload) && durFromPayload > 0
+                ? durFromPayload
+                : 45
+          setState((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              rapidFireTimer: {
+                startedAt: String(rs.started_at),
+                durationSeconds: dur,
+              },
+              ...(data.event ? { currentQuestionEvent: data.event } : {}),
+              ...(data.question ? { currentQuestion: data.question } : {}),
+              serverTimestampMs: Date.now(),
+            }
+          })
+        }
+      }
       await fetchState()
       return data
     } catch (e: any) {
