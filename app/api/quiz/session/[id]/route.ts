@@ -1949,6 +1949,12 @@ export async function PATCH(
         .eq('id', questionEventId)
         .single()
       if (!event) return NextResponse.json({ error: 'Question event not found' }, { status: 404 })
+      if (event.status === 'answered' || event.status === 'dropped') {
+        return NextResponse.json(
+          { error: 'Question event already finalized', status: event.status },
+          { status: 409 },
+        )
+      }
 
       const teamLabel = (event.rapid_fire_team || event.directed_team) as TeamLabel
       if (!teamLabel || !TEAM_LABELS.includes(teamLabel)) {
