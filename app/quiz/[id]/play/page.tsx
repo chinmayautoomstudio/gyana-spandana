@@ -683,6 +683,11 @@ export default function ParticipantPlayPage() {
     (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0 || rapidFireGraceActive)
   const questionReadOnly = isTrueFalseRound ? !canChooseTrueFalse : !rapidFirePhaseOpen
   const rapidFireTurnSummary = isRapidFireRound ? state.rapidFireTurnSummary ?? null : null
+  const rapidFireCounterComplete =
+    isRapidFireRound &&
+    Boolean(rapidFireTurnSummary) &&
+    (state.rapidFireTurnComplete ||
+      (rapidFireSecondsFromServer !== null && rapidFireSecondsFromServer <= 0 && !rapidFireGraceActive))
 
   const onTrueFalseSelect = (value: 'TRUE' | 'FALSE') => {
     setSelectedTrueFalse(value)
@@ -833,8 +838,16 @@ export default function ParticipantPlayPage() {
         ) : null}
 
         {isRapidFireRound && rapidFireTurnSummary ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
-            <p className="text-sm font-semibold">Rapid Fire score</p>
+          <div
+            className={`rounded-xl p-4 ${
+              rapidFireCounterComplete
+                ? 'border-2 border-emerald-500 bg-emerald-50 text-emerald-950'
+                : 'border border-emerald-200 bg-emerald-50 text-emerald-950'
+            }`}
+          >
+            <p className="text-sm font-semibold">
+              {rapidFireCounterComplete ? 'Rapid Fire score - turn complete' : 'Rapid Fire score'}
+            </p>
             <p className="mt-1 text-sm">
               Correct: {rapidFireTurnSummary.correct} | Incorrect: {rapidFireTurnSummary.incorrect}
             </p>
