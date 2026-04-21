@@ -856,19 +856,20 @@ export default function ParticipantPlayPage() {
         ) : null}
 
         {isRapidFireRound && rapidFireTurnSummary ? (
-          <div
-            className={`rounded-xl p-4 ${
-              rapidFireCounterComplete
-                ? 'border-2 border-emerald-500 bg-emerald-50 text-emerald-950'
-                : 'border border-emerald-200 bg-emerald-50 text-emerald-950'
-            }`}
-          >
-            <p className="text-sm font-semibold">
-              {rapidFireCounterComplete ? 'Rapid Fire score - turn complete' : 'Rapid Fire score'}
-            </p>
-            <p className="mt-1 text-sm">
-              Correct: {rapidFireTurnSummary.correct} | Incorrect: {rapidFireTurnSummary.incorrect}
-            </p>
+          <div className="flex justify-end">
+            <div
+              className={`inline-flex max-w-full flex-wrap items-center gap-2 rounded-lg px-2 py-1 ${
+                rapidFireCounterComplete ? 'border-2 border-emerald-500 bg-emerald-50' : 'border border-gray-200 bg-white'
+              }`}
+              aria-label={rapidFireCounterComplete ? 'Rapid Fire score, turn complete' : 'Rapid Fire score'}
+            >
+              <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900">
+                Correct {rapidFireTurnSummary.correct}
+              </span>
+              <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-900">
+                Wrong {rapidFireTurnSummary.incorrect}
+              </span>
+            </div>
           </div>
         ) : null}
 
