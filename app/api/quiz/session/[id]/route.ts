@@ -9,6 +9,7 @@ import { fetchLatestRapidFireSessionForRoundTeam } from '@/lib/quiz/loadLatestRa
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
+const QUIZ_SYNC_DEBUG = process.env.QUIZ_SYNC_DEBUG === 'true'
 type ScoreboardTeamRow = {
   teamLabel: TeamLabel
   teamName: string
@@ -90,6 +91,70 @@ async function broadcastTimerStarted(
     void supabase.removeChannel(channel)
   } catch {
     // DB write already succeeded; polling + GET rapidFireTimer remain fallback.
+  }
+}
+
+/** Best-effort: authoritative host-action signal for participant sync (reveal/open buzzer). */
+async function broadcastHostSyncEvent(
+  sessionId: string,
+  supabase: any,
+  args:
+    | {
+        type: 'question_revealed'
+        questionEventId: string
+        status: 'revealed'
+        roundType: string
+      }
+    | {
+        type: 'buzzer_open'
+        questionEventId: string
+        status: 'buzzer_open'
+      },
+) {
+  const now = new Date().toISOString()
+  try {
+    const channel = supabase.channel(`quiz:session:${sessionId}`, {
+      config: { broadcast: { self: true, ack: false } },
+    })
+    await new Promise<void>((resolve) => {
+      const fallback = setTimeout(() => resolve(), 1500)
+      channel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          clearTimeout(fallback)
+          resolve()
+        }
+      })
+    })
+    await channel.send({
+      type: 'broadcast',
+      event: 'quiz_event',
+      payload: {
+        type: args.type,
+        payload:
+          args.type === 'question_revealed'
+            ? {
+                questionEventId: args.questionEventId,
+                status: args.status,
+                roundType: args.roundType,
+              }
+            : {
+                questionEventId: args.questionEventId,
+                status: args.status,
+              },
+        timestamp: now,
+      },
+    })
+    if (QUIZ_SYNC_DEBUG) {
+      console.info('[quiz-sync][host-broadcast]', {
+        sessionId,
+        type: args.type,
+        questionEventId: args.questionEventId,
+        sentAt: now,
+      })
+    }
+    void supabase.removeChannel(channel)
+  } catch {
+    // DB write already succeeded; postgres changes + polling remain fallback.
   }
 }
 
@@ -864,6 +929,13 @@ export async function PATCH(
           .update({ buzzer_next_directed_team: null, updated_at: new Date().toISOString() })
           .eq('id', sessionId)
       }
+
+      void broadcastHostSyncEvent(sessionId, supabase, {
+        type: 'question_revealed',
+        questionEventId: String(event.id),
+        status: 'revealed',
+        roundType: String(round.round_type || ''),
+      })
 
       return NextResponse.json({
         success: true,
@@ -2091,6 +2163,11 @@ export async function PATCH(
         .select('*')
         .single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      void broadcastHostSyncEvent(sessionId, supabase, {
+        type: 'buzzer_open',
+        questionEventId,
+        status: 'buzzer_open',
+      })
       return NextResponse.json({ success: true, event })
     }
 

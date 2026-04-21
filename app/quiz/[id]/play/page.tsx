@@ -11,6 +11,8 @@ import type { TeamLabel } from '@/lib/utils/teamColors'
 import { LiveScoreboard } from '@/components/quiz/LiveScoreboard'
 
 const RAPID_FIRE_SUBMIT_GRACE_SECONDS = 2
+const QUIZ_SYNC_DEBUG =
+  process.env.NEXT_PUBLIC_QUIZ_SYNC_DEBUG === 'true' && process.env.NODE_ENV !== 'production'
 
 interface SessionState {
   session: any
@@ -70,19 +72,46 @@ export default function ParticipantPlayPage() {
   const [questionLanguage, setQuestionLanguage] = useState<'en' | 'odia'>('en')
   const [buzzerClock, setBuzzerClock] = useState(() => Date.now())
   const [rapidFireClock, setRapidFireClock] = useState(() => Date.now())
+  const fetchSeqRef = useRef(0)
+  const pendingRefreshMetaRef = useRef<{ source: string; eventType?: string; eventTimestamp?: string } | null>(null)
 
   const fetchState = useCallback(async () => {
     if (!sessionId) return
+    const fetchSeq = ++fetchSeqRef.current
+    const requestStartedMs = Date.now()
+    const meta = pendingRefreshMetaRef.current
+    pendingRefreshMetaRef.current = null
     // Fix 7: lean participant endpoint — omits host-only queries (activeRoundQuestions etc.)
     const res = await fetch(`/api/quiz/session/${sessionId}/participant`)
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data?.error || 'Failed to load session')
+    if (fetchSeq !== fetchSeqRef.current) return null
     setState(data)
     if (typeof data?.serverTimestampMs === 'number') {
       clockOffsetMsRef.current = Date.now() - data.serverTimestampMs
     }
+    if (QUIZ_SYNC_DEBUG && meta) {
+      const nowMs = Date.now()
+      const eventAgeMs =
+        meta.eventTimestamp && Number.isFinite(new Date(meta.eventTimestamp).getTime())
+          ? nowMs - new Date(meta.eventTimestamp).getTime()
+          : null
+      console.info('[quiz-sync][participant-refresh]', {
+        sessionId,
+        source: meta.source,
+        eventType: meta.eventType || null,
+        requestDurationMs: nowMs - requestStartedMs,
+        eventToRenderMs: eventAgeMs,
+        eventId: (data as SessionState)?.currentQuestionEvent?.id || null,
+        eventStatus: (data as SessionState)?.currentQuestionEvent?.status || null,
+      })
+    }
     return data as SessionState
   }, [sessionId])
+  const requestRefresh = useCallback((source = 'unknown', eventType?: string, eventTimestamp?: string) => {
+    pendingRefreshMetaRef.current = { source, eventType, eventTimestamp }
+    void fetchState()
+  }, [fetchState])
 
   useEffect(() => {
     let unsub = () => {}
@@ -114,9 +143,9 @@ export default function ParticipantPlayPage() {
 
     if (sessionId) {
       unsub = subscribeToSession(sessionId, {
-        onRoundStarted: () => void fetchState(),
-        onQuestionRevealed: () => void fetchState(),
-        onOptionsRevealed: () => void fetchState(),
+        onRoundStarted: () => requestRefresh('broadcast', 'round_started'),
+        onQuestionRevealed: () => requestRefresh('broadcast', 'question_revealed'),
+        onOptionsRevealed: () => requestRefresh('broadcast', 'options_revealed'),
         onTimerStarted: (payload) => {
           const seconds = Number(payload?.durationSeconds || 0)
           setRapidFireRemaining(Number.isFinite(seconds) && seconds > 0 ? seconds : null)
@@ -131,22 +160,22 @@ export default function ParticipantPlayPage() {
                 : prev,
             )
           }
-          void fetchState()
+          requestRefresh('broadcast', 'timer_started')
         },
         onBuzzerOpen: (_payload) => {
           setBuzzerPressedForEventId(null)
           setMyBuzzOrder(null)
-          void fetchState()
+          requestRefresh('broadcast', 'buzzer_open')
         },
         onBuzzReceived: (payload) => {
           if (myTeamLabel && payload.teamLabel === myTeamLabel) {
             setMyBuzzOrder(Number(payload.buzzOrder || 0) || null)
             setBuzzerPressedForEventId(payload.questionEventId)
           }
-          void fetchState()
+          requestRefresh('broadcast', 'buzz_received')
         },
-        onAnswerResult: () => void fetchState(),
-        onParticipantAnswerSubmitted: () => void fetchState(),
+        onAnswerResult: () => requestRefresh('broadcast', 'answer_result'),
+        onParticipantAnswerSubmitted: () => requestRefresh('broadcast', 'participant_answer_submitted'),
         onDirectVerdictApplied: (payload) => {
           // Fix 1: optimistic update — instantly show verdict, then background-sync
           setState((prev) => {
@@ -160,24 +189,24 @@ export default function ParticipantPlayPage() {
               },
             }
           })
-          void fetchState()
+          requestRefresh('broadcast', 'direct_verdict_applied')
         },
-        onScoresUpdated: () => void fetchState(),
-        onRoundEnded: () => void fetchState(),
-        onSessionEnded: () => void fetchState(),
+        onScoresUpdated: () => requestRefresh('broadcast', 'scores_updated'),
+        onRoundEnded: () => requestRefresh('broadcast', 'round_ended'),
+        onSessionEnded: () => requestRefresh('broadcast', 'session_ended'),
       })
     }
 
     return () => unsub()
-  }, [sessionId, supabase, fetchState, myTeamLabel])
+  }, [sessionId, supabase, fetchState, myTeamLabel, requestRefresh])
 
   const roundIdsKey = (state?.rounds ?? []).map((r: { id: string }) => r.id).sort().join(',')
 
   useEffect(() => {
     if (!sessionId || !roundIdsKey) return
     const roundIds = roundIdsKey.split(',').filter(Boolean)
-    return subscribeQuizDataRefresh(sessionId, roundIds, () => void fetchState())
-  }, [sessionId, roundIdsKey, fetchState])
+    return subscribeQuizDataRefresh(sessionId, roundIds, () => requestRefresh('postgres_changes'))
+  }, [sessionId, roundIdsKey, requestRefresh])
 
   /** When Realtime misses updates, still pick up new questions and host actions. */
   useEffect(() => {
@@ -188,11 +217,11 @@ export default function ParticipantPlayPage() {
     const POLL_MS = 10_000 // Fix 6: was 4000; Realtime covers hot events, poll only recovers from disconnect
     const tick = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-      void fetchState()
+      requestRefresh('poll')
     }
     const id = setInterval(tick, POLL_MS)
     return () => clearInterval(id)
-  }, [sessionId, loading, state?.session?.id, state?.session?.status, fetchState])
+  }, [sessionId, loading, state?.session?.id, state?.session?.status, requestRefresh])
 
   useEffect(() => {
     setSelectedTrueFalse(null)
@@ -537,7 +566,7 @@ export default function ParticipantPlayPage() {
     (isTrueFalseRound && state.currentQuestionEvent?.status === 'options_revealed') ||
     (isRapidFireRound &&
       ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || ''))) ||
-    (isBuzzerRound && ['revealed', 'buzzer_open', 'options_revealed'].includes(String(state.currentQuestionEvent?.status || '')))
+    (isBuzzerRound && String(state.currentQuestionEvent?.status || '') === 'buzzer_open')
   const rapidFireEventActive =
     isRapidFireRound && ['revealed', 'options_revealed', 'buzzer_open'].includes(String(state.currentQuestionEvent?.status || ''))
   const rapidFireQuestionVisible =
@@ -551,6 +580,8 @@ export default function ParticipantPlayPage() {
   const verdict = attempt?.verdict
   const hasFinalVerdict =
     Boolean(attempt) && verdict !== 'pending' && (verdict === 'correct' || verdict === 'wrong')
+  const buzzerQuestionVisible =
+    !isBuzzerRound || evStatus === 'buzzer_open' || hasFinalVerdict || revealCorrect
   const showDirectParticipantPanel =
     isDirectRound &&
     Boolean(state.currentQuestion) &&
@@ -801,7 +832,7 @@ export default function ParticipantPlayPage() {
           </div>
         ) : null}
 
-        {!state.currentQuestion || (isRapidFireRound && !rapidFireQuestionVisible) ? (
+        {!state.currentQuestion || (isRapidFireRound && !rapidFireQuestionVisible) || !buzzerQuestionVisible ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-600">
             {isRapidFireRound
               ? !rapidFireEventActive
@@ -815,7 +846,9 @@ export default function ParticipantPlayPage() {
                     : rapidFireSecondsDisplay <= 0
                       ? 'Rapid Fire turn ended. Waiting for host...'
                       : 'Loading your Rapid Fire question...'
-              : 'Questions will be assigned soon.'}
+              : isBuzzerRound && evStatus !== 'buzzer_open'
+                ? 'Waiting for host to open buzzer...'
+                : 'Questions will be assigned soon.'}
           </div>
         ) : (
           <QuestionDisplay
@@ -1065,7 +1098,7 @@ export default function ParticipantPlayPage() {
           </div>
         ) : null}
 
-        {isBuzzerRound && state.currentQuestion ? (
+        {isBuzzerRound && state.currentQuestion && buzzerQuestionVisible ? (
           <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
             {hasFinalVerdict ? (
               <>
