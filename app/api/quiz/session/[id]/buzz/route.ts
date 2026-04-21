@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
+const BUZZER_ARBITRATION_DEBUG = process.env.BUZZER_ARBITRATION_DEBUG === 'true'
 
 function normalizeTeamLabel(value: unknown): TeamLabel | null {
   const label = String(value || '').trim().toUpperCase()
@@ -23,6 +24,10 @@ function parseClientPressedAtMs(body: unknown, serverNowMs: number): number {
   if (n > serverNowMs + 120_000) return serverNowMs
   if (n < serverNowMs - 600_000) return serverNowMs
   return n
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
 export async function POST(
@@ -122,20 +127,76 @@ export async function POST(
     const myIndex = ordered.findIndex((row) => row.team_label === teamLabel)
     const buzzOrder = myIndex >= 0 ? myIndex + 1 : null
 
-    const { data: passRowsBuzz } = await supabase
-      .from('quiz_pass_log')
-      .select('team_label')
-      .eq('question_event_id', questionEventId)
-      .eq('passed_or_wrong', true)
-    const excludedBuzz = new Set((passRowsBuzz || []).map((row: { team_label: string }) => String(row.team_label)))
-    const firstActive = ordered.find((row) => !excludedBuzz.has(String(row.team_label)))
-    if (firstActive?.team_label === teamLabel) {
-      const deadlineIso = new Date(serverNowMs + 30_000).toISOString()
-      await supabaseAdmin
+    // Internal arbitration window: wait briefly so near-simultaneous presses can be compared.
+    await delay(2000)
+
+    const [{ data: passRowsBuzz }, { data: settledEvent }] = await Promise.all([
+      supabase
+        .from('quiz_pass_log')
+        .select('team_label')
+        .eq('question_event_id', questionEventId)
+        .eq('passed_or_wrong', true),
+      supabase
         .from('quiz_question_events')
-        .update({ directed_team: teamLabel, buzzer_answer_deadline_at: deadlineIso })
+        .select('id,status,directed_team,buzzer_answer_deadline_at')
         .eq('id', questionEventId)
-        .eq('status', 'buzzer_open')
+        .maybeSingle(),
+    ])
+
+    const eventStillOpen =
+      settledEvent &&
+      settledEvent.status === 'buzzer_open' &&
+      !settledEvent.directed_team &&
+      !settledEvent.buzzer_answer_deadline_at
+
+    if (eventStillOpen) {
+      const { data: arbitrationRows, error: arbitrationError } = await supabase
+        .from('quiz_buzz_events')
+        .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_ms')
+        .eq('question_event_id', questionEventId)
+        .order('client_pressed_at_ms', { ascending: true })
+        .order('buzzed_at', { ascending: true })
+        .order('id', { ascending: true })
+
+      if (arbitrationError) {
+        return NextResponse.json({ error: arbitrationError.message }, { status: 500 })
+      }
+
+      const arbitrationOrdered = arbitrationRows || []
+      const firstTwo = arbitrationOrdered.slice(0, 2)
+      const fastestTeam = firstTwo[0]?.team_label ? String(firstTwo[0].team_label) : null
+      const excludedBuzz = new Set((passRowsBuzz || []).map((row: { team_label: string }) => String(row.team_label)))
+      const arbitrationPriority = fastestTeam
+        ? [
+            { team_label: fastestTeam },
+            ...arbitrationOrdered.filter((row) => String(row.team_label) !== fastestTeam),
+          ]
+        : arbitrationOrdered
+      const firstActive = arbitrationPriority.find((row) => !excludedBuzz.has(String(row.team_label)))
+
+      if (BUZZER_ARBITRATION_DEBUG) {
+        // Debug-only log to inspect arbitration decisions in staging without changing behavior.
+        console.info('[buzzer-arbitration]', {
+          sessionId,
+          questionEventId,
+          firstTwoTeams: firstTwo.map((row) => String(row.team_label)),
+          fastestTeam,
+          excludedTeams: [...excludedBuzz],
+          selectedTeam: firstActive?.team_label ? String(firstActive.team_label) : null,
+        })
+      }
+
+      if (firstActive?.team_label) {
+        const directedTeam = String(firstActive.team_label)
+        const deadlineIso = new Date(Date.now() + 30_000).toISOString()
+        await supabaseAdmin
+          .from('quiz_question_events')
+          .update({ directed_team: directedTeam, buzzer_answer_deadline_at: deadlineIso })
+          .eq('id', questionEventId)
+          .eq('status', 'buzzer_open')
+          .is('directed_team', null)
+          .is('buzzer_answer_deadline_at', null)
+      }
     }
 
     try {
