@@ -132,6 +132,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: slotError }, { status: 400 })
     }
 
+    const selectedTeamIds = SLOT_LABELS.map((label) => team_slots[label]).filter((id) => id.length > 0)
+    if (selectedTeamIds.length > 0) {
+      const { data: eliminatedTeams, error: eliminatedTeamsError } = await supabase
+        .from('teams')
+        .select('id, team_name')
+        .in('id', selectedTeamIds)
+        .eq('is_eliminated', true)
+
+      if (eliminatedTeamsError) {
+        return NextResponse.json({ error: eliminatedTeamsError.message }, { status: 400 })
+      }
+
+      if ((eliminatedTeams || []).length > 0) {
+        const teamNames = (eliminatedTeams || []).map((team) => team.team_name).join(', ')
+        return NextResponse.json(
+          { error: `Eliminated teams cannot be assigned to quiz sessions: ${teamNames}` },
+          { status: 400 },
+        )
+      }
+    }
+
     let adminDb
     try {
       adminDb = createAdminClient()

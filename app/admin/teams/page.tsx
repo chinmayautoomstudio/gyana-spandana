@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { DataTable } from '@/components/admin/DataTable'
 import { Button } from '@/components/ui/Button'
 import { KebabMenu } from '@/components/ui/KebabMenu'
-import { deleteTeam } from '@/app/actions/admin'
+import { deleteTeam, eliminateTeam, restoreTeam } from '@/app/actions/admin'
 import { format } from 'date-fns'
 import { BulkDeleteTeamsModal } from '@/components/admin/BulkDeleteTeamsModal'
 
@@ -15,6 +15,7 @@ interface TeamRow {
   team_name: string
   team_code: string
   status: string
+  is_eliminated: boolean
   created_at: string
   participants_count: number
   p2_invited_email: string | null
@@ -29,15 +30,18 @@ export default function AdminTeamsPage() {
   const [remindingId, setRemindingId] = useState<string | null>(null)
   const [notifyingP1Id, setNotifyingP1Id] = useState<string | null>(null)
   const [sendingBulkP1Notifications, setSendingBulkP1Notifications] = useState(false)
+  const [eliminatingId, setEliminatingId] = useState<string | null>(null)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
+  const [teamFilter, setTeamFilter] = useState<'all' | 'active' | 'eliminated'>('all')
 
   const fetchTeams = async () => {
     const supabase = createClient()
     const { data: teamsData, error: teamsError } = await supabase
       .from('teams')
-      .select('id, team_name, team_code, status, created_at, p2_invited_email')
+      .select('id, team_name, team_code, status, is_eliminated, created_at, p2_invited_email')
       .order('created_at', { ascending: false })
 
     if (teamsError) {
@@ -61,6 +65,7 @@ export default function AdminTeamsPage() {
         team_name: t.team_name,
         team_code: t.team_code,
         status: t.status || 'complete',
+        is_eliminated: Boolean((t as any).is_eliminated),
         created_at: t.created_at,
         participants_count: counts[t.id] ?? 0,
         p2_invited_email: (t as any).p2_invited_email ?? null,
@@ -133,7 +138,7 @@ export default function AdminTeamsPage() {
   }
 
   const handleNotifyAllP1Pending = async () => {
-    const pendingCount = teams.filter((t) => t.status === 'pending_p2' && t.p2_invited_email).length
+    const pendingCount = teams.filter((t) => !t.is_eliminated && t.status === 'pending_p2' && t.p2_invited_email).length
     if (pendingCount === 0) {
       setMessage({ type: 'error', text: 'No pending teams with a Participant 2 invite email.' })
       return
@@ -187,6 +192,46 @@ export default function AdminTeamsPage() {
     if (result.success) {
       setMessage({ type: 'success', text: 'Team deleted successfully.' })
       setTeams((prev) => prev.filter((t) => t.id !== team.id))
+    } else {
+      setMessage({ type: 'error', text: result.error })
+    }
+  }
+
+  const handleEliminate = async (team: TeamRow) => {
+    if (team.is_eliminated) return
+    if (
+      !window.confirm(
+        `Eliminate team "${team.team_name}" (${team.team_code})? The team will remain in the database but will be excluded from leaderboards and cannot be assigned to exams/quizzes.`,
+      )
+    ) {
+      return
+    }
+
+    setEliminatingId(team.id)
+    setMessage(null)
+    const result = await eliminateTeam(team.id)
+    setEliminatingId(null)
+    if (result.success) {
+      setTeams((prev) => prev.map((t) => (t.id === team.id ? { ...t, is_eliminated: true } : t)))
+      setMessage({ type: 'success', text: 'Team eliminated successfully.' })
+    } else {
+      setMessage({ type: 'error', text: result.error })
+    }
+  }
+
+  const handleRestore = async (team: TeamRow) => {
+    if (!team.is_eliminated) return
+    if (!window.confirm(`Restore team "${team.team_name}" (${team.team_code}) to active competition status?`)) {
+      return
+    }
+
+    setRestoringId(team.id)
+    setMessage(null)
+    const result = await restoreTeam(team.id)
+    setRestoringId(null)
+    if (result.success) {
+      setTeams((prev) => prev.map((t) => (t.id === team.id ? { ...t, is_eliminated: false } : t)))
+      setMessage({ type: 'success', text: 'Team restored successfully.' })
     } else {
       setMessage({ type: 'error', text: result.error })
     }
@@ -254,6 +299,12 @@ export default function AdminTeamsPage() {
     )
   }
 
+  const filteredTeams = teams.filter((team) => {
+    if (teamFilter === 'active') return !team.is_eliminated
+    if (teamFilter === 'eliminated') return team.is_eliminated
+    return true
+  })
+
   const columns = [
     {
       key: 'team_name',
@@ -271,15 +322,22 @@ export default function AdminTeamsPage() {
       key: 'status',
       header: 'Status',
       getSearchText: (t: TeamRow) =>
-        `${t.status} ${t.status === 'complete' ? 'Complete' : 'Pending P2'}`,
+        `${t.status} ${t.is_eliminated ? 'Eliminated' : ''} ${t.status === 'complete' ? 'Complete' : 'Pending P2'}`,
       render: (t: TeamRow) => (
-        <span
-          className={`px-2 py-1 text-xs font-medium rounded-full ${
-            t.status === 'complete' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-          }`}
-        >
-          {t.status === 'complete' ? 'Complete' : 'Pending P2'}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`px-2 py-1 text-xs font-medium rounded-full ${
+              t.status === 'complete' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+            }`}
+          >
+            {t.status === 'complete' ? 'Complete' : 'Pending P2'}
+          </span>
+          {t.is_eliminated && (
+            <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+              Eliminated
+            </span>
+          )}
+        </div>
       ),
       sortable: true,
     },
@@ -294,7 +352,7 @@ export default function AdminTeamsPage() {
       header: 'Participant 2 email',
       getSearchText: (t: TeamRow) => t.p2_invited_email || '',
       render: (t: TeamRow) =>
-        t.status === 'pending_p2' && t.p2_invited_email ? (
+        !t.is_eliminated && t.status === 'pending_p2' && t.p2_invited_email ? (
           <span className="text-sm text-gray-800">{t.p2_invited_email}</span>
         ) : (
           <span className="text-xs text-gray-400 italic">—</span>
@@ -306,7 +364,7 @@ export default function AdminTeamsPage() {
       header: 'P2 reminder',
       getSearchText: () => '',
       render: (t: TeamRow) =>
-        t.status === 'pending_p2' && t.p2_invited_email ? (
+        !t.is_eliminated && t.status === 'pending_p2' && t.p2_invited_email ? (
           <Button
             type="button"
             variant="outline"
@@ -341,12 +399,27 @@ export default function AdminTeamsPage() {
               label: 'View',
               onClick: () => router.push(`/admin/teams/${t.id}`),
             },
+            ...(t.is_eliminated
+              ? [
+                  {
+                    label: 'Restore',
+                    onClick: () => void handleRestore(t),
+                    disabled: restoringId === t.id,
+                  },
+                ]
+              : [
+                  {
+                    label: 'Eliminate',
+                    onClick: () => void handleEliminate(t),
+                    disabled: eliminatingId === t.id,
+                  },
+                ]),
             ...(t.status === 'pending_p2' && t.p2_invited_email
               ? [
                   {
                     label: 'Notify Participant 1',
                     onClick: () => void handleNotifyP1(t),
-                    disabled: notifyingP1Id === t.id,
+                    disabled: notifyingP1Id === t.id || t.is_eliminated,
                   },
                 ]
               : []),
@@ -367,6 +440,35 @@ export default function AdminTeamsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-3xl font-bold text-gray-900">Teams</h1>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setTeamFilter('all')}
+              className={`rounded-md px-3 py-1 text-sm font-medium ${
+                teamFilter === 'all' ? 'bg-[#C0392B] text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setTeamFilter('active')}
+              className={`rounded-md px-3 py-1 text-sm font-medium ${
+                teamFilter === 'active' ? 'bg-[#C0392B] text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setTeamFilter('eliminated')}
+              className={`rounded-md px-3 py-1 text-sm font-medium ${
+                teamFilter === 'eliminated' ? 'bg-[#C0392B] text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Eliminated
+            </button>
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -410,14 +512,14 @@ export default function AdminTeamsPage() {
       )}
 
       <DataTable
-        data={teams}
+        data={filteredTeams}
         columns={columns}
         searchable
         searchPlaceholder="Search by team name, code, status, email, or date..."
         belowSearch={
           <p className="text-sm text-gray-600">
-            Total teams registered:{' '}
-            <span className="font-medium text-gray-900">{teams.length}</span>
+            Showing <span className="font-medium text-gray-900">{filteredTeams.length}</span> of{' '}
+            <span className="font-medium text-gray-900">{teams.length}</span> teams
           </p>
         }
         selectable

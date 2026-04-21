@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
-import { deleteTeam } from '@/app/actions/admin'
+import { deleteTeam, eliminateTeam, restoreTeam } from '@/app/actions/admin'
 
 interface TeamDetail {
   id: string
@@ -21,6 +21,7 @@ interface TeamDetail {
   p2_invited_email: string | null
   invitation_expires_at: string | null
   team_name_renamed_at: string | null
+  is_eliminated: boolean
 }
 
 interface ParticipantSummary {
@@ -53,6 +54,8 @@ export default function AdminTeamDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [reminding, setReminding] = useState(false)
   const [resettingRename, setResettingRename] = useState(false)
+  const [eliminating, setEliminating] = useState(false)
+  const [restoring, setRestoring] = useState(false)
 
   useEffect(() => {
     if (!teamId) return
@@ -63,7 +66,7 @@ export default function AdminTeamDetailPage() {
       const { data: teamData, error: teamError } = await supabase
         .from('teams')
         .select(
-          'id, team_name, team_code, status, created_at, authority_name, authority_email, authority_phone, p2_invited_email, invitation_expires_at, team_name_renamed_at',
+          'id, team_name, team_code, status, created_at, authority_name, authority_email, authority_phone, p2_invited_email, invitation_expires_at, team_name_renamed_at, is_eliminated',
         )
         .eq('id', teamId)
         .single()
@@ -171,7 +174,7 @@ export default function AdminTeamDetailPage() {
   }
 
   const handleSendReminder = async () => {
-    if (!teamId || !team || team.status !== 'pending_p2' || !team.p2_invited_email) {
+    if (!teamId || !team || team.is_eliminated || team.status !== 'pending_p2' || !team.p2_invited_email) {
       return
     }
     setReminding(true)
@@ -192,6 +195,42 @@ export default function AdminTeamDetailPage() {
     } finally {
       setReminding(false)
     }
+  }
+
+  const handleEliminateTeam = async () => {
+    if (!teamId || !team || team.is_eliminated) return
+    if (
+      !window.confirm(
+        `Eliminate team "${team.team_name}" (${team.team_code})? The team will be excluded from leaderboards and cannot be assigned to exams/quizzes.`,
+      )
+    ) {
+      return
+    }
+    setEliminating(true)
+    setError(null)
+    const result = await eliminateTeam(teamId)
+    setEliminating(false)
+    if (!result.success) {
+      setError(result.error)
+      return
+    }
+    setTeam((prev) => (prev ? { ...prev, is_eliminated: true } : prev))
+  }
+
+  const handleRestoreTeam = async () => {
+    if (!teamId || !team || !team.is_eliminated) return
+    if (!window.confirm(`Restore team "${team.team_name}" (${team.team_code}) to active competition status?`)) {
+      return
+    }
+    setRestoring(true)
+    setError(null)
+    const result = await restoreTeam(teamId)
+    setRestoring(false)
+    if (!result.success) {
+      setError(result.error)
+      return
+    }
+    setTeam((prev) => (prev ? { ...prev, is_eliminated: false } : prev))
   }
 
   if (loading) {
@@ -236,6 +275,34 @@ export default function AdminTeamDetailPage() {
           >
             {team.status === 'complete' ? 'Complete' : 'Pending P2'}
           </span>
+          {team.is_eliminated && (
+            <span className="px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+              Eliminated
+            </span>
+          )}
+          {team.is_eliminated ? (
+            <Button
+              variant="outline"
+              size="md"
+              className="text-green-700 border-green-200 hover:bg-green-50"
+              onClick={handleRestoreTeam}
+              disabled={restoring}
+              isLoading={restoring}
+            >
+              Restore team
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="md"
+              className="text-amber-700 border-amber-200 hover:bg-amber-50"
+              onClick={handleEliminateTeam}
+              disabled={eliminating}
+              isLoading={eliminating}
+            >
+              Eliminate team
+            </Button>
+          )}
           <Button
             variant="outline"
             size="md"
@@ -302,7 +369,7 @@ export default function AdminTeamDetailPage() {
             )}
           </div>
 
-          {team.status === 'pending_p2' && (
+          {!team.is_eliminated && team.status === 'pending_p2' && (
             <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-lg p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-3">Participant 2 invitation</h2>
               <p className="text-sm text-gray-700">
@@ -437,7 +504,7 @@ export default function AdminTeamDetailPage() {
                     {team.invitation_expires_at ? formatDateTime(team.invitation_expires_at) : '—'}
                   </span>
                 </p>
-                {team.status === 'pending_p2' && team.p2_invited_email && (
+                {!team.is_eliminated && team.status === 'pending_p2' && team.p2_invited_email && (
                   <Button
                     variant="outline"
                     size="sm"

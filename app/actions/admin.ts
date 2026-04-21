@@ -889,6 +889,38 @@ export async function removeHost(userId: string): Promise<{ success: boolean; er
 
 export type DeleteTeamResult = { success: true } | { success: false; error: string }
 export type DeleteParticipantResult = { success: true } | { success: false; error: string }
+export type TeamEliminationResult = { success: true } | { success: false; error: string }
+
+/**
+ * Soft-eliminate a team (admin only).
+ * Data remains intact; team is excluded from competition flows.
+ */
+export async function eliminateTeam(teamId: string): Promise<TeamEliminationResult> {
+  const isAdmin = await verifyAdmin()
+  if (!isAdmin) return { success: false, error: 'Unauthorized' }
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('teams').update({ is_eliminated: true }).eq('id', teamId)
+  if (error) {
+    return { success: false, error: error.message || 'Failed to eliminate team' }
+  }
+  return { success: true }
+}
+
+/**
+ * Restore an eliminated team (admin only).
+ */
+export async function restoreTeam(teamId: string): Promise<TeamEliminationResult> {
+  const isAdmin = await verifyAdmin()
+  if (!isAdmin) return { success: false, error: 'Unauthorized' }
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('teams').update({ is_eliminated: false }).eq('id', teamId)
+  if (error) {
+    return { success: false, error: error.message || 'Failed to restore team' }
+  }
+  return { success: true }
+}
 
 /**
  * Delete a team and all its participants (admin only).

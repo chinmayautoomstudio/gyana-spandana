@@ -50,12 +50,24 @@ export default function PublicSessionLeaderboardPage() {
       setTitle(sessionData?.session?.title || 'Live Leaderboard')
       setIsTestSession(Boolean(sessionData?.session?.is_test_session))
       const names = (sessionData?.team_display_names || {}) as Record<string, string>
+      const normalizedNames: Partial<Record<TeamLabel, string>> = {
+        A: String(names.A || '').trim() || 'Unassigned',
+        B: String(names.B || '').trim() || 'Unassigned',
+        C: String(names.C || '').trim() || 'Unassigned',
+        D: String(names.D || '').trim() || 'Unassigned',
+      }
       setTeamDisplayNames({
-        A: String(names.A || '').trim() || 'A',
-        B: String(names.B || '').trim() || 'B',
-        C: String(names.C || '').trim() || 'C',
-        D: String(names.D || '').trim() || 'D',
+        A: normalizedNames.A || 'Unassigned',
+        B: normalizedNames.B || 'Unassigned',
+        C: normalizedNames.C || 'Unassigned',
+        D: normalizedNames.D || 'Unassigned',
       })
+      setRows((prev) =>
+        prev.filter((row) => {
+          const labelName = normalizedNames[row.team_label]
+          return Boolean(labelName && labelName !== 'Unassigned')
+        }),
+      )
       setRoundName(
         sessionData?.activeRound?.title ||
           sessionData?.activeRound?.round_type ||

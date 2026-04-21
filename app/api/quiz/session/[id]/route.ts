@@ -226,7 +226,11 @@ async function getTeamDisplayNames(session: { team_slots?: Record<string, string
 
   const nameById = new Map<string, string>()
   if (ids.length > 0) {
-    const { data: rows } = await supabase.from('teams').select('id, team_name').in('id', ids)
+    const { data: rows } = await supabase
+      .from('teams')
+      .select('id, team_name')
+      .in('id', ids)
+      .eq('is_eliminated', false)
     for (const row of rows || []) {
       if (row?.id && row?.team_name != null) nameById.set(row.id, String(row.team_name))
     }
@@ -238,7 +242,7 @@ async function getTeamDisplayNames(session: { team_slots?: Record<string, string
       acc[label] = 'Unassigned'
     } else {
       const name = nameById.get(id)
-      acc[label] = name ?? `Team ${id.slice(0, 8)}`
+      acc[label] = name ?? 'Unassigned'
     }
     return acc
   }, {} as Record<TeamLabel, string>)
@@ -318,10 +322,17 @@ async function buildFinalScoreboard(
   }
 
   const slots = (session?.team_slots || {}) as Record<string, string>
-  const occupiedLabels = TEAM_LABELS.filter((label) => Boolean(slots[label]))
+  const activeLabelSet = new Set(
+    TEAM_LABELS.filter((label) => {
+      const id = slots[label]
+      if (!id) return false
+      return Boolean(teamDisplayNames[label] && teamDisplayNames[label] !== 'Unassigned')
+    }),
+  )
+  const occupiedLabels = TEAM_LABELS.filter((label) => activeLabelSet.has(label))
   const participatingLabels = session?.is_test_session
     ? occupiedLabels
-    : TEAM_LABELS
+    : TEAM_LABELS.filter((label) => activeLabelSet.has(label))
 
   const totalsByLabel = TEAM_LABELS.reduce((acc, label) => {
     const row = (totalsRes.data || []).find((r: any) => r.team_label === label)

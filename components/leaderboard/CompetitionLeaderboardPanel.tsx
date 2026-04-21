@@ -112,7 +112,6 @@ export function CompetitionLeaderboardPanel({
 
   const exams = controlledExams?.exams ?? internalExams
   const selectedExamId = controlledExams?.selectedExamId ?? internalSelectedExamId
-  const examsLoading = controlledExams?.loading ?? false
   const setSelectedExamId = controlledExams?.onSelectExamId ?? setInternalSelectedExamId
 
   const loading =
@@ -181,7 +180,11 @@ export function CompetitionLeaderboardPanel({
     async (teamIds: string[]) => {
       const uniq = [...new Set(teamIds.filter(Boolean))]
       if (uniq.length === 0) return new Map<string, string>()
-      const { data: teams } = await supabase.from('teams').select('id,team_name').in('id', uniq)
+      const { data: teams } = await supabase
+        .from('teams')
+        .select('id,team_name')
+        .in('id', uniq)
+        .eq('is_eliminated', false)
       return new Map(
         (teams || [])
           .filter((row) => row?.id)
@@ -207,10 +210,12 @@ export function CompetitionLeaderboardPanel({
       const teamIds = [...new Set(rawRows.map((row) => row.team_id).filter(Boolean))]
       const nameById = await resolveTeamNamesMap(teamIds)
       setTeamScores(
-        rawRows.map((row) => ({
-          ...row,
-          team_name: nameById.get(String(row.team_id || '')) || null,
-        })),
+        rawRows
+          .filter((row) => nameById.has(String(row.team_id || '')))
+          .map((row) => ({
+            ...row,
+            team_name: nameById.get(String(row.team_id || '')) || null,
+          })),
       )
     }
     setLastExamUpdatedAt(new Date())
@@ -240,10 +245,10 @@ export function CompetitionLeaderboardPanel({
     }
     const nameById = await resolveTeamNamesMap(ids)
     setLiveTeamNames({
-      A: nameById.get(String(slots.A || ''))?.trim() || `Team ${String(slots.A || 'A').slice(0, 8) || 'A'}`,
-      B: nameById.get(String(slots.B || ''))?.trim() || `Team ${String(slots.B || 'B').slice(0, 8) || 'B'}`,
-      C: nameById.get(String(slots.C || ''))?.trim() || `Team ${String(slots.C || 'C').slice(0, 8) || 'C'}`,
-      D: nameById.get(String(slots.D || ''))?.trim() || `Team ${String(slots.D || 'D').slice(0, 8) || 'D'}`,
+      A: nameById.get(String(slots.A || ''))?.trim() || 'Unassigned',
+      B: nameById.get(String(slots.B || ''))?.trim() || 'Unassigned',
+      C: nameById.get(String(slots.C || ''))?.trim() || 'Unassigned',
+      D: nameById.get(String(slots.D || ''))?.trim() || 'Unassigned',
     })
   }, [selectedLiveSessionId, supabase, resolveTeamNamesMap])
 
@@ -258,10 +263,26 @@ export function CompetitionLeaderboardPanel({
     if (error) {
       console.error('Error fetching live leaderboard:', error)
     } else {
-      setLiveScores((data || []) as LiveScoreRow[])
+      const rows = (data || []) as LiveScoreRow[]
+      const { data: session } = await supabase
+        .from('quiz_live_sessions')
+        .select('team_slots')
+        .eq('id', selectedLiveSessionId)
+        .maybeSingle()
+      const slots = ((session?.team_slots || {}) as Record<string, string>) || {}
+      const candidateTeamIds = rows
+        .map((row) => row.team_id || slots[row.team_label] || null)
+        .filter((id): id is string => Boolean(id))
+      const activeNames = await resolveTeamNamesMap(candidateTeamIds)
+      setLiveScores(
+        rows.filter((row) => {
+          const resolvedTeamId = row.team_id || slots[row.team_label] || null
+          return Boolean(resolvedTeamId && activeNames.has(String(resolvedTeamId)))
+        }),
+      )
     }
     setLastLiveUpdatedAt(new Date())
-  }, [selectedLiveSessionId, supabase])
+  }, [selectedLiveSessionId, supabase, resolveTeamNamesMap])
 
   const fetchFinalLeaderboard = useCallback(async () => {
     if (!selectedExamId || !selectedLiveSessionId) {
@@ -315,7 +336,9 @@ export function CompetitionLeaderboardPanel({
     const allIds = [...new Set([...examByTeam.keys(), ...quizByTeam.keys()])]
     const nameById = await resolveTeamNamesMap(allIds)
 
-    const combined = allIds.map((teamId) => {
+    const combined = allIds
+      .filter((teamId) => nameById.has(teamId))
+      .map((teamId) => {
       const examPts = examByTeam.get(teamId) || 0
       const quizPts = quizByTeam.get(teamId) || 0
       return {
@@ -323,7 +346,7 @@ export function CompetitionLeaderboardPanel({
         teamName: nameById.get(teamId) || 'Team',
         pointsScored: examPts + quizPts,
       }
-    })
+      })
 
     combined.sort((x, y) => {
       if (y.pointsScored !== x.pointsScored) return y.pointsScored - x.pointsScored

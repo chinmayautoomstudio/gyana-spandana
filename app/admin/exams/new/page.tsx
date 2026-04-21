@@ -18,6 +18,7 @@ interface Team {
   team_name: string
   team_code: string
   participant_count: number
+  is_eliminated: boolean
 }
 
 /** Detach questions and remove exam so a failed team assignment never leaves a public unrestricted exam. */
@@ -148,7 +149,8 @@ export default function NewExamPage() {
         const supabase = createClient()
         const { data: teamsData, error: teamsError } = await supabase
           .from('teams')
-          .select('id, team_name, team_code, participants(id)')
+          .select('id, team_name, team_code, is_eliminated, participants(id)')
+          .eq('is_eliminated', false)
           .order('team_name')
 
         if (teamsError) {
@@ -162,6 +164,7 @@ export default function NewExamPage() {
           team_name: team.team_name,
           team_code: team.team_code,
           participant_count: team.participants?.length || 0,
+          is_eliminated: Boolean(team.is_eliminated),
         }))
 
         setTeams(teamsWithCounts)
@@ -341,6 +344,18 @@ export default function NewExamPage() {
           ))
 
         try {
+          const { data: eliminatedTeams } = await supabase
+            .from('teams')
+            .select('id, team_name')
+            .in('id', selectedTeamIds)
+            .eq('is_eliminated', true)
+
+          if ((eliminatedTeams || []).length > 0) {
+            const teamNames = (eliminatedTeams || []).map((t: any) => t.team_name).join(', ')
+            await rollbackExamAfterFailedTeamAssignment(supabase, exam.id, selectedQuestionIds)
+            throw new Error(`Cannot assign eliminated teams to an exam: ${teamNames}`)
+          }
+
           const { data: participants, error: participantsError } = await supabase
             .from('participants')
             .select('id, team_id, teams(id, team_name)')

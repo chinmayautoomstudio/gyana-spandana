@@ -93,7 +93,11 @@ export default function NewQuizSessionPage() {
       try {
         const [{ data: teamRows, error: teamsErr }, { data: hostRows, error: hostsErr }, qRes] =
           await Promise.all([
-            supabase.from('teams').select('id,team_name').order('team_name', { ascending: true }),
+            supabase
+              .from('teams')
+              .select('id,team_name')
+              .eq('is_eliminated', false)
+              .order('team_name', { ascending: true }),
             supabase
               .from('user_profiles')
               .select('user_id,name,role')
