@@ -486,11 +486,13 @@ export default function ParticipantPlayPage() {
   const revealCorrect = Boolean(state.currentQuestionEvent?.correct_answer_revealed_at)
 
   const rt = state.rapidFireTimer
+  /** Align with server clock using participant GET `serverTimestampMs` (same pattern as buzzer). */
+  const rfNow = rapidFireClock - clockOffsetMsRef.current
   let rapidFireSecondsFromServer: number | null = null
   if (rt?.startedAt != null && rt.durationSeconds != null) {
     const startedMs = new Date(rt.startedAt).getTime()
     if (Number.isFinite(startedMs)) {
-      const elapsed = Math.floor((rapidFireClock - startedMs) / 1000)
+      const elapsed = Math.floor((rfNow - startedMs) / 1000)
       rapidFireSecondsFromServer = Math.max(0, Number(rt.durationSeconds) - elapsed)
     }
   }
@@ -502,7 +504,7 @@ export default function ParticipantPlayPage() {
     if (!Number.isFinite(startedMs)) return false
     const deadlineMs = startedMs + Number(rt.durationSeconds) * 1000
     const graceDeadlineMs = deadlineMs + RAPID_FIRE_SUBMIT_GRACE_SECONDS * 1000
-    return rapidFireClock >= deadlineMs && rapidFireClock < graceDeadlineMs
+    return rfNow >= deadlineMs && rfNow < graceDeadlineMs
   })()
 
   const showOptions =

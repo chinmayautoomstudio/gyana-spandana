@@ -50,6 +50,8 @@ interface SessionState {
     answer_option_label: 'A' | 'B' | 'C' | 'D' | 'TRUE' | 'FALSE' | null
     answer_option_text: string | null
   } | null
+  /** Server time at GET response; aligns Rapid Fire countdown across devices. */
+  serverTimestampMs?: number
 }
 
 interface FinalScoreboardRound {
@@ -698,6 +700,7 @@ export default function HostSessionPage() {
                   rapidFireTimer={state.rapidFireTimer ?? null}
                   rapidFireQuestionBank={state.rapidFireQuestionBank ?? null}
                   rapidFireTurnComplete={Boolean(state.rapidFireTurnComplete)}
+                  serverTimestampMs={state.serverTimestampMs}
                 />
               ) : activeRound.round_type === 'buzzer' ? (
                 <BuzzerControls

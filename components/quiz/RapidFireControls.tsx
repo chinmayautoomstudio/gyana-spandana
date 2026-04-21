@@ -56,6 +56,8 @@ interface RapidFireControlsProps {
   rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
   rapidFireQuestionBank?: any[] | null
   rapidFireTurnComplete?: boolean
+  /** From session GET; used to align remaining time with server clock. */
+  serverTimestampMs?: number | null
 }
 
 export function RapidFireControls({
@@ -75,6 +77,7 @@ export function RapidFireControls({
   rapidFireTimer = null,
   rapidFireQuestionBank = null,
   rapidFireTurnComplete = false,
+  serverTimestampMs = null,
 }: RapidFireControlsProps) {
   const [durationSeconds, setDurationSeconds] = useState<number>(Number(round?.rapid_fire_duration_seconds || 45))
   const [phase, setPhase] = useState<'idle' | 'preview' | 'running'>('idle')
@@ -82,6 +85,13 @@ export function RapidFireControls({
   const [localFallbackSeconds, setLocalFallbackSeconds] = useState<number>(0)
   const [clock, setClock] = useState(() => Date.now())
   const timeoutHandledRef = useRef(false)
+  const serverOffsetMsRef = useRef(0)
+
+  useEffect(() => {
+    if (typeof serverTimestampMs === 'number' && Number.isFinite(serverTimestampMs)) {
+      serverOffsetMsRef.current = Date.now() - serverTimestampMs
+    }
+  }, [serverTimestampMs])
 
   const activeTeam = (event?.rapid_fire_team || selectedTeam) as TeamLabel
   const isQuestionActive = Boolean(event && ['revealed', 'options_revealed', 'buzzer_open'].includes(event.status))
@@ -91,12 +101,16 @@ export function RapidFireControls({
     if (hasServerTimer && rapidFireTimer) {
       const startedAtMs = new Date(rapidFireTimer.startedAt).getTime()
       if (Number.isFinite(startedAtMs)) {
-        const elapsed = Math.floor((clock - startedAtMs) / 1000)
+        const alignedNow =
+          typeof serverTimestampMs === 'number' && Number.isFinite(serverTimestampMs)
+            ? clock - serverOffsetMsRef.current
+            : clock
+        const elapsed = Math.floor((alignedNow - startedAtMs) / 1000)
         return Math.max(0, Number(rapidFireTimer.durationSeconds) - elapsed)
       }
     }
     return Math.max(0, localFallbackSeconds)
-  }, [clock, hasServerTimer, localFallbackSeconds, rapidFireTimer])
+  }, [clock, hasServerTimer, localFallbackSeconds, rapidFireTimer, serverTimestampMs])
 
   const isRunning = phase === 'running' && isQuestionActive && remainingSeconds > 0
 

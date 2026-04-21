@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { RAPID_FIRE_SUBMIT_GRACE_MS } from '@/lib/quiz/rapidFireConstants'
+import { fetchLatestRapidFireSessionForRoundTeam } from '@/lib/quiz/loadLatestRapidFireSession'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
@@ -167,25 +168,8 @@ export async function GET(
       ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(String(ev?.status || ''))
     ) {
       const rfTeam = String((ev as any)?.rapid_fire_team || '').trim().toUpperCase()
-      if (TEAM_LABELS.includes(rfTeam as TeamLabel)) {
-        const { data: rfByEvent } = await supabase
-          .from('quiz_rapid_fire_sessions')
-          .select('started_at, duration_seconds,questions_attempted,questions_correct,ended_at')
-          .eq('question_event_id', String(ev?.id || ''))
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        const { data: rfByTeam } = rfByEvent
-          ? ({ data: null } as { data: any })
-          : await supabase
-              .from('quiz_rapid_fire_sessions')
-              .select('started_at, duration_seconds,questions_attempted,questions_correct,ended_at')
-              .eq('team_label', rfTeam)
-              .is('ended_at', null)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle()
-        const rfSess = rfByEvent || rfByTeam
+      if (TEAM_LABELS.includes(rfTeam as TeamLabel) && roundId) {
+        const rfSess = await fetchLatestRapidFireSessionForRoundTeam(supabase, String(roundId), rfTeam)
         rapidFireSessionMeta = rfSess
         if (rfSess?.started_at != null && rfSess.duration_seconds != null && rfSess.ended_at == null) {
           rapidFireTimer = {
