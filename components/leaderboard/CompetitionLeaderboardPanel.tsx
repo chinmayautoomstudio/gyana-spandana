@@ -290,38 +290,26 @@ export function CompetitionLeaderboardPanel({
       return
     }
 
-    const [{ data: examData, error: examError }, { data: quizData, error: quizError }, sessionRes] =
-      await Promise.all([
-        supabase
-          .from('team_scores')
-          .select('team_id, total_team_score')
-          .eq('exam_id', selectedExamId),
-        supabase
-          .from('quiz_session_scores')
-          .select('team_label, team_id, total_score')
-          .eq('session_id', selectedLiveSessionId),
-        supabase
-          .from('quiz_live_sessions')
-          .select('team_slots')
-          .eq('id', selectedLiveSessionId)
-          .maybeSingle(),
-      ])
+    const [{ data: quizData, error: quizError }, sessionRes] = await Promise.all([
+      supabase
+        .from('quiz_session_scores')
+        .select('team_label, team_id, total_score')
+        .eq('session_id', selectedLiveSessionId),
+      supabase
+        .from('quiz_live_sessions')
+        .select('team_slots')
+        .eq('id', selectedLiveSessionId)
+        .maybeSingle(),
+    ])
 
-    if (examError || quizError) {
-      console.error('Final leaderboard fetch error', examError || quizError)
+    if (quizError) {
+      console.error('Final leaderboard fetch error', quizError)
       setFinalRows([])
       setLastFinalUpdatedAt(new Date())
       return
     }
 
     const slots = ((sessionRes.data?.team_slots || {}) as Record<string, string>) || {}
-    const examByTeam = new Map<string, number>()
-    for (const row of examData || []) {
-      const tid = String((row as { team_id: string }).team_id || '')
-      if (!tid) continue
-      examByTeam.set(tid, Number((row as { total_team_score: number }).total_team_score) || 0)
-    }
-
     const quizByTeam = new Map<string, number>()
     for (const row of quizData || []) {
       const r = row as { team_label: string; team_id: string | null; total_score: number }
@@ -333,18 +321,17 @@ export function CompetitionLeaderboardPanel({
       quizByTeam.set(tid, Number(r.total_score) || 0)
     }
 
-    const allIds = [...new Set([...examByTeam.keys(), ...quizByTeam.keys()])]
+    const allIds = [...new Set([...quizByTeam.keys()])]
     const nameById = await resolveTeamNamesMap(allIds)
 
     const combined = allIds
       .filter((teamId) => nameById.has(teamId))
       .map((teamId) => {
-      const examPts = examByTeam.get(teamId) || 0
       const quizPts = quizByTeam.get(teamId) || 0
       return {
         teamId,
         teamName: nameById.get(teamId) || 'Team',
-        pointsScored: examPts + quizPts,
+        pointsScored: quizPts,
       }
       })
 
