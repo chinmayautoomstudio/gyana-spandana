@@ -21,6 +21,8 @@ interface SessionState {
   /** From GET: server-backed Rapid Fire turn countdown (started_at + duration_seconds). */
   rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
   rapidFireTurnSummary?: { correct: number; incorrect: number } | null
+  /** True when the active Rapid Fire session has ended (time or bank exhausted). */
+  rapidFireTurnComplete?: boolean
   /** From GET: server epoch ms at response time — used to correct buzzer deadline vs client clock skew. */
   serverTimestampMs?: number
 }
@@ -299,12 +301,12 @@ export default function ParticipantPlayPage() {
                 currentQuestion: data.nextQuestion,
                 participantDirectAttempt: null,
                 rapidFireTurnSummary: data.turnSummary ?? prev.rapidFireTurnSummary ?? null,
+                rapidFireTurnComplete: Boolean(data.rapidFireCompleted),
               }
             : prev,
         )
         setSelectedDirectOption(null)
       } else {
-        // Turn ended or no further question available; refresh authoritative state.
         setRapidFireRemaining(0)
         await fetchState()
       }
@@ -794,9 +796,17 @@ export default function ParticipantPlayPage() {
           />
         )}
 
-        {isRapidFireRound && rapidFireTurnSummary ? (
+        {isRapidFireRound && rapidFireTurnSummary && state.rapidFireTurnComplete ? (
+          <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 px-4 py-5 text-center shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-900">Rapid Fire — turn complete</p>
+            <p className="mt-2 text-lg font-semibold text-emerald-950">
+              Correct: <span className="tabular-nums">{rapidFireTurnSummary.correct}</span> · Incorrect:{' '}
+              <span className="tabular-nums">{rapidFireTurnSummary.incorrect}</span>
+            </p>
+          </div>
+        ) : isRapidFireRound && rapidFireTurnSummary && !state.rapidFireTurnComplete ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
-            <p className="text-sm font-semibold">Rapid Fire turn summary</p>
+            <p className="text-sm font-semibold">Rapid Fire live tally</p>
             <p className="mt-1 text-sm">
               Correct: {rapidFireTurnSummary.correct} | Incorrect: {rapidFireTurnSummary.incorrect}
             </p>

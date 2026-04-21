@@ -6,6 +6,33 @@ import { TeamBadge } from '@/components/quiz/TeamBadge'
 import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
 import type { TeamLabel } from '@/lib/utils/teamColors'
 
+const MCQ: readonly ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D']
+
+function localizedText(
+  language: 'en' | 'odia',
+  english: string | null | undefined,
+  odia: string | null | undefined,
+): string {
+  const en = String(english || '').trim()
+  const od = String(odia || '').trim()
+  if (language === 'odia') return od || en
+  return en || od
+}
+
+function truncate(s: string, max: number) {
+  const t = s.replace(/\s+/g, ' ').trim()
+  if (t.length <= max) return t
+  return `${t.slice(0, max - 1)}…`
+}
+
+function correctMcqLetter(correct: string | null | undefined): 'A' | 'B' | 'C' | 'D' | null {
+  const c = String(correct || '')
+    .trim()
+    .toUpperCase()
+    .charAt(0)
+  return c === 'A' || c === 'B' || c === 'C' || c === 'D' ? c : null
+}
+
 interface RapidFireControlsProps {
   round: any | null
   question: any | null
@@ -27,6 +54,8 @@ interface RapidFireControlsProps {
   teamDisplayNames?: Record<TeamLabel, string>
   questionLanguage?: 'en' | 'odia'
   rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
+  rapidFireQuestionBank?: any[] | null
+  rapidFireTurnComplete?: boolean
 }
 
 export function RapidFireControls({
@@ -44,6 +73,8 @@ export function RapidFireControls({
   teamDisplayNames,
   questionLanguage = 'en',
   rapidFireTimer = null,
+  rapidFireQuestionBank = null,
+  rapidFireTurnComplete = false,
 }: RapidFireControlsProps) {
   const [durationSeconds, setDurationSeconds] = useState<number>(Number(round?.rapid_fire_duration_seconds || 45))
   const [phase, setPhase] = useState<'idle' | 'preview' | 'running'>('idle')
@@ -148,10 +179,18 @@ export function RapidFireControls({
     timeoutHandledRef.current = false
   }
 
-  const teamLabelText = teamDisplayNames?.[activeTeam] && teamDisplayNames[activeTeam] !== 'Unassigned'
-    ? `${teamDisplayNames[activeTeam]} (${activeTeam})`
-    : `Team ${activeTeam}`
+  const teamLabelText =
+    teamDisplayNames?.[activeTeam] && teamDisplayNames[activeTeam] !== 'Unassigned'
+      ? `${teamDisplayNames[activeTeam]} (${activeTeam})`
+      : `Team ${activeTeam}`
   const displayQuestion = phase === 'preview' ? previewQuestion : question || previewQuestion
+
+  const activeQuestionId =
+    phase === 'preview' ? (previewQuestion?.id as string | undefined) : (event?.question_id as string | undefined)
+
+  const showProminentTurnSummary =
+    turnSummary != null &&
+    (rapidFireTurnComplete || (phase !== 'idle' && remainingSeconds <= 0))
 
   return (
     <section className="space-y-4">
@@ -162,6 +201,92 @@ export function RapidFireControls({
           <p className="text-2xl font-bold tracking-wide text-gray-900">{formattedTime}</p>
         </div>
       </div>
+
+      {rapidFireQuestionBank && rapidFireQuestionBank.length > 0 ? (
+        <details open className="rounded-xl border border-slate-200 bg-slate-50/90 p-3">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-800">
+            Question bank ({rapidFireQuestionBank.length}) — compact
+          </summary>
+          <div className="mt-2 max-h-[min(42vh,26rem)] space-y-2 overflow-y-auto pr-1">
+            {rapidFireQuestionBank.map((q: any, idx: number) => {
+              const rowId = String(q?.id || `row-${idx}`)
+              const isCurrent = Boolean(activeQuestionId && rowId === String(activeQuestionId))
+              const stem = localizedText(
+                questionLanguage,
+                q.question_text,
+                q.question_text_odia,
+              )
+              const correct = correctMcqLetter(q.correct_answer)
+              const picked =
+                isCurrent &&
+                participantResponse?.answer_option_label &&
+                ['A', 'B', 'C', 'D'].includes(String(participantResponse.answer_option_label))
+                  ? (String(participantResponse.answer_option_label).toUpperCase() as 'A' | 'B' | 'C' | 'D')
+                  : null
+              return (
+                <div
+                  key={rowId}
+                  className={`rounded-lg border px-2 py-2 ${
+                    isCurrent ? 'border-orange-400 bg-orange-50/60 ring-1 ring-orange-300' : 'border-slate-200 bg-white'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-[10px] font-semibold uppercase text-slate-500">Q{q.question_order ?? '—'}</span>
+                    <p className="min-w-0 flex-1 text-sm text-slate-900" title={stem}>
+                      {truncate(stem, 140)}
+                    </p>
+                  </div>
+                  <div className="mt-1.5 grid grid-cols-2 gap-1 sm:grid-cols-4">
+                    {MCQ.map((letter) => {
+                      const en = q[`option_${letter.toLowerCase()}`] as string | undefined
+                      const od = q[`option_${letter.toLowerCase()}_odia`] as string | undefined
+                      const text = truncate(localizedText(questionLanguage, en, od), 52)
+                      const isCorrect = correct === letter
+                      const isPicked = picked === letter
+                      let cellClass = 'border border-slate-200 bg-slate-50/80 px-1.5 py-1 text-left'
+                      if (isCorrect && isPicked) {
+                        cellClass =
+                          'border border-emerald-500 bg-emerald-100 px-1.5 py-1 text-left ring-1 ring-emerald-600'
+                      } else if (isCorrect) {
+                        cellClass = 'border border-emerald-400 bg-emerald-50 px-1.5 py-1 text-left'
+                      } else if (isPicked) {
+                        cellClass = 'border border-amber-400 bg-amber-50 px-1.5 py-1 text-left ring-1 ring-amber-500'
+                      }
+                      return (
+                        <div key={letter} className={cellClass} title={localizedText(questionLanguage, en, od)}>
+                          <span className="text-[10px] font-bold text-slate-600">{letter}</span>
+                          <p className="text-[11px] leading-snug text-slate-800">{text || '—'}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {isCurrent && picked ? (
+                    <p className="mt-1 text-[11px] font-medium text-slate-700">
+                      Participant picked <span className="font-bold text-amber-800">{picked}</span>
+                      {correct ? (
+                        <>
+                          {' '}
+                          · Correct <span className="font-bold text-emerald-800">{correct}</span>
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </details>
+      ) : null}
+
+      {showProminentTurnSummary ? (
+        <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 px-4 py-4 text-center shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-900">Rapid Fire — turn complete</p>
+          <p className="mt-2 text-lg font-semibold text-emerald-950">
+            Correct: <span className="tabular-nums">{turnSummary.correct}</span> · Incorrect:{' '}
+            <span className="tabular-nums">{turnSummary.incorrect}</span>
+          </p>
+        </div>
+      ) : null}
 
       {phase === 'idle' ? (
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
@@ -239,7 +364,8 @@ export function RapidFireControls({
                 {participantResponse?.answer_option_label ? (
                   <>
                     <p>
-                      Participant response: <span className="font-semibold">{participantResponse.answer_option_label}</span>
+                      Participant response:{' '}
+                      <span className="font-semibold">{participantResponse.answer_option_label}</span>
                       {participantResponse.answer_option_text ? ` — ${participantResponse.answer_option_text}` : ''}
                     </p>
                     <p className="mt-1">
@@ -276,9 +402,9 @@ export function RapidFireControls({
           )}
         </>
       )}
-      {turnSummary ? (
+      {turnSummary && !showProminentTurnSummary ? (
         <p className="text-sm text-gray-600">
-          Turn summary - Correct: {turnSummary.correct}, Incorrect: {turnSummary.incorrect}
+          Live tally — Correct: {turnSummary.correct}, Incorrect: {turnSummary.incorrect}
         </p>
       ) : null}
     </section>

@@ -4,6 +4,7 @@ import { resolvePoints } from '@/lib/services/scoringService'
 import { applyBuzzerWrongOutcome } from '@/lib/services/buzzerRoundService'
 import { runBuzzerAnswerTimeout } from '@/lib/services/buzzerAnswerTimeout'
 import { getOccupiedLabels, nextOccupiedLabel } from '@/lib/quiz/teamSlots'
+import { RAPID_FIRE_SUBMIT_GRACE_MS } from '@/lib/quiz/rapidFireConstants'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
@@ -579,6 +580,7 @@ export async function GET(
 
     let rapidFireTimer: { startedAt: string; durationSeconds: number } | null = null
     let rapidFireTurnSummary: { correct: number; incorrect: number } | null = null
+    let rapidFireQuestionBank: any[] | null = null
     let rapidFireSessionMeta: { started_at: string | null; duration_seconds: number | null; ended_at: string | null } | null =
       null
     if (
@@ -624,6 +626,15 @@ export async function GET(
       }
     }
 
+    if (isHostOrAdmin && activeRound?.round_type === 'rapid_fire' && roundId) {
+      const { data: rfBankRows } = await supabase
+        .from('quiz_questions')
+        .select('*')
+        .eq('round_id', roundId)
+        .order('question_order', { ascending: true })
+      rapidFireQuestionBank = rfBankRows && rfBankRows.length > 0 ? rfBankRows : []
+    }
+
     if (!isHostOrAdmin && activeRound?.round_type === 'rapid_fire' && latestEvent) {
       const rapidTeam = String((ev?.rapid_fire_team || ev?.directed_team || '')).trim().toUpperCase() as TeamLabel | ''
       const isRapidTeam = Boolean(participantLabel && rapidTeam && participantLabel === rapidTeam)
@@ -634,13 +645,17 @@ export async function GET(
       if (rapidFireTimer?.startedAt && rapidFireTimer.durationSeconds != null) {
         const startedMs = new Date(rapidFireTimer.startedAt).getTime()
         if (Number.isFinite(startedMs)) {
-          timerActive = Date.now() < startedMs + Number(rapidFireTimer.durationSeconds) * 1000
+          timerActive =
+            Date.now() < startedMs + Number(rapidFireTimer.durationSeconds) * 1000 + RAPID_FIRE_SUBMIT_GRACE_MS
         }
       }
       if (!isRapidTeam || !timerActive) {
         currentQuestion = null
       }
     }
+
+    const rapidFireTurnComplete =
+      activeRound?.round_type === 'rapid_fire' && Boolean(rapidFireSessionMeta?.ended_at)
 
     return NextResponse.json({
       session,
@@ -656,6 +671,8 @@ export async function GET(
       participantDirectAttempt,
       rapidFireTimer,
       rapidFireTurnSummary,
+      rapidFireTurnComplete,
+      ...(isHostOrAdmin && rapidFireQuestionBank != null ? { rapidFireQuestionBank } : {}),
       serverTimestampMs: Date.now(),
     })
   } catch (error: any) {

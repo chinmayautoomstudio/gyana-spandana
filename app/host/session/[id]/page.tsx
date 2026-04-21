@@ -26,6 +26,8 @@ interface SessionState {
   currentQuestionEvent: any | null
   currentQuestion: any | null
   rapidFireTimer?: { startedAt: string; durationSeconds: number } | null
+  rapidFireTurnComplete?: boolean
+  rapidFireQuestionBank?: any[] | null
   scores: Record<TeamLabel, number>
   team_display_names?: Record<TeamLabel, string>
   activeRoundQuestions?: Array<{
@@ -134,11 +136,45 @@ export default function HostSessionPage() {
   const applyParticipantAnswerOptimistic = useCallback(
     (payload: ParticipantAnswerSubmittedPayload) => {
       setState((prev) => {
+        if (!prev?.activeRound) return prev
+
+        const isRf = prev.activeRound.round_type === 'rapid_fire'
+        const nextEvent = payload.nextEvent as Record<string, unknown> | null | undefined
+        const nextQuestion = payload.nextQuestion as Record<string, unknown> | null | undefined
+
+        if (isRf && payload.rapidFireCompleted && !nextEvent) {
+          return {
+            ...prev,
+            currentQuestion: null,
+            rapidFireTurnSummary: payload.turnSummary ?? prev.rapidFireTurnSummary ?? null,
+            rapidFireTurnComplete: true,
+            rapidFireTimer: null,
+            pendingDirectAnswer: null,
+          }
+        }
+
+        if (isRf && nextEvent && nextQuestion) {
+          const bank = prev.rapidFireQuestionBank
+          const nid = String(nextQuestion.id || '')
+          const fullNext = Array.isArray(bank) ? bank.find((q: any) => String(q?.id) === nid) : null
+          const mergedQ = fullNext
+            ? { ...nextQuestion, correct_answer: fullNext.correct_answer }
+            : nextQuestion
+          return {
+            ...prev,
+            currentQuestionEvent: nextEvent,
+            currentQuestion: mergedQ,
+            rapidFireTurnSummary: payload.turnSummary ?? prev.rapidFireTurnSummary ?? null,
+            rapidFireTurnComplete: Boolean(payload.rapidFireCompleted),
+            pendingDirectAnswer: null,
+          }
+        }
+
         if (
-          !prev?.currentQuestionEvent ||
-          (prev.activeRound?.round_type !== 'direct_question' &&
-            prev.activeRound?.round_type !== 'true_or_false' &&
-            prev.activeRound?.round_type !== 'rapid_fire')
+          !prev.currentQuestionEvent ||
+          (prev.activeRound.round_type !== 'direct_question' &&
+            prev.activeRound.round_type !== 'true_or_false' &&
+            prev.activeRound.round_type !== 'rapid_fire')
         ) {
           return prev
         }
@@ -660,6 +696,8 @@ export default function HostSessionPage() {
                   teamDisplayNames={teamNames}
                   questionLanguage={questionLanguage}
                   rapidFireTimer={state.rapidFireTimer ?? null}
+                  rapidFireQuestionBank={state.rapidFireQuestionBank ?? null}
+                  rapidFireTurnComplete={Boolean(state.rapidFireTurnComplete)}
                 />
               ) : activeRound.round_type === 'buzzer' ? (
                 <BuzzerControls

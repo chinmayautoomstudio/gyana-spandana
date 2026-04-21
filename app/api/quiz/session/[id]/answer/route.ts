@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolvePoints } from '@/lib/services/scoringService'
+import { RAPID_FIRE_SUBMIT_GRACE_MS } from '@/lib/quiz/rapidFireConstants'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
-const RAPID_FIRE_SUBMIT_GRACE_MS = 2_000
+
+function stripCorrectAnswerFromQuestion(q: Record<string, unknown> | null) {
+  if (!q) return null
+  const { correct_answer: _omit, ...rest } = q
+  return rest
+}
 
 async function pickNextRapidFireQuestion(roundId: string, supabase: any) {
   const [{ data: allQuestions }, { data: usedEvents }] = await Promise.all([
@@ -377,11 +383,14 @@ export async function POST(
           .eq('id', event.round_id)
       }
 
+      const nextQuestionPublic =
+        nextQuestion && !rapidFireCompleted ? stripCorrectAnswerFromQuestion(nextQuestion as Record<string, unknown>) : null
+
       rapidFirePayload = {
         verdict,
         pointsAwarded,
         nextEvent,
-        nextQuestion: nextQuestion && !rapidFireCompleted ? nextQuestion : null,
+        nextQuestion: nextQuestionPublic,
         rapidFireCompleted,
         turnSummary: {
           correct: nextCorrect,
@@ -395,6 +404,15 @@ export async function POST(
       const channel = supabase.channel(`quiz:session:${sessionId}`, {
         config: { broadcast: { self: true, ack: false } },
       })
+      const rfBroadcastExtra =
+        rapidFirePayload && round.round_type === 'rapid_fire'
+          ? {
+              nextEvent: rapidFirePayload.nextEvent ?? null,
+              nextQuestion: rapidFirePayload.nextQuestion ?? null,
+              turnSummary: rapidFirePayload.turnSummary ?? null,
+              rapidFireCompleted: Boolean(rapidFirePayload.rapidFireCompleted),
+            }
+          : {}
       void channel
         .send({
           type: 'broadcast',
@@ -407,6 +425,7 @@ export async function POST(
               answerText,
               verdict: rapidFirePayload?.verdict ?? 'pending',
               submittedAt: now,
+              ...rfBroadcastExtra,
             },
             timestamp: now,
           },

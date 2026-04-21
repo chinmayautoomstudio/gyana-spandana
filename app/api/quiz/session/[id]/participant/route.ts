@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { RAPID_FIRE_SUBMIT_GRACE_MS } from '@/lib/quiz/rapidFireConstants'
 
 const TEAM_LABELS = ['A', 'B', 'C', 'D'] as const
 type TeamLabel = (typeof TEAM_LABELS)[number]
@@ -118,7 +119,8 @@ export async function GET(
       authUser &&
       (activeRound?.round_type === 'direct_question' ||
         activeRound?.round_type === 'buzzer' ||
-        activeRound?.round_type === 'true_or_false') &&
+        activeRound?.round_type === 'true_or_false' ||
+        activeRound?.round_type === 'rapid_fire') &&
       ['revealed', 'options_revealed', 'buzzer_open', 'answered', 'dropped'].includes(
         String(ev?.status),
       )
@@ -209,13 +211,17 @@ export async function GET(
       if (rapidFireTimer?.startedAt && rapidFireTimer.durationSeconds != null) {
         const startedMs = new Date(rapidFireTimer.startedAt).getTime()
         if (Number.isFinite(startedMs)) {
-          timerActive = Date.now() < startedMs + Number(rapidFireTimer.durationSeconds) * 1000
+          timerActive =
+            Date.now() < startedMs + Number(rapidFireTimer.durationSeconds) * 1000 + RAPID_FIRE_SUBMIT_GRACE_MS
         }
       }
       if (!isRapidTeam || !timerActive) {
         currentQuestion = null
       }
     }
+
+    const rapidFireTurnComplete =
+      activeRound?.round_type === 'rapid_fire' && Boolean(rapidFireSessionMeta?.ended_at)
 
     return NextResponse.json({
       session,
@@ -227,6 +233,7 @@ export async function GET(
       participantDirectAttempt,
       rapidFireTimer,
       rapidFireTurnSummary,
+      rapidFireTurnComplete,
       serverTimestampMs: Date.now(),
     })
   } catch (error: any) {

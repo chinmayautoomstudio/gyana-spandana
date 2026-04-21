@@ -89,6 +89,11 @@ export interface ParticipantAnswerSubmittedPayload {
   /** Present for auto-graded rounds like Rapid Fire. */
   verdict?: 'pending' | 'correct' | 'wrong'
   submittedAt: string
+  /** Rapid Fire: next question event after auto-advance (`correct_answer` omitted on `nextQuestion`). */
+  nextEvent?: Record<string, unknown> | null
+  nextQuestion?: Record<string, unknown> | null
+  turnSummary?: { correct: number; incorrect: number }
+  rapidFireCompleted?: boolean
 }
 
 /** Emitted after host judges a direct question; no correct answer in payload. */
