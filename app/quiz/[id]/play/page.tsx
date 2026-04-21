@@ -61,6 +61,9 @@ export default function ParticipantPlayPage() {
   const [selectedTrueFalse, setSelectedTrueFalse] = useState<'TRUE' | 'FALSE' | null>(null)
   const [trueFalseLockedEventId, setTrueFalseLockedEventId] = useState<string | null>(null)
   const [selectedDirectOption, setSelectedDirectOption] = useState<'A' | 'B' | 'C' | 'D' | null>(null)
+  const [rapidFireDisplaySummary, setRapidFireDisplaySummary] = useState<{ correct: number; incorrect: number } | null>(
+    null,
+  )
   const [answerBusy, setAnswerBusy] = useState(false)
   const [rapidFireRemaining, setRapidFireRemaining] = useState<number | null>(null)
   const [buzzerPressedForEventId, setBuzzerPressedForEventId] = useState<string | null>(null)
@@ -298,6 +301,21 @@ export default function ParticipantPlayPage() {
     if (eventId && trueFalseLockedEventId === eventId) return
     setSelectedTrueFalse(null)
   }, [state?.currentQuestionEvent?.id, state?.participantDirectAttempt?.answer_text, trueFalseLockedEventId])
+
+  useEffect(() => {
+    const isRapidFireActive = state?.activeRound?.round_type === 'rapid_fire'
+    if (isRapidFireActive) {
+      setRapidFireDisplaySummary((prev) => prev ?? { correct: 0, incorrect: 0 })
+      return
+    }
+    setRapidFireDisplaySummary(null)
+  }, [state?.activeRound?.round_type])
+
+  useEffect(() => {
+    if (state?.activeRound?.round_type !== 'rapid_fire') return
+    if (!state?.rapidFireTurnSummary) return
+    setRapidFireDisplaySummary(state.rapidFireTurnSummary)
+  }, [state?.activeRound?.round_type, state?.rapidFireTurnSummary])
 
   const submitDirectAnswer = async () => {
     if (!sessionId || !state?.currentQuestionEvent?.id || !selectedDirectOption) return
@@ -682,7 +700,7 @@ export default function ParticipantPlayPage() {
     isMyTurn &&
     (rapidFireSecondsDisplay == null || rapidFireSecondsDisplay > 0 || rapidFireGraceActive)
   const questionReadOnly = isTrueFalseRound ? !canChooseTrueFalse : !rapidFirePhaseOpen
-  const rapidFireTurnSummary = isRapidFireRound ? state.rapidFireTurnSummary ?? null : null
+  const rapidFireTurnSummary = isRapidFireRound ? rapidFireDisplaySummary ?? { correct: 0, incorrect: 0 } : null
   const rapidFireCounterComplete =
     isRapidFireRound &&
     Boolean(rapidFireTurnSummary) &&
