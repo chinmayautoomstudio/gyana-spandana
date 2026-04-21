@@ -26,6 +26,28 @@ function parseClientPressedAtMs(body: unknown, serverNowMs: number): number {
   return n
 }
 
+/**
+ * Epoch microseconds from client (`performance.timeOrigin + performance.now()` * 1000).
+ * Falls back to serverNowUs when missing, invalid, or outside clock-skew bounds.
+ */
+function parseClientPressedAtUs(body: unknown, serverNowUs: number, fallbackMs?: number): number {
+  const raw = (body as { clientPressedAtUs?: unknown })?.clientPressedAtUs
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    return typeof fallbackMs === 'number' && Number.isFinite(fallbackMs) ? Math.trunc(fallbackMs * 1000) : serverNowUs
+  }
+  const n = Math.trunc(raw)
+  if (!Number.isSafeInteger(n)) {
+    return typeof fallbackMs === 'number' && Number.isFinite(fallbackMs) ? Math.trunc(fallbackMs * 1000) : serverNowUs
+  }
+  if (n > serverNowUs + 120_000_000) {
+    return typeof fallbackMs === 'number' && Number.isFinite(fallbackMs) ? Math.trunc(fallbackMs * 1000) : serverNowUs
+  }
+  if (n < serverNowUs - 600_000_000) {
+    return typeof fallbackMs === 'number' && Number.isFinite(fallbackMs) ? Math.trunc(fallbackMs * 1000) : serverNowUs
+  }
+  return n
+}
+
 function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
@@ -44,7 +66,9 @@ export async function POST(
     const questionEventId = typeof body?.questionEventId === 'string' ? body.questionEventId : ''
     const teamLabel = normalizeTeamLabel(body?.teamLabel)
     const serverNowMs = Date.now()
+    const serverNowUs = serverNowMs * 1000
     const clientPressedAtMs = parseClientPressedAtMs(body, serverNowMs)
+    const clientPressedAtUs = parseClientPressedAtUs(body, serverNowUs, clientPressedAtMs)
 
     if (!questionEventId || !teamLabel) {
       return NextResponse.json({ error: 'questionEventId and teamLabel are required' }, { status: 400 })
@@ -85,6 +109,7 @@ export async function POST(
       question_event_id: questionEventId,
       team_label: teamLabel,
       client_pressed_at_ms: clientPressedAtMs,
+      client_pressed_at_us: clientPressedAtUs,
     })
 
     if (insertError) {
@@ -106,8 +131,9 @@ export async function POST(
 
     const { data: allBuzzes, error: allBuzzesError } = await supabase
       .from('quiz_buzz_events')
-      .select('id,team_label,buzzed_at,buzz_order,client_pressed_at_ms')
+      .select('id,team_label,buzzed_at,buzz_order,client_pressed_at_us,client_pressed_at_ms')
       .eq('question_event_id', questionEventId)
+      .order('client_pressed_at_us', { ascending: true })
       .order('client_pressed_at_ms', { ascending: true })
       .order('buzzed_at', { ascending: true })
       .order('id', { ascending: true })
@@ -152,8 +178,9 @@ export async function POST(
     if (eventStillOpen) {
       const { data: arbitrationRows, error: arbitrationError } = await supabase
         .from('quiz_buzz_events')
-        .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_ms')
+        .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_us,client_pressed_at_ms')
         .eq('question_event_id', questionEventId)
+        .order('client_pressed_at_us', { ascending: true })
         .order('client_pressed_at_ms', { ascending: true })
         .order('buzzed_at', { ascending: true })
         .order('id', { ascending: true })
@@ -163,8 +190,7 @@ export async function POST(
       }
 
       const arbitrationOrdered = arbitrationRows || []
-      const firstTwo = arbitrationOrdered.slice(0, 2)
-      const fastestTeam = firstTwo[0]?.team_label ? String(firstTwo[0].team_label) : null
+      const fastestTeam = arbitrationOrdered[0]?.team_label ? String(arbitrationOrdered[0].team_label) : null
       const excludedBuzz = new Set((passRowsBuzz || []).map((row: { team_label: string }) => String(row.team_label)))
       const arbitrationPriority = fastestTeam
         ? [
@@ -179,7 +205,7 @@ export async function POST(
         console.info('[buzzer-arbitration]', {
           sessionId,
           questionEventId,
-          firstTwoTeams: firstTwo.map((row) => String(row.team_label)),
+          orderedTeams: arbitrationOrdered.map((row) => String(row.team_label)),
           fastestTeam,
           excludedTeams: [...excludedBuzz],
           selectedTeam: firstActive?.team_label ? String(firstActive.team_label) : null,

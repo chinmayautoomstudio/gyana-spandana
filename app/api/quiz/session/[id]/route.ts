@@ -620,8 +620,9 @@ export async function GET(
       const [{ data: buzzRows }, { data: passRows }] = await Promise.all([
         supabase
           .from('quiz_buzz_events')
-          .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_ms')
+          .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_us,client_pressed_at_ms')
           .eq('question_event_id', ev.id)
+          .order('client_pressed_at_us', { ascending: true })
           .order('client_pressed_at_ms', { ascending: true })
           .order('buzzed_at', { ascending: true })
           .order('id', { ascending: true }),
@@ -1378,8 +1379,9 @@ export async function PATCH(
         const [{ data: buzzRows, error: buzzErr }, { data: passRows, error: passErr }] = await Promise.all([
           supabase
             .from('quiz_buzz_events')
-            .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_ms')
+            .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_us,client_pressed_at_ms')
             .eq('question_event_id', questionEventId)
+            .order('client_pressed_at_us', { ascending: true })
             .order('client_pressed_at_ms', { ascending: true })
             .order('buzzed_at', { ascending: true })
             .order('id', { ascending: true }),

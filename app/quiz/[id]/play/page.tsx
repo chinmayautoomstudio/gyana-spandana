@@ -505,6 +505,8 @@ export default function ParticipantPlayPage() {
     setError(null)
     setBuzzerPressedForEventId(eventId)
     try {
+      const highPrecisionMs = performance.timeOrigin + performance.now()
+      const clientPressedAtUs = Math.round(highPrecisionMs * 1000)
       const res = await fetch(`/api/quiz/session/${sessionId}/buzz`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -512,6 +514,7 @@ export default function ParticipantPlayPage() {
           questionEventId: state.currentQuestionEvent.id,
           teamLabel: myTeamLabel,
           clientPressedAtMs,
+          clientPressedAtUs,
         }),
       })
       const data = await res.json().catch(() => ({}))
