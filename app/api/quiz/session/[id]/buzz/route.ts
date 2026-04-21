@@ -150,9 +150,6 @@ export async function POST(
       }
     }
 
-    const myIndex = ordered.findIndex((row) => row.team_label === teamLabel)
-    const buzzOrder = myIndex >= 0 ? myIndex + 1 : null
-
     // Internal arbitration window: wait briefly so near-simultaneous presses can be compared.
     await delay(2000)
 
@@ -175,21 +172,24 @@ export async function POST(
       !settledEvent.directed_team &&
       !settledEvent.buzzer_answer_deadline_at
 
+    const { data: arbitrationRows, error: arbitrationError } = await supabase
+      .from('quiz_buzz_events')
+      .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_us,client_pressed_at_ms')
+      .eq('question_event_id', questionEventId)
+      .order('client_pressed_at_us', { ascending: true })
+      .order('client_pressed_at_ms', { ascending: true })
+      .order('buzzed_at', { ascending: true })
+      .order('id', { ascending: true })
+
+    if (arbitrationError) {
+      return NextResponse.json({ error: arbitrationError.message }, { status: 500 })
+    }
+
+    const arbitrationOrdered = arbitrationRows || []
+    const myFinalIndex = arbitrationOrdered.findIndex((row) => row.team_label === teamLabel)
+    const buzzOrder = myFinalIndex >= 0 ? myFinalIndex + 1 : null
+
     if (eventStillOpen) {
-      const { data: arbitrationRows, error: arbitrationError } = await supabase
-        .from('quiz_buzz_events')
-        .select('team_label,buzz_order,buzzed_at,id,client_pressed_at_us,client_pressed_at_ms')
-        .eq('question_event_id', questionEventId)
-        .order('client_pressed_at_us', { ascending: true })
-        .order('client_pressed_at_ms', { ascending: true })
-        .order('buzzed_at', { ascending: true })
-        .order('id', { ascending: true })
-
-      if (arbitrationError) {
-        return NextResponse.json({ error: arbitrationError.message }, { status: 500 })
-      }
-
-      const arbitrationOrdered = arbitrationRows || []
       const fastestTeam = arbitrationOrdered[0]?.team_label ? String(arbitrationOrdered[0].team_label) : null
       const excludedBuzz = new Set((passRowsBuzz || []).map((row: { team_label: string }) => String(row.team_label)))
       const arbitrationPriority = fastestTeam
