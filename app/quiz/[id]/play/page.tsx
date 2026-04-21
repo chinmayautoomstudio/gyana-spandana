@@ -8,6 +8,7 @@ import { QuestionDisplay } from '@/components/quiz/QuestionDisplay'
 import { Button } from '@/components/ui/Button'
 import { buzzerWrongPenaltyPoints } from '@/lib/services/scoringService'
 import type { TeamLabel } from '@/lib/utils/teamColors'
+import { LiveScoreboard } from '@/components/quiz/LiveScoreboard'
 
 const RAPID_FIRE_SUBMIT_GRACE_SECONDS = 2
 
@@ -25,6 +26,9 @@ interface SessionState {
   rapidFireTurnComplete?: boolean
   /** From GET: server epoch ms at response time — used to correct buzzer deadline vs client clock skew. */
   serverTimestampMs?: number
+  scores?: Record<TeamLabel, number>
+  team_display_names?: Record<TeamLabel, string>
+  scoresByRoundType?: Record<TeamLabel, Record<string, number>>
 }
 
 export default function ParticipantPlayPage() {
@@ -38,6 +42,17 @@ export default function ParticipantPlayPage() {
   const supabase = useMemo(() => createClient(), [])
 
   const [state, setState] = useState<SessionState | null>(null)
+
+  const teamNames = useMemo((): Record<TeamLabel, string> => {
+    if (state?.team_display_names) return state.team_display_names
+    const slots = (state?.session?.team_slots || {}) as Record<string, string>
+    return {
+      A: `Team ${slots.A ? slots.A.slice(0, 8) : 'A'}`,
+      B: `Team ${slots.B ? slots.B.slice(0, 8) : 'B'}`,
+      C: `Team ${slots.C ? slots.C.slice(0, 8) : 'C'}`,
+      D: `Team ${slots.D ? slots.D.slice(0, 8) : 'D'}`,
+    }
+  }, [state?.team_display_names, state?.session?.team_slots])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [myTeamLabel, setMyTeamLabel] = useState<TeamLabel | null>(null)
@@ -660,8 +675,17 @@ export default function ParticipantPlayPage() {
     return localizedText(state.currentQuestion[key], state.currentQuestion[keyOdia])
   }
 
+  const emptyScoresByRoundType = { A: {}, B: {}, C: {}, D: {} } as Record<TeamLabel, Record<string, number>>
+  const scoresMap = (state.scores ?? { A: 0, B: 0, C: 0, D: 0 }) as Record<TeamLabel, number>
+
   return (
     <div className="min-h-screen w-full bg-white px-4 py-6 sm:px-6">
+      <LiveScoreboard
+        teams={teamNames}
+        scores={scoresMap}
+        rounds={state.rounds || []}
+        scoresByRoundType={state.scoresByRoundType ?? emptyScoresByRoundType}
+      />
       <div className="mx-auto w-full max-w-4xl space-y-4">
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
         <div className="rounded-xl border border-gray-200 bg-white p-4">

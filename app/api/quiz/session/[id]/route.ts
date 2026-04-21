@@ -179,6 +179,47 @@ async function getTeamDisplayNames(session: { team_slots?: Record<string, string
   }, {} as Record<TeamLabel, string>)
 }
 
+/** Per-team points summed by `quiz_rounds.round_type` (for live scoreboard UI). */
+async function getScoresByRoundType(
+  rounds: any[],
+  supabase: any,
+): Promise<Record<TeamLabel, Record<string, number>>> {
+  const empty = TEAM_LABELS.reduce((acc, l) => {
+    acc[l] = {}
+    return acc
+  }, {} as Record<TeamLabel, Record<string, number>>)
+
+  if (!rounds?.length) return empty
+
+  const roundIds = rounds.map((r: any) => String(r?.id || '')).filter((id: string) => id.length > 0)
+  if (!roundIds.length) return empty
+
+  const roundTypeById: Record<string, string> = {}
+  for (const r of rounds) {
+    if (r?.id) roundTypeById[String(r.id)] = String(r.round_type || '')
+  }
+
+  const { data: events } = await supabase
+    .from('quiz_question_events')
+    .select('round_id,answered_by_team,points_awarded')
+    .in('round_id', roundIds)
+    .in('status', ['answered', 'dropped'])
+    .not('answered_by_team', 'is', null)
+
+  const result: Record<TeamLabel, Record<string, number>> = TEAM_LABELS.reduce((acc, l) => {
+    acc[l] = {}
+    return acc
+  }, {} as Record<TeamLabel, Record<string, number>>)
+
+  for (const ev of events ?? []) {
+    const label = String((ev as { answered_by_team?: string }).answered_by_team || '').toUpperCase() as TeamLabel
+    if (!TEAM_LABELS.includes(label)) continue
+    const rt = roundTypeById[String((ev as { round_id?: string }).round_id)] || 'unknown'
+    result[label][rt] = (result[label][rt] || 0) + Number((ev as { points_awarded?: number | null }).points_awarded || 0)
+  }
+  return result
+}
+
 async function buildFinalScoreboard(
   sessionId: string,
   session: { team_slots?: Record<string, string> | null; is_test_session?: boolean | null },
@@ -373,14 +414,22 @@ export async function GET(
           .in('status', ['answered', 'dropped'])
       : Promise.resolve({ data: null })
 
-    const [{ data: event }, { data: qs }, { data: completedEvents }, { isHostOrAdmin }, scores, team_display_names] =
-      await Promise.all([
+    const [
+      { data: event },
+      { data: qs },
+      { data: completedEvents },
+      { isHostOrAdmin },
+      scores,
+      team_display_names,
+      scoresByRoundType,
+    ] = await Promise.all([
       eventPromise,
       qsPromise,
       completedEventsPromise,
       resolveHostOrAdmin(session.assigned_host_id, authUser, supabase),
       getScoreMap(sessionId, supabase),
       getTeamDisplayNames(session, supabase),
+      getScoresByRoundType(rounds || [], supabase),
     ])
 
     latestEvent = event || null
@@ -650,6 +699,7 @@ export async function GET(
       currentQuestion,
       scores,
       team_display_names,
+      scoresByRoundType,
       activeRoundQuestions,
       pendingDirectAnswer,
       pendingBuzzerAnswer,

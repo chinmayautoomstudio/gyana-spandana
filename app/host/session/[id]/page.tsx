@@ -10,6 +10,7 @@ import {
   type ParticipantAnswerSubmittedPayload,
 } from '@/lib/services/quizSessionService'
 import { ScoreSidebar } from '@/components/quiz/ScoreSidebar'
+import { LiveScoreboard } from '@/components/quiz/LiveScoreboard'
 import { RoundNavigator } from '@/components/quiz/RoundNavigator'
 import { DirectQuestionControls } from '@/components/quiz/DirectQuestionControls'
 import { TrueOrFalseControls } from '@/components/quiz/TrueOrFalseControls'
@@ -29,6 +30,7 @@ interface SessionState {
   rapidFireTurnComplete?: boolean
   rapidFireQuestionBank?: any[] | null
   scores: Record<TeamLabel, number>
+  scoresByRoundType?: Record<TeamLabel, Record<string, number>>
   team_display_names?: Record<TeamLabel, string>
   activeRoundQuestions?: Array<{
     id: string
@@ -486,8 +488,16 @@ export default function HostSessionPage() {
     }
   }
 
+  const emptyScoresByRoundType = { A: {}, B: {}, C: {}, D: {} } as Record<TeamLabel, Record<string, number>>
+
   return (
     <div className="space-y-4">
+      <LiveScoreboard
+        teams={teamNames}
+        scores={state.scores}
+        rounds={state.rounds || []}
+        scoresByRoundType={state.scoresByRoundType ?? emptyScoresByRoundType}
+      />
       {state.session.is_test_session ? (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           <span className="font-semibold">Test session</span>

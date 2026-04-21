@@ -15,13 +15,11 @@ type TeamLabel = (typeof TEAM_LABELS)[number]
  *   - pendingBuzzerAnswer    (judging panel)
  *   - completedEvents join   (needed only for activeRoundQuestions)
  *   - resolveHostOrAdmin     (always false for participants)
- *   - team_display_names     (display board only)
  *
  * Returns: session, rounds, activeRound, currentQuestionEvent,
  *          currentQuestion (correct_answer stripped unless revealed),
- *          scores, participantDirectAttempt, rapidFireTimer, serverTimestampMs.
- *
- * Switch play/page.tsx to call this instead of /api/quiz/session/[id].
+ *          scores, team_display_names, scoresByRoundType (live scoreboard),
+ *          participantDirectAttempt, rapidFireTimer, serverTimestampMs.
  */
 
 async function getScoreMap(sessionId: string, supabase: any) {
@@ -34,6 +32,71 @@ async function getScoreMap(sessionId: string, supabase: any) {
     acc[label] = scores?.find((s: any) => s.team_label === label)?.total_score || 0
     return acc
   }, {} as Record<TeamLabel, number>)
+}
+
+async function getTeamDisplayNames(session: { team_slots?: Record<string, string> | null }, supabase: any) {
+  const slots = (session?.team_slots || {}) as Record<string, string>
+  const ids = [...new Set(TEAM_LABELS.map((l) => slots[l]).filter(Boolean))]
+
+  const nameById = new Map<string, string>()
+  if (ids.length > 0) {
+    const { data: rows } = await supabase.from('teams').select('id, team_name').in('id', ids)
+    for (const row of rows || []) {
+      if (row?.id && row?.team_name != null) nameById.set(row.id, String(row.team_name))
+    }
+  }
+
+  return TEAM_LABELS.reduce((acc, label) => {
+    const id = slots[label]
+    if (!id) {
+      acc[label] = 'Unassigned'
+    } else {
+      const name = nameById.get(id)
+      acc[label] = name ?? `Team ${id.slice(0, 8)}`
+    }
+    return acc
+  }, {} as Record<TeamLabel, string>)
+}
+
+/** Per-team points summed by `quiz_rounds.round_type` (for live scoreboard UI). */
+async function getScoresByRoundType(
+  rounds: any[],
+  supabase: any,
+): Promise<Record<TeamLabel, Record<string, number>>> {
+  const empty = TEAM_LABELS.reduce((acc, l) => {
+    acc[l] = {}
+    return acc
+  }, {} as Record<TeamLabel, Record<string, number>>)
+
+  if (!rounds?.length) return empty
+
+  const roundIds = rounds.map((r: any) => String(r?.id || '')).filter((id: string) => id.length > 0)
+  if (!roundIds.length) return empty
+
+  const roundTypeById: Record<string, string> = {}
+  for (const r of rounds) {
+    if (r?.id) roundTypeById[String(r.id)] = String(r.round_type || '')
+  }
+
+  const { data: events } = await supabase
+    .from('quiz_question_events')
+    .select('round_id,answered_by_team,points_awarded')
+    .in('round_id', roundIds)
+    .in('status', ['answered', 'dropped'])
+    .not('answered_by_team', 'is', null)
+
+  const result: Record<TeamLabel, Record<string, number>> = TEAM_LABELS.reduce((acc, l) => {
+    acc[l] = {}
+    return acc
+  }, {} as Record<TeamLabel, Record<string, number>>)
+
+  for (const ev of events ?? []) {
+    const label = String((ev as { answered_by_team?: string }).answered_by_team || '').toUpperCase() as TeamLabel
+    if (!TEAM_LABELS.includes(label)) continue
+    const rt = roundTypeById[String((ev as { round_id?: string }).round_id)] || 'unknown'
+    result[label][rt] = (result[label][rt] || 0) + Number((ev as { points_awarded?: number | null }).points_awarded || 0)
+  }
+  return result
 }
 
 function stripCorrectAnswer(question: any | null, eventAllows: boolean) {
@@ -79,7 +142,7 @@ export async function GET(
 
     const roundId = activeRound?.id
 
-    // Batch 2: latest event + scores in parallel (no completedEvents, no host checks, no team names)
+    // Batch 2: latest event + scores + scoreboard fields in parallel
     const eventPromise = roundId
       ? supabase
           .from('quiz_question_events')
@@ -90,9 +153,11 @@ export async function GET(
           .maybeSingle()
       : Promise.resolve({ data: null })
 
-    const [{ data: event }, scores] = await Promise.all([
+    const [{ data: event }, scores, team_display_names, scoresByRoundType] = await Promise.all([
       eventPromise,
       getScoreMap(sessionId, supabase),
+      getTeamDisplayNames(session, supabase),
+      getScoresByRoundType(rounds || [], supabase),
     ])
 
     const latestEvent = event || null
@@ -214,6 +279,8 @@ export async function GET(
       currentQuestionEvent: latestEvent,
       currentQuestion,
       scores,
+      team_display_names,
+      scoresByRoundType,
       participantDirectAttempt,
       rapidFireTimer,
       rapidFireTurnSummary,
