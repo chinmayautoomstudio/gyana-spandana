@@ -832,6 +832,15 @@ export default function ParticipantPlayPage() {
           </div>
         ) : null}
 
+        {isRapidFireRound && rapidFireTurnSummary ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+            <p className="text-sm font-semibold">Rapid Fire score</p>
+            <p className="mt-1 text-sm">
+              Correct: {rapidFireTurnSummary.correct} | Incorrect: {rapidFireTurnSummary.incorrect}
+            </p>
+          </div>
+        ) : null}
+
         {!state.currentQuestion || (isRapidFireRound && !rapidFireQuestionVisible) || !buzzerQuestionVisible ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-600">
             {isRapidFireRound
@@ -865,35 +874,6 @@ export default function ParticipantPlayPage() {
             }}
           />
         )}
-
-        {isRapidFireRound &&
-        rapidFireTurnSummary &&
-        (state.rapidFireTurnComplete ||
-          (rapidFireSecondsFromServer !== null &&
-            rapidFireSecondsFromServer <= 0 &&
-            !rapidFireGraceActive)) ? (
-          <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 px-4 py-5 text-center shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-900">Rapid Fire — turn complete</p>
-            <p className="mt-2 text-lg font-semibold text-emerald-950">
-              Correct: <span className="tabular-nums">{rapidFireTurnSummary.correct}</span> · Incorrect:{' '}
-              <span className="tabular-nums">{rapidFireTurnSummary.incorrect}</span>
-            </p>
-          </div>
-        ) : isRapidFireRound &&
-          rapidFireTurnSummary &&
-          !state.rapidFireTurnComplete &&
-          !(
-            rapidFireSecondsFromServer !== null &&
-            rapidFireSecondsFromServer <= 0 &&
-            !rapidFireGraceActive
-          ) ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
-            <p className="text-sm font-semibold">Rapid Fire live tally</p>
-            <p className="mt-1 text-sm">
-              Correct: {rapidFireTurnSummary.correct} | Incorrect: {rapidFireTurnSummary.incorrect}
-            </p>
-          </div>
-        ) : null}
 
         {isRapidFireRound && state.currentQuestion && (
           <div className="rounded-xl border border-gray-200 bg-white p-4">
