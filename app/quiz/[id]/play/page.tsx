@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useResolvedParams } from '@/lib/navigation/unwrapNavigation'
 import { createClient } from '@/lib/supabase/client'
 import { subscribeQuizDataRefresh, subscribeToSession } from '@/lib/services/quizSessionService'
@@ -34,6 +35,7 @@ interface SessionState {
 }
 
 export default function ParticipantPlayPage() {
+  const router = useRouter()
   const resolvedParams = useResolvedParams()
   const sessionId =
     typeof resolvedParams?.id === 'string'
@@ -547,6 +549,9 @@ export default function ParticipantPlayPage() {
             <h1 className="mt-2 text-2xl font-bold text-emerald-950">{state.session.title}</h1>
             <p className="mt-4 text-base text-emerald-900">Thank you for participating in Gyana Spardha.</p>
             <p className="mt-2 text-sm text-emerald-800">This session is now closed. Rejoin is disabled for participants.</p>
+            <div className="mt-6">
+              <Button onClick={() => router.push('/dashboard')}>Return to Dashboard</Button>
+            </div>
           </div>
         </div>
       </div>

@@ -83,15 +83,9 @@ export function RapidFireControls({
   const [phase, setPhase] = useState<'idle' | 'preview' | 'running'>('idle')
   const [previewQuestion, setPreviewQuestion] = useState<any | null>(null)
   const [localFallbackSeconds, setLocalFallbackSeconds] = useState<number>(0)
+  const [clockBaseMs] = useState(() => Date.now())
   const [clock, setClock] = useState(() => Date.now())
   const timeoutHandledRef = useRef(false)
-  const serverOffsetMsRef = useRef(0)
-
-  useEffect(() => {
-    if (typeof serverTimestampMs === 'number' && Number.isFinite(serverTimestampMs)) {
-      serverOffsetMsRef.current = Date.now() - serverTimestampMs
-    }
-  }, [serverTimestampMs])
 
   const activeTeam = (event?.rapid_fire_team || selectedTeam) as TeamLabel
   const isQuestionActive = Boolean(event && ['revealed', 'options_revealed', 'buzzer_open'].includes(event.status))
@@ -103,16 +97,15 @@ export function RapidFireControls({
       if (Number.isFinite(startedAtMs)) {
         const alignedNow =
           typeof serverTimestampMs === 'number' && Number.isFinite(serverTimestampMs)
-            ? clock - serverOffsetMsRef.current
+            ? serverTimestampMs + (clock - clockBaseMs)
             : clock
         const elapsed = Math.floor((alignedNow - startedAtMs) / 1000)
         return Math.max(0, Number(rapidFireTimer.durationSeconds) - elapsed)
       }
     }
     return Math.max(0, localFallbackSeconds)
-  }, [clock, hasServerTimer, localFallbackSeconds, rapidFireTimer, serverTimestampMs])
+  }, [clock, clockBaseMs, hasServerTimer, localFallbackSeconds, rapidFireTimer, serverTimestampMs])
 
-  const isRunning = phase === 'running' && isQuestionActive && remainingSeconds > 0
   const tickClockActive = phase === 'running' && isQuestionActive
 
   useEffect(() => {

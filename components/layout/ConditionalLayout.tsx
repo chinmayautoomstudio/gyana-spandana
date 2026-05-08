@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { Navbar } from './Navbar'
 import { Footer } from './Footer'
+import { TopAnnouncementBar } from './TopAnnouncementBar'
 
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -22,6 +23,7 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!hideNavFooter && <Navbar />}
+      {!hideNavFooter && <TopAnnouncementBar />}
       {children}
       {!hideNavFooter && <Footer />}
     </>
